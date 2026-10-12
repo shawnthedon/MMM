@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 700" font-family="Inter,Segoe UI,sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6C8CFF"/><stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6C8CFF"/><stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="700" rx="18" fill="#0B0F17"/>
+
+  <!-- ================= PHONE 1: Home ================= -->
+  <g transform="translate(60,60)">
+    <rect x="-6" y="-6" width="332" height="592" rx="42" fill="#1A2234" stroke="#2A3650" stroke-width="2"/>
+    <rect x="0" y="0" width="320" height="580" rx="36" fill="#0B0F17"/>
+    <rect x="120" y="10" width="80" height="18" rx="9" fill="#1A2234"/>
+    <!-- topbar -->
+    <circle cx="30" cy="52" r="12" fill="url(#g)"/>
+    <text x="50" y="57" fill="#EAF0FA" font-size="13" font-weight="800">SwarmOS</text>
+    <circle cx="112" cy="52" r="4" fill="#34D399"/>
+    <text x="250" y="57" fill="#93A1BA" font-size="11">🔔 2</text>
+    <text x="285" y="57" fill="#93A1BA" font-size="11">⚙</text>
+    <!-- greeting -->
+    <text x="20" y="100" fill="#EAF0FA" font-size="19" font-weight="800">Good evening, Maya</text>
+    <text x="20" y="118" fill="#93A1BA" font-size="10">Gateway healthy · v0.1.0 · SQLite WAL</text>
+    <!-- approval banner -->
+    <rect x="16" y="132" width="288" height="40" rx="10" fill="rgba(251,191,36,.12)" stroke="rgba(251,191,36,.4)"/>
+    <text x="28" y="150" fill="#FBBF24" font-size="10.5" font-weight="700">⚠ 2 approvals need you</text>
+    <text x="28" y="164" fill="#FBBF24" font-size="8.5" opacity=".8">vercel.deploy · production</text>
+    <!-- stat tiles -->
+    <g>
+      <rect x="16" y="186" width="138" height="64" rx="12" fill="#121826" stroke="#243044"/>
+      <text x="28" y="206" fill="#64748F" font-size="8.5" font-weight="700">SPEND TODAY</text>
+      <text x="28" y="228" fill="#EAF0FA" font-size="18" font-weight="800">$17.93</text>
+      <text x="28" y="242" fill="#34D399" font-size="8">budget posture: green</text>
+      <rect x="166" y="186" width="138" height="64" rx="12" fill="#121826" stroke="#243044"/>
+      <text x="178" y="206" fill="#64748F" font-size="8.5" font-weight="700">AGENTS</text>
+      <text x="178" y="228" fill="#EAF0FA" font-size="18" font-weight="800">4/6</text>
+      <text x="178" y="242" fill="#93A1BA" font-size="8">running now</text>
+      <rect x="16" y="258" width="138" height="64" rx="12" fill="#121826" stroke="#243044"/>
+      <text x="28" y="278" fill="#64748F" font-size="8.5" font-weight="700">LIVE SWARMS</text>
+      <text x="28" y="300" fill="#EAF0FA" font-size="18" font-weight="800">1</text>
+      <rect x="166" y="258" width="138" height="64" rx="12" fill="#121826" stroke="#243044"/>
+      <text x="178" y="278" fill="#64748F" font-size="8.5" font-weight="700">FLEET TRUST</text>
+      <text x="178" y="300" fill="#EAF0FA" font-size="18" font-weight="800">82</text>
+    </g>
+    <!-- live swarm card -->
+    <rect x="16" y="336" width="288" height="86" rx="12" fill="#121826" stroke="#243044"/>
+    <circle cx="36" cy="360" r="9" fill="#1A2234"/>
+    <circle cx="36" cy="360" r="4" fill="#818CF8"/>
+    <text x="52" y="358" fill="#EAF0FA" font-size="11" font-weight="700">market-intel-swarm</text>
+    <text x="52" y="372" fill="#93A1BA" font-size="8.5">Map the EU AI-agent market · top 20 vendors</text>
+    <rect x="30" y="386" width="260" height="6" rx="3" fill="#243044"/>
+    <rect x="30" y="386" width="161" height="6" rx="3" fill="url(#bar)"/>
+    <text x="30" y="410" fill="#93A1BA" font-size="8.5">48m ago · telegram</text>
+    <text x="262" y="410" fill="#93A1BA" font-size="8.5">$3.41/$10</text>
+    <!-- activity -->
+    <rect x="16" y="434" width="288" height="58" rx="12" fill="#121826" stroke="#243044"/>
+    <circle cx="32" cy="452" r="3" fill="#FBBF24"/><text x="42" y="455" fill="#EAF0FA" font-size="8.5">Approval requested: vercel.deploy</text>
+    <circle cx="32" cy="472" r="3" fill="#818CF8"/><text x="42" y="475" fill="#93A1BA" font-size="8.5">Swarm market-intel deployed · budget $10</text>
+    <!-- copilot dock -->
+    <rect x="16" y="504" width="288" height="36" rx="18" fill="#1A2234" stroke="#2A3650"/>
+    <circle cx="36" cy="522" r="10" fill="url(#g)"/>
+    <text x="32" y="526" fill="#0B0F17" font-size="9" font-weight="800">✦</text>
+    <text x="52" y="526" fill="#93A1BA" font-size="9">✦ Ask Copilot — it drives the app</text>
+    <!-- tabbar -->
+    <rect x="0" y="548" width="320" height="32" fill="#121826"/>
+    <text x="32" y="568" fill="#6C8CFF" font-size="10">⌂</text><text x="88" y="568" fill="#64748F" font-size="10">🤖</text><text x="148" y="568" fill="#64748F" font-size="10">▦</text><text x="208" y="568" fill="#64748F" font-size="10">💬</text><text x="268" y="568" fill="#64748F" font-size="10">•••</text>
+    <text x="160" y="530" text-anchor="middle" fill="#64748F" font-size="8" opacity="0"></text>
+    <!-- label -->
+  </g>
+  <text x="220" y="678" text-anchor="middle" fill="#93A1BA" font-size="13" font-weight="600">Command Deck</text>
+
+  <!-- ================= PHONE 2: Live Swarm Monitor ================= -->
+  <g transform="translate(480,60)">
+    <rect x="-6" y="-6" width="332" height="592" rx="42" fill="#1A2234" stroke="#2A3650" stroke-width="2"/>
+    <rect x="0" y="0" width="320" height="580" rx="36" fill="#0B0F17"/>
+    <rect x="120" y="10" width="80" height="18" rx="9" fill="#1A2234"/>
+    <text x="20" y="58" fill="#EAF0FA" font-size="11" font-weight="700">‹ Swarms</text>
+    <rect x="20" y="72" width="280" height="74" rx="12" fill="#121826" stroke="#243044"/>
+    <text x="32" y="94" fill="#EAF0FA" font-size="12" font-weight="800">market-intel-swarm</text>
+    <rect x="222" y="80" width="66" height="18" rx="9" fill="rgba(129,140,248,.2)" stroke="rgba(129,140,248,.5)"/>
+    <text x="255" y="93" text-anchor="middle" fill="#818CF8" font-size="8.5" font-weight="700">● LIVE</text>
+    <text x="32" y="112" fill="#93A1BA" font-size="8.5">EU AI-agent market map · 6/9 tasks</text>
+    <rect x="32" y="122" width="256" height="6" rx="3" fill="#243044"/>
+    <rect x="32" y="122" width="158" height="6" rx="3" fill="url(#bar)"/>
+    <text x="32" y="140" fill="#93A1BA" font-size="8.5">elapsed 48m</text>
+    <text x="252" y="140" fill="#EAF0FA" font-size="8.5" font-weight="700">$3.41/$10</text>
+    <!-- DAG -->
+    <rect x="16" y="158" width="288" height="240" rx="12" fill="#0E1420" stroke="#243044"/>
+    <text x="28" y="178" fill="#64748F" font-size="8.5" font-weight="700">DEPENDENCY GRAPH</text>
+    <g stroke="#2E3B55" stroke-width="2">
+      <line x1="160" y1="212" x2="90" y2="256"/><line x1="160" y1="212" x2="230" y2="256"/>
+      <line x1="90" y1="256" x2="90" y2="308"/><line x1="90" y1="256" x2="230" y2="308"/>
+      <line x1="230" y1="256" x2="230" y2="308"/><line x1="90" y1="308" x2="160" y2="356"/>
+      <line x1="230" y1="308" x2="160" y2="356"/>
+    </g>
+    <g font-size="8" font-weight="700" text-anchor="middle">
+      <rect x="116" y="192" width="88" height="28" rx="8" fill="#121826" stroke="#34D399" stroke-width="1.6"/>
+      <text x="160" y="205" fill="#EAF0FA">planner</text><text x="160" y="215" fill="#34D399" font-size="6.5">done · $0.42</text>
+      <rect x="46" y="236" width="88" height="28" rx="8" fill="#121826" stroke="#34D399" stroke-width="1.6"/>
+      <text x="90" y="249" fill="#EAF0FA">research-a</text><text x="90" y="259" fill="#34D399" font-size="6.5">done · $1.12</text>
+      <rect x="186" y="236" width="88" height="28" rx="8" fill="#121826" stroke="#818CF8" stroke-width="1.6"/>
+      <text x="230" y="249" fill="#EAF0FA">research-b</text><text x="230" y="259" fill="#818CF8" font-size="6.5">running · $0.98</text>
+      <rect x="46" y="292" width="88" height="28" rx="8" fill="#121826" stroke="#818CF8" stroke-width="1.6"/>
+      <text x="90" y="305" fill="#EAF0FA">analyze</text><text x="90" y="315" fill="#818CF8" font-size="6.5">running · $0.61</text>
+      <rect x="186" y="292" width="88" height="28" rx="8" fill="#121826" stroke="#64748F" stroke-width="1.6"/>
+      <text x="230" y="305" fill="#EAF0FA">writer</text><text x="230" y="315" fill="#64748F" font-size="6.5">queued</text>
+      <rect x="116" y="342" width="88" height="28" rx="8" fill="#121826" stroke="#64748F" stroke-width="1.6"/>
+      <text x="160" y="355" fill="#EAF0FA">assembler</text><text x="160" y="365" fill="#64748F" font-size="6.5">queued</text>
+    </g>
+    <!-- resources -->
+    <text x="28" y="424" fill="#64748F" font-size="8.5" font-weight="700">RESOURCE ALLOCATION</text>
+    <g font-size="8.5">
+      <text x="28" y="442" fill="#93A1BA">tokens/s</text><text x="272" y="442" fill="#EAF0FA" text-anchor="end" font-weight="700">78%</text>
+      <rect x="28" y="447" width="244" height="5" rx="2.5" fill="#243044"/><rect x="28" y="447" width="190" height="5" rx="2.5" fill="url(#bar)"/>
+      <text x="28" y="468" fill="#93A1BA">cost rate</text><text x="272" y="468" fill="#EAF0FA" text-anchor="end" font-weight="700">32%</text>
+      <rect x="28" y="473" width="244" height="5" rx="2.5" fill="#243044"/><rect x="28" y="473" width="78" height="5" rx="2.5" fill="url(#bar)"/>
+      <text x="28" y="494" fill="#93A1BA">parallel slots</text><text x="272" y="494" fill="#EAF0FA" text-anchor="end" font-weight="700">4/6</text>
+      <rect x="28" y="499" width="244" height="5" rx="2.5" fill="#243044"/><rect x="28" y="499" width="162" height="5" rx="2.5" fill="url(#bar)"/>
+    </g>
+    <rect x="16" y="518" width="138" height="32" rx="10" fill="#1A2234" stroke="#2A3650"/>
+    <text x="85" y="538" text-anchor="middle" fill="#EAF0FA" font-size="9.5" font-weight="700">⏸ Pause</text>
+    <rect x="166" y="518" width="138" height="32" rx="10" fill="rgba(248,113,113,.12)" stroke="rgba(248,113,113,.4)"/>
+    <text x="235" y="538" text-anchor="middle" fill="#F87171" font-size="9.5" font-weight="700">■ Cancel</text>
+  </g>
+  <text x="640" y="678" text-anchor="middle" fill="#93A1BA" font-size="13" font-weight="600">Live Swarm Monitor · Dependency DAG</text>
+
+  <!-- ================= PHONE 3: Copilot ================= -->
+  <g transform="translate(900,60)">
+    <rect x="-6" y="-6" width="332" height="592" rx="42" fill="#1A2234" stroke="#2A3650" stroke-width="2"/>
+    <rect x="0" y="0" width="320" height="580" rx="36" fill="#0B0F17"/>
+    <rect x="120" y="10" width="80" height="18" rx="9" fill="#1A2234"/>
+    <circle cx="30" cy="54" r="11" fill="url(#g)"/><text x="26" y="58" fill="#0B0F17" font-size="10" font-weight="800">✦</text>
+    <text x="48" y="52" fill="#EAF0FA" font-size="13" font-weight="800">Copilot</text>
+    <rect x="102" y="42" width="52" height="16" rx="8" fill="rgba(108,140,255,.18)"/>
+    <text x="128" y="53" text-anchor="middle" fill="#6C8CFF" font-size="7.5" font-weight="700">act mode</text>
+    <!-- chips -->
+    <rect x="16" y="74" width="66" height="18" rx="9" fill="#1A2234" stroke="#243044"/><text x="49" y="86" text-anchor="middle" fill="#93A1BA" font-size="7.5">6 agents</text>
+    <rect x="88" y="74" width="82" height="18" rx="9" fill="#1A2234" stroke="#243044"/><text x="129" y="86" text-anchor="middle" fill="#93A1BA" font-size="7.5">Governance ON</text>
+    <rect x="176" y="74" width="112" height="18" rx="9" fill="rgba(52,211,153,.12)" stroke="rgba(52,211,153,.35)"/><text x="232" y="86" text-anchor="middle" fill="#34D399" font-size="7.5">Self-approval blocked</text>
+    <!-- user msg -->
+    <rect x="110" y="106" width="194" height="30" rx="12" fill="#6C8CFF"/>
+    <text x="200" y="125" text-anchor="middle" fill="#fff" font-size="9.5">create agent Nova researcher</text>
+    <!-- bot reply -->
+    <rect x="16" y="148" width="230" height="26" rx="10" fill="#121826" stroke="#243044"/>
+    <text x="28" y="165" fill="#EAF0FA" font-size="9">Ready to create agent <tspan font-weight="700">Nova Researcher</tspan>:</text>
+    <!-- action card -->
+    <rect x="16" y="184" width="288" height="220" rx="12" fill="#0E1420" stroke="#2A3650"/>
+    <rect x="16" y="184" width="288" height="28" rx="12" fill="rgba(108,140,255,.14)"/>
+    <text x="28" y="202" fill="#6C8CFF" font-size="8.5" font-weight="800">✦ ACTION CARD · CREATE AGENT</text>
+    <rect x="228" y="190" width="64" height="16" rx="8" fill="rgba(52,211,153,.15)" stroke="rgba(52,211,153,.4)"/>
+    <text x="260" y="201" text-anchor="middle" fill="#34D399" font-size="7" font-weight="700">risk: low</text>
+    <g font-size="9">
+      <text x="28" y="232" fill="#93A1BA">Name</text><text x="292" y="232" fill="#EAF0FA" text-anchor="end" font-weight="700">Nova Researcher</text>
+      <text x="28" y="258" fill="#93A1BA">Framework</text><text x="292" y="258" fill="#EAF0FA" text-anchor="end" font-weight="700">LangGraph</text>
+      <text x="28" y="284" fill="#93A1BA">Model</text><text x="292" y="284" fill="#EAF0FA" text-anchor="end" font-weight="700">claude-sonnet-4</text>
+      <text x="28" y="310" fill="#93A1BA">Trust seed</text><text x="292" y="310" fill="#EAF0FA" text-anchor="end" font-weight="700">50 (tier B)</text>
+      <text x="28" y="336" fill="#93A1BA">Gate</text><text x="292" y="336" fill="#EAF0FA" text-anchor="end" font-weight="700">all writes approved</text>
+    </g>
+    <rect x="28" y="352" width="122" height="30" rx="9" fill="#1A2234" stroke="#2A3650"/>
+    <text x="89" y="371" text-anchor="middle" fill="#EAF0FA" font-size="9.5" font-weight="700">Cancel</text>
+    <rect x="158" y="352" width="134" height="30" rx="9" fill="#6C8CFF"/>
+    <text x="225" y="371" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="700">Create agent</text>
+    <!-- done msg -->
+    <rect x="16" y="416" width="252" height="26" rx="10" fill="#121826" stroke="#243044"/>
+    <text x="28" y="433" fill="#34D399" font-size="9">✅ Agent Nova Researcher created and idle.</text>
+    <!-- quick chips -->
+    <rect x="16" y="452" width="56" height="18" rx="9" fill="#1A2234" stroke="#243044"/><text x="44" y="464" text-anchor="middle" fill="#93A1BA" font-size="7.5">status</text>
+    <rect x="78" y="452" width="92" height="18" rx="9" fill="#1A2234" stroke="#243044"/><text x="124" y="464" text-anchor="middle" fill="#93A1BA" font-size="7.5">deploy swarm…</text>
+    <rect x="176" y="452" width="80" height="18" rx="9" fill="#1A2234" stroke="#243044"/><text x="216" y="464" text-anchor="middle" fill="#93A1BA" font-size="7.5">approve ap-1</text>
+    <!-- composer -->
+    <rect x="16" y="486" width="232" height="36" rx="14" fill="#0E1420" stroke="#2A3650"/>
+    <text x="30" y="508" fill="#64748F" font-size="9">Tell the Copilot what to do…</text>
+    <circle cx="272" cy="504" r="18" fill="#6C8CFF"/>
+    <path d="M266 504 l12 -5 -3 5 3 5 z" fill="#fff"/>
+    <text x="160" y="548" text-anchor="middle" fill="#64748F" font-size="7.5">🎤 push-to-talk · 🛡 every action audited as “You via Copilot”</text>
+  </g>
+  <text x="1060" y="678" text-anchor="middle" fill="#93A1BA" font-size="13" font-weight="600">Embedded Copilot · Full-Control Action Cards</text>
+</svg>

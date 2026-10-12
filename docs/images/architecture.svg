@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" font-family="Inter,Segoe UI,sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6C8CFF"/><stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="gb" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6C8CFF"/><stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="520" rx="18" fill="#0B0F17"/>
+  <rect x="1" y="1" width="1198" height="518" rx="17" fill="none" stroke="#243044"/>
+
+  <!-- title -->
+  <text x="40" y="52" fill="#EAF0FA" font-size="24" font-weight="800">Self-Hosted Gateway — Zero External Dependencies</text>
+  <text x="40" y="78" fill="#93A1BA" font-size="14">One process · SQLite (WAL) · filesystem artifacts · no Redis · no Postgres</text>
+
+  <!-- gateway box -->
+  <rect x="440" y="120" width="320" height="330" rx="18" fill="#121826" stroke="url(#g)" stroke-width="2.5"/>
+  <text x="600" y="152" text-anchor="middle" fill="#EAF0FA" font-size="17" font-weight="700">swarmos-gateway</text>
+  <text x="600" y="172" text-anchor="middle" fill="#93A1BA" font-size="11">single process · docker or binary</text>
+
+  <g font-size="11.5" font-weight="600">
+    <rect x="462" y="188" width="276" height="34" rx="9" fill="#1A2234" stroke="#2A3650"/>
+    <text x="600" y="210" text-anchor="middle" fill="#EAF0FA">HTTP / WebSocket API · PWA static host</text>
+
+    <rect x="462" y="230" width="276" height="34" rx="9" fill="#1A2234" stroke="#2A3650"/>
+    <text x="600" y="252" text-anchor="middle" fill="#EAF0FA">Scheduler + Parallel Execution Engine</text>
+
+    <rect x="462" y="272" width="276" height="34" rx="9" fill="#1A2234" stroke="#2A3650"/>
+    <text x="600" y="294" text-anchor="middle" fill="#EAF0FA">MCP Proxy + Plugin Runners</text>
+
+    <rect x="462" y="314" width="276" height="34" rx="9" fill="#1A2234" stroke="#2A3650"/>
+    <text x="600" y="336" text-anchor="middle" fill="#EAF0FA">Model Gateway (26 providers)</text>
+
+    <rect x="462" y="356" width="276" height="34" rx="9" fill="#1A2234" stroke="#2A3650"/>
+    <text x="600" y="378" text-anchor="middle" fill="#EAF0FA">Embedded Learner (self-improvement)</text>
+  </g>
+
+  <rect x="462" y="402" width="132" height="30" rx="8" fill="rgba(52,211,153,.14)" stroke="#34D399"/>
+  <text x="528" y="421" text-anchor="middle" fill="#34D399" font-size="11.5" font-weight="700">SQLite · WAL</text>
+  <rect x="606" y="402" width="132" height="30" rx="8" fill="rgba(52,211,153,.14)" stroke="#34D399"/>
+  <text x="672" y="421" text-anchor="middle" fill="#34D399" font-size="11.5" font-weight="700">FS artifacts</text>
+
+  <!-- left: clients -->
+  <g>
+    <rect x="60" y="150" width="150" height="52" rx="12" fill="#121826" stroke="#2A3650"/>
+    <text x="135" y="172" text-anchor="middle" fill="#EAF0FA" font-size="12.5" font-weight="700">📱 PWA (mobile)</text>
+    <text x="135" y="190" text-anchor="middle" fill="#93A1BA" font-size="10">installable · offline</text>
+
+    <rect x="60" y="222" width="150" height="52" rx="12" fill="#121826" stroke="#2A3650"/>
+    <text x="135" y="244" text-anchor="middle" fill="#EAF0FA" font-size="12.5" font-weight="700">✈️ Telegram</text>
+    <text x="135" y="262" text-anchor="middle" fill="#93A1BA" font-size="10">command layer</text>
+
+    <rect x="60" y="294" width="150" height="52" rx="12" fill="#121826" stroke="#2A3650"/>
+    <text x="135" y="316" text-anchor="middle" fill="#EAF0FA" font-size="12.5" font-weight="700">⌨️ swarm CLI</text>
+    <text x="135" y="334" text-anchor="middle" fill="#93A1BA" font-size="10">in-app terminal</text>
+
+    <rect x="60" y="366" width="150" height="52" rx="12" fill="#121826" stroke="#2A3650"/>
+    <text x="135" y="388" text-anchor="middle" fill="#EAF0FA" font-size="12.5" font-weight="700">🔌 Webhooks</text>
+    <text x="135" y="406" text-anchor="middle" fill="#93A1BA" font-size="10">in / out</text>
+  </g>
+  <g stroke="url(#gb)" stroke-width="2.2" fill="none">
+    <path d="M212 176 C 320 176, 330 250, 438 252"/>
+    <path d="M212 248 C 320 248, 330 270, 438 288"/>
+    <path d="M212 320 C 320 320, 330 320, 438 322"/>
+    <path d="M212 392 C 320 392, 330 360, 438 360"/>
+  </g>
+
+  <!-- right: external targets -->
+  <g>
+    <rect x="990" y="150" width="160" height="52" rx="12" fill="#121826" stroke="#2A3650"/>
+    <text x="1070" y="172" text-anchor="middle" fill="#EAF0FA" font-size="12.5" font-weight="700">☁️ LLM providers</text>
+    <text x="1070" y="190" text-anchor="middle" fill="#93A1BA" font-size="10">cloud · local · enterprise</text>
+
+    <rect x="990" y="222" width="160" height="52" rx="12" fill="#121826" stroke="#2A3650"/>
+    <text x="1070" y="244" text-anchor="middle" fill="#EAF0FA" font-size="12.5" font-weight="700">🧩 MCP plugins</text>
+    <text x="1070" y="262" text-anchor="middle" fill="#93A1BA" font-size="10">GitHub · Supabase · +4</text>
+
+    <rect x="990" y="294" width="160" height="52" rx="12" fill="#121826" stroke="#2A3650"/>
+    <text x="1070" y="316" text-anchor="middle" fill="#EAF0FA" font-size="12.5" font-weight="700">🧠 Agent frameworks</text>
+    <text x="1070" y="334" text-anchor="middle" fill="#93A1BA" font-size="10">7 selectable adapters</text>
+
+    <rect x="990" y="366" width="160" height="52" rx="12" fill="#121826" stroke="#2A3650"/>
+    <text x="1070" y="388" text-anchor="middle" fill="#EAF0FA" font-size="12.5" font-weight="700">🔐 Approval gates</text>
+    <text x="1070" y="406" text-anchor="middle" fill="#93A1BA" font-size="10">every MCP call audited</text>
+  </g>
+  <g stroke="url(#gb)" stroke-width="2.2" fill="none">
+    <path d="M762 252 C 860 252, 880 176, 988 176"/>
+    <path d="M762 288 C 860 288, 880 248, 988 248"/>
+    <path d="M762 322 C 860 322, 880 320, 988 320"/>
+    <path d="M762 360 C 860 360, 880 392, 988 392"/>
+  </g>
+
+  <text x="600" y="492" text-anchor="middle" fill="#64748F" font-size="12">backup = copy SQLite + artifacts dir · restore = replace + restart</text>
+</svg>
