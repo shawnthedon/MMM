@@ -1,248 +1,166 @@
 <div align="center">
 
-<img src="public/icons/icon.svg" width="96" alt="SwarmOS logo"/>
+<img src="public/icons/icon.svg" width="88" alt="SwarmOS logo"/>
 
 # ⬡ SwarmOS
 
 ### 📱 Mobile-First AI Agent Orchestration Dashboard
 
-**Create & deploy AI agent teams · run swarms · govern trust · route any model — from your phone.**
+**Build, deploy & govern AI agent teams and swarms — from your phone.**
 
 ![PWA](https://img.shields.io/badge/PWA-installable-6C8CFF?style=for-the-badge&logo=pwa&logoColor=white)
 ![Mobile-first](https://img.shields.io/badge/Mobile--first-360px%2B-22D3EE?style=for-the-badge&logo=smartphone&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript-ES2020-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 ![License](https://img.shields.io/badge/License-MIT-34D399?style=for-the-badge&logo=opensourceinitiative&logoColor=white)
-![PRs Welcome](https://img.shields.io/badge/PRs-welcome-ff69b4?style=for-the-badge&logo=git&logoColor=white)
 
-[✨ Features](#-features) · [📸 Screenshots](#-screenshots) · [🚀 Quick Start](#-quick-start) · [📖 Design Spec](docs/DESIGN_SPEC.md) · [🗺 Roadmap](#-roadmap)
+[🎯 System](#-system-specification) · [📸 Screens](#-screens) · [📖 User Guide](#-user-guide) · [🚀 Deploy](#-run--deploy) · [📚 Docs](#-documentation)
 
 </div>
 
 ---
 
-<img src="docs/images/banner.png" alt="SwarmOS — mobile-first AI agent orchestration banner" width="100%"/>
+<img src="docs/images/banner.png" alt="SwarmOS banner" width="100%"/>
 
-## 🧠 What is SwarmOS?
+## 🎯 System Specification
 
-**SwarmOS** is a self-hosted, zero-dependency control plane for AI agent operations — delivered as a **Progressive Web App** you can install on your phone. It unifies:
+**SwarmOS** is a self-hosted, mobile-first control plane for AI agent operations: create agent profiles, compose teams, deploy swarms, and govern everything through a four-layer security framework — all from an installable Progressive Web App with an embedded full-control Copilot.
 
-- 🤖 **Agent engineering** across 7 selectable frameworks (Swarmzero, AutoPentest, A.I.M.A, Project Nautilus, OpenAI Swarm, CrewAI, LangGraph)
-- 🐝 **Swarm operations** — parallel execution, dependency DAGs, resource allocation, Kanban
-- 🦞 **OpenClaw runtime** — skills system, MCP tool integrations, multi-model routing, Telegram command layer
-- 🧬 **Self-improvement** — agents synthesize new skills, refine their prompts, and optimize tool usage via ML
-- 🛡 **Trust & Governance** — 4-layer security, per-agent trust scores, MCP call auditing, approval gates
-- ✦ **Embedded Copilot** — an in-app AI operator with **full control** over the application (always gate-checked)
-
-> 🏠 Runs anywhere: **one process + SQLite + a folder**. No Redis. No Postgres. No external orchestrator.
-
----
-
-## ✨ Features
-
-| | Module | What it does |
+| | Spec | Detail |
 | :---: | --- | --- |
-| 🤖 | **Agent Manager** | Advanced profiles: framework, brain (any LLM), tools, skills, memory, trust tier, autonomy level (L0–L4) |
-| 🐝 | **Team Orchestrator** | Compose teams, pick topologies (hierarchical / mesh / pipeline / debate), deploy swarms with budgets |
-| 📋 | **Kanban Board** | Touch drag & drop, swimlanes, dependencies, @agent mentions, human-in-the-loop review columns |
-| ⚡ | **Skills Hub** | OpenClaw skills with manifests, eval gating, versioning — incl. review queue for **agent-written skills** |
-| 🧠 | **Model Gateway** | **26 providers** — OpenAI, Anthropic, Google, xAI → local Ollama/vLLM → Azure/Bedrock/Vertex/watsonx |
-| 🧩 | **Plugin Marketplace** | MCP integrations: **GitHub, Supabase, Firecrawl, Vercel, Airtable, Base44** + custom stdio/SSE/HTTP |
-| 💬 | **Chat** | Threads, @mentions, streaming replies, **inline approval cards** that resolve real gates |
-| ✈️ | **Telegram Bridge** | OpenClaw command layer: `/status`, `/deploy`, `/approve`, `/ask`, `/copilot` — signed one-time buttons |
-| 📊 | **Analytics** | Live KPIs, spend & latency, agent leaderboard, trust posture, self-improvement impact |
-| ⚙️ | **Settings** | Trust-weight sliders, autonomy & self-improve policies, notifications, theme, retention |
-| 📁 | **Artifacts & Files** | Governed workspace FS, previews, versioning, sharing, run-linked outputs |
-| 💻 | **Terminal** | Working `swarm` CLI: `status`, `agents`, `deploy`, `approve`, `cat`, `open`, `copilot`… |
-
-### 🔐 Governance highlights
-
-```
-Layer 4  APPROVAL GATES ──── human/delegate sign-off for privileged actions
-Layer 3  MCP CALL AUDIT ──── every tool call logged, hash-chained, replayable
-Layer 2  RUNTIME ISOLATION ── capability tokens, egress proxy, sandboxed tools
-Layer 1  IDENTITY & ACCESS ── RBAC, agent principals, sessions, Telegram mapping
-```
-
-- 🟢 **Tier A** trust (≥ 80) → full-auto unlocks · 🟡 **Tier B** → default gates · 🔴 **Tier C** → quarantined
-- 🚫 The Copilot **can never approve its own requests** — hard-enforced in code
+| 📱 | **Interface** | Mobile-first PWA · 12 modules · dark/light themes · offline shell |
+| 🤖 | **Agents** | 7 selectable frameworks: Swarmzero · AutoPentest · A.I.M.A · Project Nautilus · OpenAI Swarm · CrewAI · LangGraph |
+| 🧠 | **Models** | 26 providers: OpenAI/Anthropic/Google/xAI · OpenRouter/Mistral/Cohere… · local Ollama/vLLM · DeepSeek/Groq… · Azure/Bedrock/Vertex/watsonx — **any model, per agent** |
+| 🐝 | **Swarms** | Parallel execution engine · dependency DAGs · resource allocation · budgets |
+| ⚡ | **OpenClaw** | Skills system · MCP tool integrations · multi-model routing · Telegram command layer |
+| 🧬 | **Self-improvement** | Agents synthesize skills, refine prompts, optimize tool usage (ML) — always human-gated |
+| 🔐 | **Governance** | Identity → Runtime isolation → MCP audit → Approval gates · per-agent trust scores (A/B/C) |
+| 🧩 | **Plugins** | MCP: GitHub · Supabase · Firecrawl · Vercel · Airtable · Base44 + custom servers |
+| 🗄 | **Backend** | Self-hosted gateway · **SQLite (WAL)** · zero external dependencies (no Redis/Postgres) |
+| ✦ | **Copilot** | In-app operator with full app control — every action in a confirm card, self-approval blocked |
 
 ---
 
-## 📸 Screenshots
+## 📸 Screens
 
 <div align="center">
 
-<img src="docs/images/screens.svg" alt="SwarmOS screens: Command Deck, Live Swarm Monitor with dependency DAG, and Copilot action cards" width="100%"/>
+<img src="docs/images/screens.svg" alt="Screens: Command Deck, Live Swarm DAG, Copilot action cards" width="100%"/>
 
-*Left: Command Deck · Center: Live Swarm Monitor with dependency DAG & resource lanes · Right: Copilot full-control action cards*
+*Command Deck · Live Swarm Monitor (dependency DAG + resource lanes) · Copilot action cards*
 
 </div>
 
-<details>
-<summary>🖼 More visuals (architecture)</summary>
-<br/>
-<img src="docs/images/architecture.svg" alt="SwarmOS self-hosted gateway architecture: single process with SQLite, MCP proxy, model gateway, no Redis/Postgres"/>
+<details><summary>🏗 Architecture</summary><br/>
+<img src="docs/images/architecture.svg" alt="Self-hosted gateway architecture" width="100%"/>
 </details>
 
 ---
 
-## 🚀 Quick Start
+## ✨ The 12 Modules
 
-### 1️⃣ Prerequisites
-
-- 📦 **Node.js ≥ 20**
-- 🖼 ImageMagick *(optional — only for regenerating PWA icons)*
-
-### 2️⃣ Install & run
-
-```bash
-# clone your fork / repo
-git clone https://github.com/<you>/swarmos.git
-cd swarmos
-
-# install
-npm install
-
-# ▶ development server (http://localhost:5173, binds 0.0.0.0)
-npm run dev
-```
-
-### 3️⃣ Production build — the real PWA ✅
-
-```bash
-npm run build     # static bundle (~37 KB gzipped JS)
-npm run preview   # serves on http://localhost:4173 with service worker active
-```
-
-### 4️⃣ Install on your phone 📱
-
-1. Open the URL on your phone (same network or via your host's preview proxy)
-2. Browser menu → **Add to Home Screen** / **Install App** *(or Settings → ℹ️ About → Install app)*
-3. 🎉 Launch from the home screen — offline shell included
-
-### 🧪 Smoke tests
-
-```bash
-npm run smoke     # boots the real app in happy-dom and renders all 12 modules
-```
+| | Module | | Module |
+| :---: | --- | :---: | --- |
+| 🤖 | **Agent Manager** — profiles, brain, memory, trust | 🐝 | **Teams & Swarms** — topologies, deploy, live DAG |
+| 📋 | **Kanban Board** — drag & drop, @agent dispatch | ⚡ | **Skills Hub** — marketplace + synthesized review |
+| 🧠 | **Model Gateway** — routing, budgets, key vault | 🧩 | **Plugins** — MCP install & scoped grants |
+| 💬 | **Chat** — streaming, inline approvals | ✈️ | **Telegram Bridge** — command layer, signed buttons |
+| 📊 | **Analytics** — KPIs, spend, trust posture | ⚙️ | **Settings** — everything live-tunable |
+| 📁 | **Artifacts & Files** — previews, upload, share | 💻 | **Terminal** — working `swarm` CLI |
 
 ---
 
-## 🦾 Try the Copilot (it drives the whole app)
+## 📖 User Guide
 
-Open the **✦ dock** at the bottom and try:
+### 🧭 Navigate
+Bottom tabs: **Home · Agents · Tasks · Chat · More** (all modules). Tap the **✦ dock** at the bottom to open the **Copilot** — it can drive the entire app.
 
-| Command | Result |
+### 🤖 Create an agent (60 seconds)
+**Agents → ➕ New** → name & role → pick a **framework** → pick **any model** → bind tools → set governance → **Create**. Tap **▶ Run** to start it.
+
+### 🐝 Deploy a swarm
+**Teams & Swarms → Deploy** → write the objective → pick team + budget cap → **Deploy**. Open the swarm to watch the **live DAG** and resource bars.
+
+### ✦ Drive it with the Copilot
+Open the ✦ dock and try:
+
+| Say this | It does that |
 | --- | --- |
 | `status` | Gateway + fleet summary |
-| `create agent Nova` | → confirm action card → agent created |
-| `deploy swarm research` | → deploy plan card → live swarm with DAG |
-| `approve ap-1` | Releases a gated action **on your explicit instruction** |
-| `open analytics` | Navigation |
-| `theme light` | Live theming |
-| `analyze spend` | Cost report + drill-down |
+| `create agent Nova` | → confirm card → agent created |
+| `deploy swarm research` | → plan card → live swarm |
+| `approve ap-1` | Releases a gate **on your instruction** |
+| `open analytics` · `theme light` | Navigate / retheme |
+| `analyze spend` | Cost report |
 
-> 🛡 Every mutation renders as an **action card** (risk level, diff, gate status) and is audited as *“You via Copilot”*.
+> 🛡 Every mutation shows an **action card** (risk, diff, gates) and is audited as *“You via Copilot”*. The copilot can never approve its own requests.
 
----
+### ✈️ Control from Telegram
+**Telegram Bridge** → link your bot → tap commands in the live preview (`/status`, `/budget`, `/ask researcher progress`). Approvals arrive with one-tap **signed** Allow/Deny buttons.
 
-## 🗺 Module Map
+### 💻 Terminal
+**Terminal** → try `help`, `status`, `agents`, `deploy audit plugins`, `approve ap-1`, `cat` a file. Destructive commands are policy-blocked.
 
-```
-App Shell (PWA)
-├── 🏠 Home / Command Deck
-├── 🤖 Agents ─────────── profiles · wizard · brain · tools · memory · trust
-├── 🐝 Teams & Swarms ─── topologies · deploy sheet · live DAG monitor
-├── 📋 Tasks ──────────── Kanban · dependency graph · @agent dispatch
-├── ⚡ Skills Hub ─────── marketplace · editor · synthesized-review queue
-├── 🧠 Model Gateway ──── 26 providers · routing policies · budgets
-├── 🧩 Plugins ────────── curated MCP + custom servers · scoped grants
-├── 💬 Chat ───────────── threads · approvals inline · artifacts
-├── ✈️ Telegram Bridge ── command layer · topics · signed buttons
-├── 📊 Analytics ──────── KPIs · leaderboard · trust · self-improvement
-├── 📁 Artifacts ──────── previews · upload · share · open-in-terminal
-├── 💻 Terminal ───────── working swarm CLI
-├── ⚙️ Settings ───────── everything, live
-└── ✦ Copilot ─────────── available everywhere (full-control operator)
-```
+### 📱 Install on your phone
+Open the site → browser menu → **Add to Home Screen / Install App** (or **Settings → About → Install app**). Works offline; queued actions sync on reconnect.
 
 ---
 
-## 🏗 Architecture
+## 🚀 Run & Deploy
 
-<div align="center">
-<img src="docs/images/architecture.svg" alt="Architecture: self-hosted gateway, SQLite, MCP proxy, zero external dependencies" width="100%"/>
-</div>
+### ▶ Run locally
+```bash
+git clone https://github.com/shawnthedon/MMM.git
+cd MMM
+npm install
+npm run dev          # http://localhost:5173
+```
+Production build (real PWA — service worker active):
+```bash
+npm run build
+npm run preview      # http://localhost:4173
+```
+Smoke-test everything: `npm run smoke`
 
-| Layer | Choice |
+### 🌍 Deploy to production (Vercel)
+The app is a static Vite build — Vercel deploys it in one command:
+```bash
+npm i -g vercel
+vercel login          # or set VERCEL_TOKEN
+vercel --prod         # uses vercel.json → outputs the production URL
+```
+Or: push to GitHub → **vercel.com/new** → import `swarmos` → Framework: **Vite** → Deploy. *(PWA works out of the box: manifest + service worker included.)*
+
+| Env | Command | URL |
+| --- | --- | --- |
+| 💻 Dev | `npm run dev` | localhost:5173 |
+| 📦 Prod build | `npm run build && npm run preview` | localhost:4173 |
+| ☁️ Production | `vercel --prod` | your Vercel URL |
+
+---
+
+## 🧪 Quality checks
+
+```bash
+npm run smoke   # boots the real app — all 12 modules render
+npm run lint    # code style (after Phase-1 tooling)
+```
+
+---
+
+## 📚 Documentation
+
+| Document | What's inside |
 | --- | --- |
-| 🖥 UI | Vanilla ES modules + Vite · mobile-first design system · hash router (deep-linkable) |
-| 📱 PWA | Manifest + service worker (offline shell, stale-while-revalidate) · installable · safe-area aware |
-| 💾 State | Observable store (demo: `localStorage`; spec: **SQLite WAL**) |
-| 🔌 Plugins | MCP via gateway proxy — agents never hold raw credentials |
-| 🤖 Frameworks | Adapter interface (FAI) with capability matrix per framework |
-| 📡 Realtime | Event envelope with cursors + missed-event replay (spec: `/ws`) |
-
----
-
-## 🧬 Self-Improving Agent Loop
-
-```
-   goal ──▶ PLAN ──▶ ACT ──▶ OBSERVE ──▶ REFLECT
-              ▲                              │
-              └───── LEARN (ML layer) ◀──────┘
-                     ├─ ⚡ skill synthesis   (never auto-activates without policy)
-                     ├─ 📝 prompt refinement (eval-gated, rollback on regression)
-                     └─ 🔧 tool optimization (contextual bandit, permission-safe)
-```
-
----
-
-## 🛠 Tech Stack
-
-![](https://img.shields.io/badge/-Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
-![](https://img.shields.io/badge/-JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
-![](https://img.shields.io/badge/-Service%20Workers-6C8CFF?style=flat-square&logo=googlechrome&logoColor=white)
-![](https://img.shields.io/badge/-SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white)
-![](https://img.shields.io/badge/-MCP-22D3EE?style=flat-square&logoColor=white)
-![](https://img.shields.io/badge/-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)
-![](https://img.shields.io/badge/-happy--dom-34D399?style=flat-square&logoColor=white)
-
----
-
-## 🗺 Roadmap
-
-- [x] 🏁 **P0 — Foundation**: app shell, 12 modules, PWA, copilot, kanban, terminal *(this release)*
-- [ ] 🔌 **P1 — Orchestration**: real gateway + WebSocket live runs, Telegram bot server-side
-- [ ] 🦞 **P2 — OpenClaw**: skills runtime, MCP proxy, 6 curated plugin connectors
-- [ ] 🧬 **P3 — Intelligence**: self-improvement ML loop, trust scoring engine
-- [ ] 🌍 **P4 — Scale**: full 26-provider matrix, all 7 framework adapters, a11y & perf hardening
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! 💜
-
-1. 🍴 Fork the repo
-2. 🌿 `git checkout -b feat/my-feature`
-3. 💾 Commit with clear messages
-4. ✅ `npm run smoke` must pass
-5. 📬 Open a Pull Request
-
----
-
-## 📄 License
-
-Released under the **MIT License** — see [LICENSE](LICENSE) for details.
+| 📐 [Design Spec](docs/DESIGN_SPEC.md) | Full 12-module spec, governance, data model, providers |
+| ✅ [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) | Functional build: 19 phases, seed data & restore guide |
+| 🗺 [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | Non-functional track to production + 100+ resource links |
 
 ---
 
 <div align="center">
 
-**⭐ Star this repo** if SwarmOS helps you orchestrate agents from anywhere!
+**⭐ Star the repo** if you like orchestrating agents from anywhere!
 
-Made with ⬡ for agent operators · [Design Spec](docs/DESIGN_SPEC.md) · [Issues](../../issues)
+⬡ Self-hosted · zero dependencies · MIT License · [Issues](../../issues)
 
 </div>
