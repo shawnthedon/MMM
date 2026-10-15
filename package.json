@@ -3,7 +3,32 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "SwarmOS — mobile-first AI Agent Orchestration Dashboard (PWA prototype)",
+  "description": "SwarmOS — mobile-first AI Agent Orchestration Dashboard. Deploy agent teams & swarms, skills, MCP plugins, multi-model routing, trust & governance. Installable PWA.",
+  "homepage": "https://zippy-ivory-4ei6zjy.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shawnthedon/MMM.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shawnthedon/MMM/issues"
+  },
+  "keywords": [
+    "ai-agents",
+    "agent-orchestration",
+    "swarm",
+    "openclaw",
+    "mcp",
+    "pwa",
+    "mobile-first",
+    "crewai",
+    "langgraph",
+    "telegram-bot",
+    "llm",
+    "self-hosted",
+    "trust-governance",
+    "multi-model-routing"
+  ],
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -13,6 +38,7 @@
   },
   "devDependencies": {
     "happy-dom": "^21.0.1",
+    "vercel": "^64.0.2",
     "vite": "^6.2.0"
   }
 }
