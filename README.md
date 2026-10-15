@@ -158,7 +158,26 @@ npm run lint    # code style (after Phase-1 tooling)
 ---
 
 <div align="center">
-
+🛰️ Connect With Me
+<div align="center">
+<table bgcolor="#0d1117">
+<tr>
+<td align="center" width="300">
+<br />
+<b>Oluwaseun Lawal</b><br />
+<i>Cyber Security Engineer</i><br /><br />
+<a href="https://www.linkedin.com/in/oluwaseun-lawal">
+<img src="https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white" />
+</a>
+<a href="mailto:cyberlawaltech@gmail.com">
+<img src="https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white" />
+</a>
+<br /><br />
+</td>
+</tr>
+</table>
+</div>
+  
 **⭐ Star the repo** if you like orchestrating agents from anywhere!
 
 ⬡ Self-hosted · zero dependencies · MIT License · [Issues](../../issues)
