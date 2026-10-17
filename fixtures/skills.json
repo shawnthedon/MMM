@@ -1,0 +1,98 @@
+[
+  {
+    "id": "sk-1",
+    "name": "firecrawl.deep-research",
+    "version": "1.2.0",
+    "origin": "marketplace",
+    "status": "active",
+    "perms": [
+      "network.egress",
+      "artifacts.write"
+    ],
+    "tools": [
+      "firecrawl.scrape",
+      "firecrawl.map"
+    ],
+    "success": 0.93,
+    "invokes": 412,
+    "desc": "Multi-source research with citation capture."
+  },
+  {
+    "id": "sk-2",
+    "name": "dev.tdd-loop",
+    "version": "2.0.1",
+    "origin": "marketplace",
+    "status": "active",
+    "perms": [
+      "fs.write",
+      "process.exec"
+    ],
+    "tools": [
+      "github.pr.create"
+    ],
+    "success": 0.9,
+    "invokes": 260,
+    "desc": "Red-green-refactor loop with PR drafts."
+  },
+  {
+    "id": "sk-3",
+    "name": "sre.triage",
+    "version": "1.5.0",
+    "origin": "user",
+    "status": "active",
+    "perms": [
+      "vercel.logs"
+    ],
+    "tools": [
+      "vercel.logs",
+      "webhook.alert"
+    ],
+    "success": 0.96,
+    "invokes": 801,
+    "desc": "Incident triage with severity scoring."
+  },
+  {
+    "id": "sk-4",
+    "name": "content.repurpose",
+    "version": "0.9.0",
+    "origin": "agent",
+    "status": "pending",
+    "perms": [
+      "airtable.records"
+    ],
+    "tools": [
+      "airtable.records"
+    ],
+    "success": 0.87,
+    "invokes": 42,
+    "desc": "Turn longform into threads + newsletter. Synthesized by Content-Weaver."
+  },
+  {
+    "id": "sk-5",
+    "name": "data.forecast-lite",
+    "version": "0.3.1",
+    "origin": "agent",
+    "status": "pending",
+    "perms": [
+      "supabase.db.query"
+    ],
+    "tools": [
+      "supabase.db.query"
+    ],
+    "success": 0.81,
+    "invokes": 17,
+    "desc": "Cheap seasonal forecast fallback. Synthesized by Analyst-Prime."
+  },
+  {
+    "id": "sk-6",
+    "name": "core.citations",
+    "version": "1.0.2",
+    "origin": "marketplace",
+    "status": "active",
+    "perms": [],
+    "tools": [],
+    "success": 0.99,
+    "invokes": 1204,
+    "desc": "Citation formatting & dedupe."
+  }
+]

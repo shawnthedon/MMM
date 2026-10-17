@@ -1,0 +1,321 @@
+[
+  {
+    "id": "pv-openai",
+    "category": "Frontier Cloud",
+    "name": "OpenAI",
+    "status": "on",
+    "auth": "API key",
+    "models": [
+      "GPT-5",
+      "o3"
+    ],
+    "latency": 640,
+    "spendMTD": 128.4
+  },
+  {
+    "id": "pv-anthropic",
+    "category": "Frontier Cloud",
+    "name": "Anthropic",
+    "status": "on",
+    "auth": "API key",
+    "models": [
+      "Claude Opus 4",
+      "Claude Sonnet 4"
+    ],
+    "latency": 520,
+    "spendMTD": 214.9
+  },
+  {
+    "id": "pv-google",
+    "category": "Frontier Cloud",
+    "name": "Google",
+    "status": "on",
+    "auth": "API key",
+    "models": [
+      "Gemini 3 Pro"
+    ],
+    "latency": 580,
+    "spendMTD": 76.2
+  },
+  {
+    "id": "pv-xai",
+    "category": "Frontier Cloud",
+    "name": "xAI",
+    "status": "off",
+    "auth": "API key",
+    "models": [
+      "Grok 3"
+    ],
+    "latency": 710,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-openrouter",
+    "category": "Mid-Tier Cloud",
+    "name": "OpenRouter",
+    "status": "on",
+    "auth": "API key",
+    "models": [
+      "auto",
+      "many"
+    ],
+    "latency": 820,
+    "spendMTD": 41.7
+  },
+  {
+    "id": "pv-together",
+    "category": "Mid-Tier Cloud",
+    "name": "Together AI",
+    "status": "off",
+    "auth": "API key",
+    "models": [
+      "Qwen2.5-72B"
+    ],
+    "latency": 460,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-mistral",
+    "category": "Mid-Tier Cloud",
+    "name": "Mistral",
+    "status": "on",
+    "auth": "API key",
+    "models": [
+      "Large",
+      "Codestral"
+    ],
+    "latency": 430,
+    "spendMTD": 22.8
+  },
+  {
+    "id": "pv-cohere",
+    "category": "Mid-Tier Cloud",
+    "name": "Cohere",
+    "status": "off",
+    "auth": "API key",
+    "models": [
+      "Command R+"
+    ],
+    "latency": 550,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-ai21",
+    "category": "Mid-Tier Cloud",
+    "name": "AI21",
+    "status": "off",
+    "auth": "API key",
+    "models": [
+      "Jamba"
+    ],
+    "latency": 600,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-zhipu",
+    "category": "Mid-Tier Cloud",
+    "name": "Zhipu GLM",
+    "status": "on",
+    "auth": "API key",
+    "models": [
+      "GLM-4 Plus"
+    ],
+    "latency": 490,
+    "spendMTD": 9.3
+  },
+  {
+    "id": "pv-ollama",
+    "category": "Local/Self-Hosted",
+    "name": "Ollama",
+    "status": "on",
+    "auth": "local URL",
+    "models": [
+      "qwen2.5:32b",
+      "llama3.3"
+    ],
+    "latency": 220,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-lmstudio",
+    "category": "Local/Self-Hosted",
+    "name": "LM Studio",
+    "status": "off",
+    "auth": "local URL",
+    "models": [
+      "any GGUF"
+    ],
+    "latency": 260,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-llamacpp",
+    "category": "Local/Self-Hosted",
+    "name": "llama.cpp",
+    "status": "off",
+    "auth": "local URL",
+    "models": [
+      "any GGUF"
+    ],
+    "latency": 190,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-vllm",
+    "category": "Local/Self-Hosted",
+    "name": "vLLM",
+    "status": "on",
+    "auth": "local URL",
+    "models": [
+      "qwen2.5-72b"
+    ],
+    "latency": 150,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-localai",
+    "category": "Local/Self-Hosted",
+    "name": "LocalAI",
+    "status": "off",
+    "auth": "local URL",
+    "models": [
+      "any"
+    ],
+    "latency": 300,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-tabby",
+    "category": "Local/Self-Hosted",
+    "name": "TabbyAPI",
+    "status": "off",
+    "auth": "local URL",
+    "models": [
+      "exl2 models"
+    ],
+    "latency": 210,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-deepseek",
+    "category": "Specialized",
+    "name": "DeepSeek",
+    "status": "on",
+    "auth": "API key",
+    "models": [
+      "DeepSeek-V3",
+      "R1"
+    ],
+    "latency": 380,
+    "spendMTD": 18.6
+  },
+  {
+    "id": "pv-qwen",
+    "category": "Specialized",
+    "name": "Qwen",
+    "status": "off",
+    "auth": "API key",
+    "models": [
+      "Qwen-Max"
+    ],
+    "latency": 420,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-minimax",
+    "category": "Specialized",
+    "name": "MiniMax",
+    "status": "off",
+    "auth": "API key",
+    "models": [
+      "MiniMax-01"
+    ],
+    "latency": 470,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-moonshot",
+    "category": "Specialized",
+    "name": "Moonshot AI",
+    "status": "off",
+    "auth": "API key",
+    "models": [
+      "Kimi K2"
+    ],
+    "latency": 510,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-perplexity",
+    "category": "Specialized",
+    "name": "Perplexity",
+    "status": "on",
+    "auth": "API key",
+    "models": [
+      "Sonar"
+    ],
+    "latency": 640,
+    "spendMTD": 6.9
+  },
+  {
+    "id": "pv-groq",
+    "category": "Specialized",
+    "name": "Groq",
+    "status": "on",
+    "auth": "API key",
+    "models": [
+      "Llama-3.3-70B"
+    ],
+    "latency": 90,
+    "spendMTD": 3.2
+  },
+  {
+    "id": "pv-azure",
+    "category": "Enterprise",
+    "name": "Azure OpenAI",
+    "status": "off",
+    "auth": "Entra",
+    "models": [
+      "GPT-5"
+    ],
+    "latency": 560,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-bedrock",
+    "category": "Enterprise",
+    "name": "AWS Bedrock",
+    "status": "off",
+    "auth": "IAM",
+    "models": [
+      "Claude",
+      "Nova"
+    ],
+    "latency": 590,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-vertex",
+    "category": "Enterprise",
+    "name": "GCP Vertex AI",
+    "status": "off",
+    "auth": "Service acct",
+    "models": [
+      "Gemini 3"
+    ],
+    "latency": 570,
+    "spendMTD": 0
+  },
+  {
+    "id": "pv-watsonx",
+    "category": "Enterprise",
+    "name": "IBM watsonx",
+    "status": "off",
+    "auth": "API key",
+    "models": [
+      "Granite"
+    ],
+    "latency": 660,
+    "spendMTD": 0
+  }
+]

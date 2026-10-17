@@ -1,0 +1,20 @@
+[
+  {
+    "id": "po-1",
+    "name": "default-task-routing",
+    "priority": 100,
+    "rules": "WHEN task.type ∈ {research,summarize} → claude-sonnet-4; fallback deepseek-v3; escalate claude-opus-4 IF confidence < 0.6"
+  },
+  {
+    "id": "po-2",
+    "name": "cheap-night-shift",
+    "priority": 50,
+    "rules": "WHEN hour ∈ [00,07] AND task.cost_class = low → ollama/qwen2.5:32b; cap $0.10/run"
+  },
+  {
+    "id": "po-3",
+    "name": "code-escalation",
+    "priority": 80,
+    "rules": "WHEN task.type = code → gpt-5; fallback openrouter/auto"
+  }
+]

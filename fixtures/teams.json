@@ -1,0 +1,33 @@
+[
+  {
+    "id": "tm-research",
+    "name": "Research Squad",
+    "topology": "Hierarchical",
+    "members": [
+      "ag-researcher",
+      "ag-content",
+      "ag-analyst"
+    ],
+    "health": "good"
+  },
+  {
+    "id": "tm-ops",
+    "name": "Ops Crew",
+    "topology": "Peer mesh",
+    "members": [
+      "ag-sre",
+      "ag-coder"
+    ],
+    "health": "good"
+  },
+  {
+    "id": "tm-red",
+    "name": "Red Cell",
+    "topology": "Pipeline",
+    "members": [
+      "ag-pentester",
+      "ag-analyst"
+    ],
+    "health": "watch"
+  }
+]

@@ -73,7 +73,7 @@ export const trustTier = (t) => (t >= 80 ? 'a' : t >= 50 ? 'b' : 'c');
 export const trustColor = (t) => (t >= 80 ? 'var(--trust-a)' : t >= 50 ? 'var(--trust-b)' : 'var(--trust-c)');
 
 /* ---------- seeded demo state ---------- */
-function seed() {
+export function seed() {
   const t = now();
   const mins = (m) => t - m * 60000;
   return {

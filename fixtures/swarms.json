@@ -1,0 +1,66 @@
+[
+  {
+    "id": "sw-market",
+    "teamId": "tm-research",
+    "name": "market-intel-swarm",
+    "objective": "Map the EU AI-agent market: top 20 vendors, pricing, positioning.",
+    "status": "live",
+    "progress": 0.62,
+    "budget": {
+      "cap": 10,
+      "spent": 3.41
+    },
+    "startedAt": 1792200079399,
+    "channel": "telegram",
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "planner",
+        "agent": "ag-researcher",
+        "status": "done",
+        "spent": 0.42,
+        "elapsed": "0:48"
+      },
+      {
+        "id": "n2",
+        "label": "research-a",
+        "agent": "ag-researcher",
+        "status": "done",
+        "spent": 1.12,
+        "elapsed": "3:10"
+      },
+      {
+        "id": "n3",
+        "label": "research-b",
+        "agent": "ag-content",
+        "status": "running",
+        "spent": 0.98,
+        "elapsed": "4:02"
+      },
+      {
+        "id": "n4",
+        "label": "analyze",
+        "agent": "ag-analyst",
+        "status": "running",
+        "spent": 0.61,
+        "elapsed": "2:12"
+      },
+      {
+        "id": "n5",
+        "label": "writer",
+        "agent": "ag-content",
+        "status": "queued",
+        "spent": 0,
+        "elapsed": "—"
+      },
+      {
+        "id": "n6",
+        "label": "assembler",
+        "agent": "ag-researcher",
+        "status": "queued",
+        "spent": 0,
+        "elapsed": "—"
+      }
+    ]
+  }
+]

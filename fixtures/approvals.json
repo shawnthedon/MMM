@@ -1,0 +1,22 @@
+[
+  {
+    "id": "ap-1",
+    "action": "vercel.deploy",
+    "target": "production · web-app",
+    "risk": "medium",
+    "principal": "SRE-Bot",
+    "evidence": "Commit 8f21c: \"fix auth redirect loop\". Diff +214/−96.",
+    "status": "pending",
+    "createdAt": 1792202599399
+  },
+  {
+    "id": "ap-2",
+    "action": "db.migrate",
+    "target": "supabase · staging",
+    "risk": "high",
+    "principal": "Analyst-Prime",
+    "evidence": "ALTER TABLE runs ADD COLUMN cost_usd numeric.",
+    "status": "pending",
+    "createdAt": 1792201699399
+  }
+]

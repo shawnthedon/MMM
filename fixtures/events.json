@@ -1,0 +1,44 @@
+[
+  {
+    "id": "ev-1",
+    "ts": 1792202899399,
+    "type": "mcp",
+    "text": "firecrawl.map called by Researcher-01 · 1.2s · ok",
+    "seq": 6
+  },
+  {
+    "id": "ev-2",
+    "ts": 1792202599399,
+    "type": "approval",
+    "text": "Approval requested: vercel.deploy · production (SRE-Bot)",
+    "seq": 5
+  },
+  {
+    "id": "ev-3",
+    "ts": 1792202239399,
+    "type": "artifact",
+    "text": "Analyst-Prime wrote artifacts/heatmap-positioning.png",
+    "seq": 4
+  },
+  {
+    "id": "ev-4",
+    "ts": 1792201699399,
+    "type": "approval",
+    "text": "Approval requested: db.migrate · staging (Analyst-Prime)",
+    "seq": 3
+  },
+  {
+    "id": "ev-5",
+    "ts": 1792201159399,
+    "type": "trust",
+    "text": "Analyst-Prime trust −4 → 58 (cost overrun)",
+    "seq": 2
+  },
+  {
+    "id": "ev-6",
+    "ts": 1792200079399,
+    "type": "swarm",
+    "text": "Swarm market-intel-swarm deployed · budget $10",
+    "seq": 1
+  }
+]

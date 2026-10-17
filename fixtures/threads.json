@@ -1,0 +1,72 @@
+[
+  {
+    "id": "th-1",
+    "kind": "direct",
+    "title": "Researcher-01",
+    "unread": 2,
+    "messages": [
+      {
+        "id": "m1",
+        "from": "me",
+        "text": "How is the EU vendor crawl going?",
+        "ts": 1792202119399
+      },
+      {
+        "id": "m2",
+        "from": "agent",
+        "agent": "Researcher-01",
+        "text": "Crawling vendor pricing pages now — 13/20 done. Found 4 vendors with usage-based pricing I flagged for Analyst-Prime to normalize.",
+        "ts": 1792202179399
+      },
+      {
+        "id": "m3",
+        "from": "agent",
+        "agent": "Researcher-01",
+        "text": "Also: two sites blocked the crawler (403). Switching to firecrawl.extract with browser rendering for those.",
+        "ts": 1792202419399
+      }
+    ]
+  },
+  {
+    "id": "th-2",
+    "kind": "channel",
+    "title": "# market-intel-swarm",
+    "unread": 0,
+    "messages": [
+      {
+        "id": "m4",
+        "from": "system",
+        "text": "Swarm deployed · objective: EU AI-agent market map · budget $10",
+        "ts": 1792200079399
+      },
+      {
+        "id": "m5",
+        "from": "agent",
+        "agent": "Content-Weaver",
+        "text": "Structure draft attached. Using 3 buckets: Autonomous agents, Orchestration platforms, Vertical copilots.",
+        "ts": 1792200319399
+      },
+      {
+        "id": "m6",
+        "from": "me",
+        "text": "Looks right. Keep pricing in EUR.",
+        "ts": 1792200559399
+      }
+    ]
+  },
+  {
+    "id": "th-3",
+    "kind": "direct",
+    "title": "SRE-Bot",
+    "unread": 1,
+    "messages": [
+      {
+        "id": "m7",
+        "from": "agent",
+        "agent": "SRE-Bot",
+        "text": "Vercel deploy 8f21c is staged and passing checks. Requested production deploy approval (gate: vercel.prod).",
+        "ts": 1792202599399
+      }
+    ]
+  }
+]

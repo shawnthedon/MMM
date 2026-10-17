@@ -1,0 +1,179 @@
+[
+  {
+    "id": "ag-researcher",
+    "name": "Researcher-01",
+    "role": "Deep research & citation capture",
+    "framework": "LangGraph",
+    "model": "anthropic/claude-sonnet-4",
+    "fallback": "deepseek/deepseek-v3",
+    "status": "running",
+    "trust": 92,
+    "autonomy": 3,
+    "successRate": 0.94,
+    "costToday": 4.28,
+    "runs": 214,
+    "lastActive": 1792202839399,
+    "tools": [
+      "firecrawl.scrape",
+      "firecrawl.map",
+      "web.search"
+    ],
+    "skills": [
+      "firecrawl.deep-research",
+      "core.citations"
+    ],
+    "prompt": "You are Researcher-01. Gather multi-source evidence, never fabricate citations, prefer primary sources.",
+    "memory": {
+      "episodic": 1840,
+      "semantic": 412,
+      "kb": "14.2 MB"
+    }
+  },
+  {
+    "id": "ag-coder",
+    "name": "Coder-07",
+    "role": "Full-stack implementation agent",
+    "framework": "CrewAI",
+    "model": "openai/gpt-5",
+    "fallback": "openrouter/auto",
+    "status": "running",
+    "trust": 88,
+    "autonomy": 2,
+    "successRate": 0.91,
+    "costToday": 6.12,
+    "runs": 156,
+    "lastActive": 1792202659399,
+    "tools": [
+      "github.repos",
+      "github.pr.create",
+      "fs.write"
+    ],
+    "skills": [
+      "dev.tdd-loop",
+      "dev.code-review"
+    ],
+    "prompt": "You are Coder-07. Write tests first, small diffs, explain trade-offs briefly.",
+    "memory": {
+      "episodic": 980,
+      "semantic": 260,
+      "kb": "9.1 MB"
+    }
+  },
+  {
+    "id": "ag-pentester",
+    "name": "RedTeam-Alpha",
+    "role": "AutoPentest security cell lead",
+    "framework": "AutoPentest",
+    "model": "anthropic/claude-opus-4",
+    "fallback": "groq/llama-3.3-70b",
+    "status": "paused",
+    "trust": 76,
+    "autonomy": 1,
+    "successRate": 0.87,
+    "costToday": 2.03,
+    "runs": 64,
+    "lastActive": 1792197259399,
+    "tools": [
+      "net.probe",
+      "http.fuzz"
+    ],
+    "skills": [
+      "sec.recon",
+      "sec.report"
+    ],
+    "prompt": "You are RedTeam-Alpha. Operate strictly inside the engagement scope. Every exploit step requires approval.",
+    "memory": {
+      "episodic": 420,
+      "semantic": 150,
+      "kb": "5.4 MB"
+    }
+  },
+  {
+    "id": "ag-sre",
+    "name": "SRE-Bot",
+    "role": "Infra watch & incident response",
+    "framework": "Swarmzero",
+    "model": "google/gemini-3-pro",
+    "fallback": "ollama/qwen2.5:32b",
+    "status": "running",
+    "trust": 95,
+    "autonomy": 3,
+    "successRate": 0.96,
+    "costToday": 1.44,
+    "runs": 502,
+    "lastActive": 1792202899399,
+    "tools": [
+      "vercel.logs",
+      "vercel.deploy",
+      "webhook.alert"
+    ],
+    "skills": [
+      "sre.triage",
+      "sre.postmortem"
+    ],
+    "prompt": "You are SRE-Bot. Detect, triage, mitigate. Never touch prod without a gate approval.",
+    "memory": {
+      "episodic": 3200,
+      "semantic": 890,
+      "kb": "22.8 MB"
+    }
+  },
+  {
+    "id": "ag-content",
+    "name": "Content-Weaver",
+    "role": "Multi-channel content pipeline",
+    "framework": "Project Nautilus",
+    "model": "mistral/large-latest",
+    "fallback": "zhipu/glm-4-plus",
+    "status": "idle",
+    "trust": 81,
+    "autonomy": 2,
+    "successRate": 0.89,
+    "costToday": 0.87,
+    "runs": 122,
+    "lastActive": 1792201159399,
+    "tools": [
+      "airtable.records",
+      "supabase.db.query"
+    ],
+    "skills": [
+      "content.longform",
+      "content.repurpose"
+    ],
+    "prompt": "You are Content-Weaver. Match brand voice, always include sources, respect editorial gates.",
+    "memory": {
+      "episodic": 760,
+      "semantic": 320,
+      "kb": "8.7 MB"
+    }
+  },
+  {
+    "id": "ag-analyst",
+    "name": "Analyst-Prime",
+    "role": "Data & cost intelligence",
+    "framework": "A.I.M.A",
+    "model": "deepseek/deepseek-v3",
+    "fallback": "together/qwen2.5-72b",
+    "status": "error",
+    "trust": 58,
+    "autonomy": 2,
+    "successRate": 0.78,
+    "costToday": 3.19,
+    "runs": 88,
+    "lastActive": 1792200559399,
+    "tools": [
+      "supabase.db.query",
+      "firecrawl.extract"
+    ],
+    "skills": [
+      "data.etl",
+      "data.forecast"
+    ],
+    "prompt": "You are Analyst-Prime. Deliberate over hypotheses, validate data before conclusions.",
+    "memory": {
+      "episodic": 610,
+      "semantic": 240,
+      "kb": "7.2 MB"
+    }
+  }
+]

@@ -1,0 +1,39 @@
+{
+  "workspaceName": "SwarmLab",
+  "theme": "dark",
+  "density": "comfortable",
+  "autonomyLevel": 2,
+  "selfImprove": "suggest",
+  "copilotMode": "act",
+  "copilotMemory": true,
+  "simulate": true,
+  "soundHaptics": true,
+  "notify": {
+    "approvals": true,
+    "failures": true,
+    "deploys": true,
+    "budget": true,
+    "digest": true
+  },
+  "trustWeights": {
+    "success": 12,
+    "compliance": 10,
+    "approvals": 8,
+    "evals": 8,
+    "uptime": 6,
+    "incidents": 15,
+    "cost": 8
+  },
+  "retention": {
+    "runs": "90d",
+    "logs": "30d",
+    "memory": "180d"
+  },
+  "gateway": {
+    "status": "healthy",
+    "version": "0.1.0-proto",
+    "uptimeSince": 1791943759399,
+    "storageMb": 248,
+    "sqlite": "WAL"
+  }
+}

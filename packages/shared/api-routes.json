@@ -1,0 +1,36 @@
+{
+  "version": "1",
+  "baseUrl": "/api/v1",
+  "transport": { "ws": "/ws", "envelope": "{ topic, type, entity?, payload?, ts, cursor? }" },
+  "routes": {
+    "health": { "GET": "/healthz" },
+    "summary": { "GET": "/api/v1/summary" },
+    "agents": {
+      "GET": "/api/v1/agents",
+      "POST": "/api/v1/agents",
+      "GET_ONE": "/api/v1/agents/:id",
+      "PATCH": "/api/v1/agents/:id"
+    },
+    "tasks": {
+      "GET": "/api/v1/tasks",
+      "POST": "/api/v1/tasks",
+      "PATCH": "/api/v1/tasks/:id"
+    },
+    "approvals": {
+      "GET": "/api/v1/approvals",
+      "ALLOW": "POST /api/v1/approvals/:id/allow",
+      "DENY": "POST /api/v1/approvals/:id/deny"
+    },
+    "events": { "GET": "/api/v1/events?cursor=" },
+    "audit": { "GET": "/api/v1/audit/verify" },
+    "dev": { "POST": "/api/v1/dev/seed  body:{reset?:boolean}" }
+  },
+  "planned": [
+    "POST /swarms/:id/deploy|pause|resume|cancel",
+    "POST /skills/:id/activate",
+    "GET/POST /chat/threads/:id/messages",
+    "GET/POST /files",
+    "POST /copilot/messages",
+    "GET /analytics/series/:metric"
+  ]
+}

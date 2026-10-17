@@ -1,0 +1,110 @@
+[
+  {
+    "id": "pl-gh",
+    "name": "GitHub",
+    "category": "DevOps",
+    "installed": true,
+    "verified": true,
+    "callsToday": 148,
+    "scopes": [
+      "repo.read",
+      "pr.write"
+    ],
+    "tools": [
+      "repos.read",
+      "code.search",
+      "pr.create",
+      "issues.manage",
+      "actions.trigger"
+    ]
+  },
+  {
+    "id": "pl-fc",
+    "name": "Firecrawl",
+    "category": "Web",
+    "installed": true,
+    "verified": true,
+    "callsToday": 326,
+    "scopes": [
+      "network.egress"
+    ],
+    "tools": [
+      "scrape",
+      "map",
+      "crawl",
+      "extract",
+      "search"
+    ]
+  },
+  {
+    "id": "pl-sb",
+    "name": "Supabase",
+    "category": "Data",
+    "installed": false,
+    "verified": true,
+    "callsToday": 0,
+    "scopes": [
+      "db.query",
+      "storage"
+    ],
+    "tools": [
+      "db.query",
+      "db.migrate",
+      "auth.admin",
+      "storage",
+      "edge.invoke"
+    ]
+  },
+  {
+    "id": "pl-vl",
+    "name": "Vercel",
+    "category": "DevOps",
+    "installed": true,
+    "verified": true,
+    "callsToday": 61,
+    "scopes": [
+      "deploy",
+      "logs.read"
+    ],
+    "tools": [
+      "deploy",
+      "env.manage",
+      "logs.read",
+      "domains",
+      "projects"
+    ]
+  },
+  {
+    "id": "pl-at",
+    "name": "Airtable",
+    "category": "No-code",
+    "installed": false,
+    "verified": true,
+    "callsToday": 0,
+    "scopes": [
+      "records.crud"
+    ],
+    "tools": [
+      "base.list",
+      "records.crud",
+      "schema.update"
+    ]
+  },
+  {
+    "id": "pl-b44",
+    "name": "Base44",
+    "category": "No-code",
+    "installed": false,
+    "verified": true,
+    "callsToday": 0,
+    "scopes": [
+      "data.crud"
+    ],
+    "tools": [
+      "apps.list",
+      "data.crud",
+      "functions.invoke",
+      "auth"
+    ]
+  }
+]

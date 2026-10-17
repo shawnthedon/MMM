@@ -1,0 +1,89 @@
+[
+  {
+    "id": "tk-1",
+    "title": "Draft EU market map structure",
+    "column": "done",
+    "assignee": "ag-content",
+    "priority": "high",
+    "deps": [],
+    "desc": "Outline sections: vendors, pricing, positioning."
+  },
+  {
+    "id": "tk-2",
+    "title": "Crawl vendor pricing pages",
+    "column": "doing",
+    "assignee": "ag-researcher",
+    "priority": "high",
+    "deps": [
+      "tk-1"
+    ],
+    "desc": "Firecrawl map + scrape top-20 pricing."
+  },
+  {
+    "id": "tk-3",
+    "title": "Normalize pricing into Airtable",
+    "column": "doing",
+    "assignee": "ag-analyst",
+    "priority": "med",
+    "deps": [
+      "tk-2"
+    ],
+    "desc": "Map plans to canonical tiers."
+  },
+  {
+    "id": "tk-4",
+    "title": "Positioning heatmap chart",
+    "column": "review",
+    "assignee": "ag-analyst",
+    "priority": "med",
+    "deps": [
+      "tk-3"
+    ],
+    "desc": "Feature coverage × price."
+  },
+  {
+    "id": "tk-5",
+    "title": "Security review of new MCP plugin",
+    "column": "todo",
+    "assignee": "ag-pentester",
+    "priority": "high",
+    "deps": [],
+    "desc": "Scope: custom HTTP MCP server."
+  },
+  {
+    "id": "tk-6",
+    "title": "Rotate Vercel deploy key",
+    "column": "todo",
+    "assignee": "ag-sre",
+    "priority": "high",
+    "deps": [],
+    "desc": "Gate: production env access."
+  },
+  {
+    "id": "tk-7",
+    "title": "Weekly cost digest to Telegram",
+    "column": "doing",
+    "assignee": "ag-sre",
+    "priority": "low",
+    "deps": [],
+    "desc": "Automated cron task."
+  },
+  {
+    "id": "tk-8",
+    "title": "Refine Content-Weaver prompt (v12)",
+    "column": "review",
+    "assignee": "ag-content",
+    "priority": "med",
+    "deps": [],
+    "desc": "Agent-proposed refinement pending review."
+  },
+  {
+    "id": "tk-9",
+    "title": "Archive Q3 run artifacts",
+    "column": "done",
+    "assignee": "ag-sre",
+    "priority": "low",
+    "deps": [],
+    "desc": "Cold storage export."
+  }
+]
