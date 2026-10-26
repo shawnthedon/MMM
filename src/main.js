@@ -135,19 +135,8 @@ function boot() {
   window.addEventListener('offline', updateNet);
   updateNet();
 
-  // dock hint rotation
-  const hints = [
-    '✦ Ask Copilot — it can drive the whole app',
-    '✦ Try “deploy swarm research”',
-    '✦ Try “create agent Nova”',
-    '✦ Try “approve ap-1”',
-  ];
-  let hi = 0;
-  setInterval(() => {
-    hi = (hi + 1) % hints.length;
-    const el = document.getElementById('dock-text');
-    if (el) el.textContent = hints[hi];
-  }, 6000);
+  // hint rotation lived in the removed Copilot dock; suggestions now come from the panel.
+
 }
 
 boot();

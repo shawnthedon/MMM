@@ -737,10 +737,12 @@ views.settings = {
       <div class="card">
         <div class="kv"><span class="k">Default mode</span>
           <select class="input" data-model="settings.copilotMode" style="width:130px">
-            ${['ask', 'act', 'build', 'analyze'].map((m) => `<option ${st.copilotMode === m ? 'selected' : ''}>${m}</option>`).join('')}
+            ${['ask', 'operate', 'build', 'knowledge', 'training', 'voice', 'activity'].map((m) => `<option ${st.copilotMode === m ? 'selected' : ''}>${m}</option>`).join('')}
           </select>
         </div>
+        <div class="tiny muted" style="margin:-4px 0 8px">Used when the Copilot panel opens with no mode chosen. Modes never grant permissions.</div>
         <div class="kv"><span class="k">Conversation memory</span><span class="switch ${st.copilotMemory ? 'on' : ''}" data-act="toggle-memory"></span></div>
+        <div class="tiny muted" style="margin-top:6px">When off, draft and action log stay in this tab only and are never written to storage.</div>
         <div class="kv"><span class="k">Self-approval</span><span class="chip tiny bad">always blocked</span></div>
       </div>
 

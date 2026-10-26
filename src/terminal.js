@@ -151,7 +151,7 @@ export function execCommand(raw) {
       if (!arg) { push({ kind: 'err', text: 'copilot: missing message' }); break; }
       import('./copilot.js').then((m) => {
         m.copilotSay(`(from terminal) ${arg}`);
-        push({ kind: 'dim', text: 'opening copilot… see dock' });
+        push({ kind: 'dim', text: 'opening copilot…' });
         setTimeout(() => m.openCopilot(), 400);
         setTimeout(() => window.__copilotChip?.(arg), 700);
       });

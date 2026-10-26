@@ -36,7 +36,7 @@
 | 🔐 | **Governance** | Identity → Runtime isolation → MCP audit → Approval gates · per-agent trust scores (A/B/C) |
 | 🧩 | **Plugins** | MCP: GitHub · Supabase · Firecrawl · Vercel · Airtable · Base44 + custom servers |
 | 🗄 | **Backend** | Self-hosted gateway · **SQLite (WAL)** · zero external dependencies (no Redis/Postgres) |
-| ✦ | **Copilot** | In-app operator with full app control — every action in a confirm card, self-approval blocked |
+| ✦ | **Copilot** | Central launcher + floating panel · 7 modes · grounded, source-linked answers · risk-classed confirm cards · browser-scoped memory · honest capability report |
 
 ---
 
@@ -72,7 +72,7 @@
 ## 📖 User Guide
 
 ### 🧭 Navigate
-Bottom tabs: **Home · Agents · Tasks · Chat · More** (all modules). Tap the **✦ dock** at the bottom to open the **Copilot** — it can drive the entire app.
+Bottom tabs: **Home · Agents · ✦ Copilot · Tasks · More** (all modules). The **✦ Copilot** button is the centre action of the bottom navigation — tap it to open the floating panel; `Esc` closes it and your draft is kept.
 
 ### 🤖 Create an agent (60 seconds)
 **Agents → ➕ New** → name & role → pick a **framework** → pick **any model** → bind tools → set governance → **Create**. Tap **▶ Run** to start it.
@@ -81,18 +81,21 @@ Bottom tabs: **Home · Agents · Tasks · Chat · More** (all modules). Tap the 
 **Teams & Swarms → Deploy** → write the objective → pick team + budget cap → **Deploy**. Open the swarm to watch the **live DAG** and resource bars.
 
 ### ✦ Drive it with the Copilot
-Open the ✦ dock and try:
+Tap the centre **✦ Copilot** button and pick a mode — **Ask · Operate · Build · Knowledge · Training · Voice · Activity**:
 
 | Say this | It does that |
 | --- | --- |
-| `status` | Gateway + fleet summary |
-| `create agent Nova` | → confirm card → agent created |
-| `deploy swarm research` | → plan card → live swarm |
-| `approve ap-1` | Releases a gate **on your instruction** |
-| `open analytics` · `theme light` | Navigate / retheme |
-| `analyze spend` | Cost report |
+| `status` | Live agent/swarm/approval counts, spend, gateway state |
+| `explain this screen` | Describes the module you are on, with sources |
+| `create agent Nova` | → review card → agent definition (status `idle`, not running) |
+| `deploy swarm research` | → consequential plan card → **two-step** confirmation |
+| `approve ap-1` | Prepares *your* decision; Copilot never decides or self-approves |
+| `gateway authentication` | Knowledge hits with verification status + file paths |
+| `can it sing?` | Reports the unsupported capability instead of faking output |
 
-> 🛡 Every mutation shows an **action card** (risk, diff, gates) and is audited as *“You via Copilot”*. The copilot can never approve its own requests.
+> 🛡 Every mutation is risk-classed (`reversible` / `consequential`), bound to the values shown, expires after 5 minutes, and is recorded in Copilot's episodic log with its evidence.
+
+> ⚠️ **Truthfulness:** this build runs on seeded demo state in the browser. The panel header always shows `Demo data · gateway …`, and agents/swarms/training/voice actions say what is simulated. No model, scheduler, training worker, voice engine or SMS connector is called. See [`docs/copilot/PHASE0_DISCOVERY.md`](docs/copilot/PHASE0_DISCOVERY.md).
 
 ### ✈️ Control from Telegram
 **Telegram Bridge** → link your bot → tap commands in the live preview (`/status`, `/budget`, `/ask researcher progress`). Approvals arrive with one-tap **signed** Allow/Deny buttons.

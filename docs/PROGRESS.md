@@ -36,6 +36,36 @@
 - ⬜ 3.2 rest: teams/swarms/skills/chat/files/analytics routes
 - ⬜ 3.4 Auth + RBAC (Owner/Admin/Operator/Reviewer/Observer)
 
+## ✦ Copilot (master spec phases) — 🟨
+> Spec: `docs/copilot/PHASE0_DISCOVERY.md` (discovery + blockers) ·
+> `docs/copilot/copilot-ui-fab-panel.md` (module spec + evidence)
+
+- ✅ **Phase 0** Repository discovery & contracts — every claim in the report is tied to a file;
+  blockers recorded (`PHASE0_DISCOVERY.md`).
+- ✅ **Phase 1** FAB + panel + holographic empty state — central bottom-nav launcher, floating
+  panel (mobile sheet / desktop card), 7 modes, context strip, action tray, details drawer,
+  draft/mode persistence, Escape + focus trap, reduced-motion path. Evidence: `npm run smoke`
+  (28 checks) + `npm run test:copilot` (6 interaction checks) + `npm run build`.
+- ✅ **Phase 1 cards** answer (with sources + verification badges), proposal (risk class, edit
+  re-arms review, 5-min expiry, two-step consequential confirm), result (per-step state,
+  blocked steps named), diagnostic (real `/healthz` probe), knowledge, capability, activity.
+- ✅ **Phase 1 grounding (subset of Phase 2)** versioned knowledge pack with per-entry
+  verification status, version, update date and source files; keyword retrieval; explicit
+  "no grounded answer" instead of guessing.
+- 🟨 **Phase 2** Knowledge & memory — browser-scoped working/episodic/preference memory with
+  secret redaction, export, clear, and Settings kill-switch ✅. Ingestion, revision/approval,
+  semantic memory, retention enforcement, server audit ⬜.
+- ⬜ **Phase 3** Runtime-backed orchestration — needs gateway auth/RBAC + API client first.
+- ⬜ **Phase 4** Training Studio — **BLOCKED**: no worker, dataset decoder, checkpoint store or
+  model registry. Training mode reports the blocker and runs metadata-only dataset checks.
+- ⬜ **Phase 5** Voice Studio — **BLOCKED/UNVERIFIED**: candidate engines (Local TTS, NeuTTS,
+  OpenVoice) not verified here; singing has no supported path and is reported unsupported.
+- ⬜ **Phase 6** Communication gateway & OpenSMS — **UNCONFIGURED**: needs a server-side secret
+  store + proxy, verified topology, and on-device tests. Telegram remains a UI simulation.
+- ⬜ **Phase 7** Browser control — not started; no candidate reviewed, nothing enabled.
+- ⬜ **Phase 8** Hardening & acceptance — device/browser screenshots and screen-reader passes
+  outstanding; server-side policy enforcement blocked on 3.4.
+
 ## Phase 4 🤖 Agents & adapters — ⬜ (FAI + 7 adapters)
 ## Phase 5 🐝 Parallel execution engine — ⬜ (scheduler, DAG)
 ## Phase 6 🧠 Model gateway (real LLM calls) — ⬜
@@ -84,4 +114,4 @@ curl localhost:8787/api/v1/summary
 ```
 
 ---
-*Last updated: 2026-10-15 — Phase 0–2 foundation + gateway first slice.*
+*Last updated: 2026-10-26 — Copilot Phase 0 discovery + Phase 1 FAB/panel/modes/knowledge/memory.*

@@ -1,0 +1,159 @@
+/* ============ Capability registry ============
+ * Single source of truth for "can Copilot actually do this here?". Modes and cards read from
+ * it, so the UI cannot advertise a feature the repository does not have.
+ * status: available | demo | blocked | unconfigured | unverified
+ */
+import { getRuntime } from './runtime.js';
+import { knowledgeStats } from './knowledge.js';
+import { memorySummary } from './memory.js';
+
+const CAPS = {
+  knowledge: {
+    id: 'knowledge',
+    label: 'Grounded knowledge',
+    status: 'available',
+    summary: 'Bundled, versioned, source-linked knowledge pack with keyword retrieval.',
+    detail:
+      'Read-only snapshot built from this repository. Search returns verification status, version and source references. There is no ingestion, editing, revision or approval pipeline yet.',
+    requirements: ['Knowledge editor + revision store (Phase 2)'],
+    evidence: () => `${knowledgeStats().total} entries · ${knowledgeStats().sources} source files · pack ${knowledgeStats().version}`,
+  },
+  memory: {
+    id: 'memory',
+    label: 'Copilot memory',
+    status: 'available',
+    summary: 'Working draft, episodic action log and preferences, scoped to this browser.',
+    detail:
+      'Persisted in localStorage with secret redaction. No semantic memory, no cross-device continuity, no server audit trail.',
+    requirements: ['Server memory service with retention + audit (Phase 2)'],
+    evidence: () => {
+      const m = memorySummary();
+      return `${m.episodes}/${m.cap} episodes · draft ${m.hasDraft ? 'saved' : 'empty'} · ${m.storage}`;
+    },
+  },
+  actions: {
+    id: 'actions',
+    label: 'App actions',
+    status: 'demo',
+    summary: 'Operates the seeded demo store in this browser — not the gateway.',
+    detail:
+      'Creates agents, tasks and swarms and resolves approvals against localStorage. Every mutation shows a risk card and is recorded in episodic memory. Nothing is sent to the gateway or enforced by a server.',
+    requirements: ['Frontend API client + auth/RBAC (checklist 2.5 / 3.4)', 'Server-side policy enforcement'],
+    evidence: () => {
+      const rt = getRuntime();
+      return `store: ${rt.store.mode} · gateway: ${rt.gateway.status}`;
+    },
+  },
+  training: {
+    id: 'training',
+    label: 'Model Training Studio',
+    status: 'blocked',
+    summary: 'No training backend exists, so no job can be created or reported.',
+    detail:
+      'The repository has no dataset decoder, job queue, worker, checkpoint store, evaluator or model registry. Inference, retrieval, fine-tuning, LoRA and full training are different operations; none are wired. Dataset checks run locally against File Manager metadata and say what they cannot verify.',
+    requirements: [
+      'Verified training backend + worker adapter',
+      'Dataset contract per modality (audio/image/text)',
+      'Checkpoint + artifact storage and model registry',
+      'Resource limits, isolation and licence/consent checks',
+    ],
+    evidence: () => 'no worker process, no job table usage, no model registry in repo',
+  },
+  voice: {
+    id: 'voice',
+    label: 'Voice Studio',
+    status: 'unverified',
+    summary: 'Candidate engines are not installed or verified; singing is unsupported.',
+    detail:
+      'Local TTS, NeuTTS and OpenVoice are candidates from the spec. Their licences, maintenance, mobile runtimes and audio capabilities were not verified here. Text-to-speech is not singing: “now sing …” has no supported path, and no consent/profile storage exists yet.',
+    requirements: [
+      'Verify each upstream repo, licence (code + weights) and mobile runtime',
+      'Engine adapter with capability declaration (speech vs singing)',
+      'Consent record, protected voice profiles, deletion + synthetic labelling',
+    ],
+    evidence: () => 'no engine adapter, no audio pipeline, no consent store',
+  },
+  channels: {
+    id: 'channels',
+    label: 'Communication gateway',
+    status: 'demo',
+    summary: 'Telegram screen is a UI simulation; other channels are unverified.',
+    detail:
+      'No inbound or outbound transport exists. Telegram, WhatsApp, Slack, Discord, Signal and iMessage each require their own verified connector, credentials, identity mapping and rate limits. No channel can trigger a privileged action today.',
+    requirements: ['Per-channel adapter + credentials in a server-side store', 'Identity mapping, allowlists, rate limits, delivery receipts'],
+    evidence: () => 'Telegram view renders from demo state only',
+  },
+  opensms: {
+    id: 'opensms',
+    label: 'OpenSMS (Android SMS)',
+    status: 'unconfigured',
+    summary: 'Not connected. Needs a server-side proxy and a verified device topology.',
+    detail:
+      'OpenSMS is a separate Apache-2.0 Android app; its Python classes and Android permissions cannot be inherited by browser code. Only a thin adapter over its authenticated HTTP API is sound. An API key must never reach client JavaScript, and HTTPS→plain-HTTP LAN calls are unreliable, so a server-side proxy is a prerequisite. No remote start/stop will be offered: the inspected /control/ route is unauthenticated and does not actually control the server.',
+    requirements: [
+      'Server-side secret store and proxy (no key in browser JS)',
+      'Verified topology (same device / LAN / hosted) and HTTPS story',
+      'Recipient preview, approval policy, rate limits, audit',
+      'On-device test of missing permissions, stopped server, bad key',
+    ],
+    evidence: () => 'no base URL configured, no secret reference, no connector code',
+  },
+  browser: {
+    id: 'browser',
+    label: 'Browser control',
+    status: 'blocked',
+    summary: 'No adapter reviewed or enabled; authorised automation only.',
+    detail:
+      'Two candidate projects must pass licence, activity, security, mobile and testability review before integration behind a feature flag. “Stealth” is never authorisation to defeat anti-bot, auth, paywall or access controls.',
+    requirements: ['Candidate review + licence/security assessment', 'Adapter + feature flag + safe-failure tests'],
+    evidence: () => 'no browser-control module in repo',
+  },
+  llm: {
+    id: 'llm',
+    label: 'LLM answer generation',
+    status: 'unverified',
+    summary: 'No model is called. Answers are deterministic retrieval + live app state.',
+    detail:
+      'The model catalogue, routing policies and agent model ids are demo data. There is no provider client, no key handling and no streaming. Copilot must not be described as an LLM in this build.',
+    requirements: ['Provider client + key vault', 'Model discovery/health/limits', 'Tool-calling intent router'],
+    evidence: () => 'no fetch to a provider anywhere in src/',
+  },
+};
+
+export function getCapability(id) {
+  const cap = CAPS[id];
+  if (!cap) return null;
+  let evidence = '';
+  try {
+    evidence = cap.evidence ? cap.evidence() : '';
+  } catch {
+    evidence = '';
+  }
+  return { ...cap, evidence };
+}
+
+export function capabilityList() {
+  return Object.keys(CAPS).map(getCapability);
+}
+
+/** Modes whose primary capability is not usable yet. */
+export const BLOCKED_MODES = {
+  training: 'training',
+  voice: 'voice',
+};
+
+export const STATUS_LABEL = {
+  available: 'available',
+  demo: 'demo',
+  blocked: 'blocked',
+  unconfigured: 'not configured',
+  unverified: 'unverified',
+};
+
+export const STATUS_TONE = {
+  available: 'ok',
+  demo: 'info',
+  blocked: 'bad',
+  unconfigured: 'warn',
+  unverified: 'warn',
+};
