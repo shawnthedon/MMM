@@ -15,6 +15,7 @@ import './copilot.js';
 import './designer.js';
 import './skillsMatrix.js';
 import './skillsImportView.js';
+import './comms.js';
 
 let currentRoute = 'home';
 let currentParams = {};

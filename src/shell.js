@@ -14,10 +14,11 @@ export const routes = [
   { id: 'tasks', label: 'Tasks', icon: 'board', title: 'Kanban Board' },
   { id: 'chat', label: 'Chat', icon: 'chat', title: 'Chat' },
   { id: 'skills', label: 'Skills', icon: 'skill', title: 'Skills Hub' },
-  { id: 'matrix', label: 'Skills Matrix', icon: 'graph', title: 'Skills Matrix' },
   { id: 'models', label: 'Models', icon: 'model', title: 'Model Gateway' },
   { id: 'plugins', label: 'Plugins', icon: 'plug', title: 'Plugin Marketplace' },
-  { id: 'telegram', label: 'Telegram', icon: 'send', title: 'Telegram Bridge' },
+  { id: 'comms', label: 'Comms', icon: 'broadcast', title: 'Comms' },
+  // Kept as routes for titles/highlighting, but not shown in the All-modules grid (see HIDDEN).
+  { id: 'matrix', label: 'Skills Matrix', icon: 'graph', title: 'Skills Matrix' },
   { id: 'analytics', label: 'Analytics', icon: 'chart', title: 'Analytics' },
   { id: 'artifacts', label: 'Files', icon: 'folder', title: 'Artifacts & Files' },
   { id: 'terminal', label: 'Terminal', icon: 'terminal', title: 'Terminal' },
@@ -169,7 +170,10 @@ function quickCreateSheet() {
 
 /* ---------- More grid ---------- */
 function moreSheet(navigate) {
-  const items = routes.filter((r) => !TABS.includes(r.id));
+  // Chat has its own header button and the Skills Matrix is opened from the Skills Hub, so neither
+  // belongs in the module list; Comms replaces the old standalone Telegram entry.
+  const HIDDEN = [...TABS, 'chat', 'matrix'];
+  const items = routes.filter((r) => !HIDDEN.includes(r.id));
   openSheet({
     title: 'All modules',
     body: `<div class="row" style="gap:8px;margin-bottom:12px">

@@ -1,6 +1,7 @@
 /* ============ SwarmOS core: state, seed, utils, icons ============ */
 
 import { cloneSkills, cloneRelations, SKILLS } from './skillsData.js';
+import { cloneComms } from './commsChannels.js';
 
 export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -62,6 +63,11 @@ export const icons = {
   // Canonical Skills Matrix glyph: three linked nodes. Reused for every matrix shortcut.
   graph: svg(P('M12 3a2.2 2.2 0 1 0 0 4.4A2.2 2.2 0 0 0 12 3zM5 16.6a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4zM19 16.6a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4zM11 7.6 6.4 15.4M13 7.6l4.6 7.8M7.2 18.8h9.6')),
   upload: svg(P('M12 20V8M7 12l5-5 5 5M4 4h16')),
+  broadcast: svg(P('M12 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM8.5 10.5a5 5 0 0 0 0 7M15.5 10.5a5 5 0 0 1 0 7M5.5 7.5a9 9 0 0 0 0 13M18.5 7.5a9 9 0 0 1 0 13')),
+  globe: svg(P('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.4 3.8 5.5 3.8 9S14.5 18.6 12 21c-2.5-2.4-3.8-5.5-3.8-9S9.5 5.4 12 3z')),
+  phone: svg(P('M7 3h10v18H7zM10.5 18h3')),
+  hash: svg(P('M9 4 7 20M17 4l-2 16M4 9h16M3 15h16')),
+  key: svg(P('M14 10a4 4 0 1 0-4-4 4 4 0 0 0 4 4zM11 13l-7 7v2h3l1-2h2v-2h2z')),
   doc: svg(P('M7 3h7l4 4v14H7zM14 3v5h4M9.5 12h5M9.5 16h5')),
 };
 
@@ -188,6 +194,8 @@ export function seed() {
     matrixHistory: [],
     // Import audit trail: every accepted package, its format, findings and decision.
     skillImports: [],
+    // Communication gateways (Comms panel): per-channel credentials, routing, inbox and log.
+    comms: cloneComms(),
     plugins: [
       { id: 'pl-gh', name: 'GitHub', category: 'DevOps', installed: true, verified: true, callsToday: 148, scopes: ['repo.read', 'pr.write'], tools: ['repos.read', 'code.search', 'pr.create', 'issues.manage', 'actions.trigger'] },
       { id: 'pl-fc', name: 'Firecrawl', category: 'Web', installed: true, verified: true, callsToday: 326, scopes: ['network.egress'], tools: ['scrape', 'map', 'crawl', 'extract', 'search'] },
@@ -332,6 +340,7 @@ function migrate(saved) {
   if (!Number.isFinite(next.matrixVersion)) next.matrixVersion = 1;
   if (!Array.isArray(next.matrixHistory)) next.matrixHistory = [];
   if (!Array.isArray(next.skillImports)) next.skillImports = [];
+  if (!next.comms || !next.comms.channels) next.comms = cloneComms();
   return next;
 }
 

@@ -1,0 +1,47 @@
+/* ============ Comms panel ============ */
+
+.comms-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+@media (min-width: 560px) {
+  .comms-grid { grid-template-columns: 1fr 1fr; }
+}
+
+.comms-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  cursor: pointer;
+}
+.comms-tile:active { background: var(--elevated); }
+.comms-tile.on { border-color: color-mix(in srgb, var(--brand) 45%, var(--border-soft)); }
+.comms-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.comms-tile-ico {
+  width: 38px; height: 38px; border-radius: 11px; flex: none;
+  display: grid; place-items: center;
+  background: var(--elevated);
+  color: var(--brand);
+}
+.comms-tile.on .comms-tile-ico { background: color-mix(in srgb, var(--brand) 20%, var(--elevated)); }
+.comms-tile .switch { flex: none; margin-top: 2px; }
+
+.comms-inbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.comms-inbox:first-child { border-top: 0; }
+
+/* Channel sheet: keep the secret inputs legible but clearly masked. */
+.sheet-body input[data-secret="1"] { letter-spacing: .04em; }
+.sheet-body .chip.tiny { vertical-align: middle; }

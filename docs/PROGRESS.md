@@ -32,6 +32,25 @@
   banner/sheet); a failure downgrades to demo or labels the rows stale instead of mixing them.
   Evidence: `npm run test:readsync` (12 checks). Design + limits: [`copilot/read-sync.md`](copilot/read-sync.md).
 
+### Comms — communication gateways — ✅ (panel + adapters), ⬜ (gateway routes)
+- ✅ **Comms panel** `#/comms` (`src/comms.js`): Telegram · WhatsApp · Discord · Slack · SMS ·
+  Browser, each with advanced settings — connection, routing (Copilot + agents), command surface,
+  delivery & safety, inbound endpoint, live **Send test**.
+- ✅ **Telegram folded in** — the old standalone module is now the first channel; the legacy
+  `#/telegram` route deep-links into the panel. The More panel no longer lists Chat, Skills Matrix or
+  Telegram.
+- ✅ **Adapters** `src/commsAdapters.js` — request builders per provider, signature verification
+  (Telegram secret token, Slack v0 HMAC + replay window, WhatsApp sha256 + GET handshake, Twilio
+  HMAC-SHA1, Discord ed25519), honest delivery classification, injected `fetch` for tests.
+- ✅ **Honest status model** — `not_configured → configured_unverified → verified | failed`; only a
+  provider-accepted live test can mark a channel verified. Browser channel is fully local (inbox).
+- ✅ **Copilot control** — `comms status`, `test <channel>`, `route <agent> to <channel>`,
+  `mute/wake <channel>`, `inbox`; refuses credentials in chat.
+- ✅ **Tests** `npm run test:comms` (18 checks) incl. forged/stale signatures and provider failures.
+- ⬜ **Gateway persistence + routes** (`/api/v1/comms/:channel/*`, encrypted secrets, outbound queue,
+  agent fan-out, Web Push) — specified in [`comms/channels.md`](comms/channels.md); credentials list in
+  [`comms/credentials.md`](comms/credentials.md).
+
 ### Skills Hub + Skills Matrix (spec §6/§7 slice) — ✅
 - ✅ **24-skill catalogue** — `src/skillsData.js`; 8 typed relationship types + 24 seeded edges;
   existing ids `sk-1…sk-6` preserved; `core.migrate()` merges the catalogue into saved workspaces.

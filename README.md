@@ -66,7 +66,7 @@
 | 🤖 | **Agent Manager** — profiles, brain, memory, trust | 🐝 | **Teams & Swarms** — topologies, deploy, live DAG |
 | 📋 | **Kanban Board** — drag & drop, @agent dispatch | ⚡ | **Skills Hub** — 24-skill marketplace, multi-format import, [Skills Matrix](docs/copilot/skills-hub.md) |
 | 🧠 | **Model Gateway** — routing, budgets, key vault | 🧩 | **Plugins** — MCP install & scoped grants |
-| 💬 | **Chat** — streaming, inline approvals | ✈️ | **Telegram Bridge** — command layer, signed buttons |
+| 💬 | **Chat** — streaming, inline approvals | 📡 | **Comms** — Telegram · WhatsApp · Discord · Slack · SMS · Browser gateways |
 | 📊 | **Analytics** — KPIs, spend, trust posture | ⚙️ | **Settings** — everything live-tunable |
 | 📁 | **Artifacts & Files** — previews, upload, share | 💻 | **Terminal** — working `swarm` CLI |
 
@@ -145,7 +145,14 @@ Tap the centre **✦ Copilot** button and pick a mode — **Ask · Operate · Bu
 > ⚠️ **Truthfulness:** the module screens still read seeded demo state in the browser (read sync is pending). The panel header always shows `Demo data · gateway …`, and agents/swarms/training/voice actions say what is simulated. No model, scheduler, training worker, voice engine or SMS connector is called. See [`docs/copilot/PHASE0_DISCOVERY.md`](docs/copilot/PHASE0_DISCOVERY.md).
 
 ### ✈️ Control from Telegram
-**Telegram Bridge** → link your bot → tap commands in the live preview (`/status`, `/budget`, `/ask researcher progress`). Approvals arrive with one-tap **signed** Allow/Deny buttons.
+**Comms** → pick a gateway (Telegram, WhatsApp, Discord, Slack, SMS, Browser) → enter credentials →
+**Send test**. A channel is *Configured · unverified* after saving and only becomes **verified** when
+the provider accepts a real test; the Browser channel delivers into the in-app inbox with no
+credentials at all. Each channel routes Copilot replies and chosen agents, and exposes a command
+surface (`/status`, `/agents`, `/tasks`, `/ask`) with gated actions refused over channels. The
+Copilot can drive it (`comms status`, `test telegram`, `route SRE-Bot to slack`, `mute discord`) but
+never accepts secrets in chat. See [Comms gateways](docs/comms/channels.md) and
+[credentials](docs/comms/credentials.md).
 
 ### 💻 Terminal
 **Terminal** → try `help`, `status`, `agents`, `deploy audit plugins`, `approve ap-1`, `cat` a file. Destructive commands are policy-blocked.
@@ -191,11 +198,12 @@ Or: push to GitHub → **vercel.com/new** → import `swarmos` → Framework: **
 ## 🧪 Quality checks
 
 ```bash
-npm test            # smoke 29 · copilot 6 · auth client 16 · read sync 12 · designer 18 · skills 23 · gateway 28
-npm run smoke       # boots the real app — all 13 routes render
+npm test            # smoke 32 · copilot 6 · auth client 16 · read sync 12 · designer 18 · skills 23 · comms 18 · gateway 28
+npm run smoke       # boots the real app — every route renders
 npm run test:readsync  # gateway rows replace fixtures, provenance labels, no persistence
 npm run test:designer  # designer shortcuts, validation split, definition save paths
 npm run test:skills    # import formats + refusals, quarantine, matrix validation/undo, catalogue size
+npm run test:comms     # channel status honesty, live-test outcomes, webhook signatures, routing, Copilot comms
 npm run test:gateway   # RBAC, CSRF, lockout, separation of duties, audit chain
 npm run lint        # code style (after Phase-1 tooling)
 ```
@@ -212,6 +220,9 @@ npm run lint        # code style (after Phase-1 tooling)
 | 🔄 [Read Sync](docs/copilot/read-sync.md) | How module screens read the gateway and how demo vs live data is labelled |
 | 🧭 [Agent Designer](docs/copilot/agent-designer.md) | Guided agent creation: steps, validation states, honest boundaries, shortcuts |
 | ⚡ [Skills Hub & Matrix](docs/copilot/skills-hub.md) | Import formats, scanning/quarantine rules, typed relationship matrix, export |
+| 📡 [Comms gateways](docs/comms/channels.md) | Six channels, adapter contract, signature checks, status model, planned routes |
+| 🔑 [Comms credentials](docs/comms/credentials.md) | Exactly what to supply per channel and where it is stored |
+| 🗺 [Next up](docs/roadmap/next-up.md) | Open work with acceptance criteria (Kanban zoom/wires/confirm, live comms) |
 
 ---
 
