@@ -32,6 +32,23 @@
   banner/sheet); a failure downgrades to demo or labels the rows stale instead of mixing them.
   Evidence: `npm run test:readsync` (12 checks). Design + limits: [`copilot/read-sync.md`](copilot/read-sync.md).
 
+### Skills Hub + Skills Matrix (spec §6/§7 slice) — ✅
+- ✅ **24-skill catalogue** — `src/skillsData.js`; 8 typed relationship types + 24 seeded edges;
+  existing ids `sk-1…sk-6` preserved; `core.migrate()` merges the catalogue into saved workspaces.
+- ✅ **Advanced import** — `src/skillsImport.js` + `src/skillsImportView.js`: SKILL.md frontmatter,
+  skill.json, registry JSON, skill.yaml, SwarmOS portable packages and .zip/.skill bundles. Pipeline:
+  parse → schema → quarantine → scan (secrets, instruction injection, unsafe paths, size) →
+  dependency/version resolution → permission review → preview → install/reject → audit log.
+  Imports land `pending` and never grant a tool or permission.
+- ✅ **Import button next to New** in the Skills Hub, with the review sheet, skip toggles and log.
+- ✅ **Skills Matrix** — `src/skillsMatrix.js`, route `#/matrix`, graph icon shortcut in the hub
+  header and in every skill drawer: typed edges with distinct line styles, legend-as-filter,
+  accessible table alternative, cycle/duplicate/self-link rejection, version bumps + undo, export.
+  Runtime overlay is reported as *not instrumented* (no skills runtime exists).
+- ✅ **Tests** — `npm run test:skills` (23 checks); smoke renders `#/matrix`.
+- ⬜ Still absent: skill execution/evals, gateway `skills` table + routes, fetching skills from a URL.
+- Design + limits: [`copilot/skills-hub.md`](copilot/skills-hub.md).
+
 ## Phase 3 🚪 Gateway core — 🟨 (first slice landed)
 - ✅ **3.2 (slice)** REST API — agents (list/create/get/update), tasks (list/create/update), approvals (list/allow/deny), events feed, summary, dev/seed — `node apps/gateway/server.js` → `:8787`
 - ✅ **3.3 (slice)** WebSocket `/ws` — live event broadcast on every mutation (topics: `agents`, `tasks`, `approvals`, `system`)

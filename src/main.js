@@ -13,6 +13,8 @@ views.login = loginView;
 import './terminal.js';
 import './copilot.js';
 import './designer.js';
+import './skillsMatrix.js';
+import './skillsImportView.js';
 
 let currentRoute = 'home';
 let currentParams = {};

@@ -568,6 +568,54 @@ export const KNOWLEDGE = [
     ],
   },
   {
+    id: 'skills.import',
+    title: 'Importing skills (formats, scanning, quarantine)',
+    type: 'howto',
+    module: 'skills',
+    tags: ['skills', 'import', 'importing', 'skill.md', 'manifest', 'yaml', 'zip', 'package', 'quarantine', 'scan'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-27',
+    sensitivity: 'public',
+    body:
+      'Skills Hub → Import (next to New) accepts: SKILL.md with YAML frontmatter, skill.json manifests, registry JSON ' +
+      '(array or {"skills":[...]}), skill.yaml, SwarmOS portable packages (schema swarmos.skill.package.v1) and .zip/.skill ' +
+      'bundles that may contain several skills.\n' +
+      'Every package goes through: parse → schema check → quarantine → scan → dependency resolution → permission review → ' +
+      'preview → install or reject → audit log. The scan blocks embedded API keys, private keys, instruction-injection text, ' +
+      'piped shell downloads, zip path traversal and oversize bodies; it warns about external hosts, undeclared execution text, ' +
+      'missing dependencies, duplicate/older versions and missing licences.\n' +
+      'Installed skills land as pending (quarantined) and must be approved in Skills → Imported. An import NEVER grants a tool ' +
+      'or permission and never makes a skill executable — there is no skills runtime on the gateway.',
+    sources: [
+      { label: 'MMMV2 skills interoperability spec §7', ref: 'MMMV2_skills_interoperability_design_spec_no_client_server_2026-10-23.md' },
+      { label: 'src/skillsImport.js', ref: 'src/skillsImport.js' },
+    ],
+  },
+  {
+    id: 'skills.matrix',
+    title: 'Skills Matrix: typed relationships and the graph',
+    type: 'howto',
+    module: 'skills',
+    tags: ['skills', 'matrix', 'graph', 'relationships', 'depends_on', 'complements', 'conflicts', 'cycle', 'network'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-27',
+    sensitivity: 'public',
+    body:
+      'The Skills Matrix (#/matrix) shows how skills relate. Open it from the graph icon next to Import in the Skills Hub, ' +
+      'from any skill drawer, or from the sidebar.\n' +
+      'Eight typed relationships: depends_on, complements, inherits_from, composes_with, triggers, conflicts_with, supersedes, ' +
+      'related_to. Each has its own line style and a legend; the table under the graph is the accessible equivalent.\n' +
+      'Valid links save with a version bump and are undoable; self-links, duplicates and cycles in ordered types are rejected. ' +
+      'Links are configuration only: the matrix has no runtime telemetry, so it reports “not instrumented” rather than ' +
+      'animating invented execution.',
+    sources: [
+      { label: 'MMMV2 skills interoperability spec §6', ref: 'MMMV2_skills_interoperability_design_spec_no_client_server_2026-10-23.md' },
+      { label: 'src/skillsMatrix.js', ref: 'src/skillsMatrix.js' },
+    ],
+  },
+  {
     id: 'roadmap.status',
     title: 'What is actually built vs planned',
     type: 'reference',
@@ -711,7 +759,8 @@ export function describeScreen(route) {
     teams: () => `Teams & Swarms: ${s.teams.length} teams, ${s.swarms.length} swarm instances.`,
     tasks: () => `Kanban: ${s.tasks.length} cards across todo/doing/review/done.`,
     chat: () => `Chat: ${s.threads.length} threads (${s.threads.map((t) => t.title).join(', ')}).`,
-    skills: () => `Skills Hub: agent skills and pending proposals.`,
+    skills: () => `Skills Hub: ${s.skills.length} skills (${s.skills.filter((k) => k.installed !== false).length} installed, ${s.skills.filter((k) => k.origin === 'marketplace').length} in the marketplace, ${s.skills.filter((k) => k.status === 'pending').length} awaiting review), ${(s.relations || []).length} typed relationships. Import (next to New) accepts SKILL.md, manifests, registries, YAML, packages and zip bundles; installed imports stay quarantined until approved and never grant tools.`,
+    matrix: () => `Skills Matrix: ${s.skills.length} skills, ${(s.relations || []).length} typed links, version v${s.matrixVersion || 1}. Relationships are configuration only — no runtime events exist, so nothing is shown as executed.`,
     models: () => `Model Gateway: ${s.providers.length} providers, ${s.policies.length} routing policies — demo catalogue, no live calls.`,
     plugins: () => `Plugin Marketplace: MCP servers and tool plugins.`,
     telegram: () => `Telegram Bridge: UI simulation only (no bot transport).`,

@@ -8,86 +8,265 @@ import { sparkline } from './views1.js';
 import { views } from './views1.js';
 
 /* ================= SKILLS HUB ================= */
+const SKILL_TABS = [
+  ['installed', 'Installed'],
+  ['marketplace', 'Marketplace'],
+  ['imported', 'Imported'],
+  ['mine', 'Mine'],
+  ['synthesized', 'Synthesized'],
+];
+
+const skillFilter = () => (window.__skillFilter ||= { category: 'all', author: 'all', license: 'all', status: 'all', q: '' });
+
+function skillTab() {
+  if (!window.__skillsTab) window.__skillsTab = 'installed';
+  return window.__skillsTab;
+}
+
+function tabSkills(s, tab) {
+  const skills = s.skills || [];
+  if (tab === 'installed') return skills.filter((k) => k.status !== 'pending' && k.status !== 'rejected' && k.installed !== false);
+  if (tab === 'marketplace') return skills.filter((k) => k.origin === 'marketplace' || k.imported);
+  if (tab === 'imported') return skills.filter((k) => k.imported);
+  if (tab === 'mine') return skills.filter((k) => k.origin === 'user');
+  return skills.filter((k) => k.origin === 'agent' || (k.status === 'pending' && k.origin !== 'import'));
+}
+
+function filteredMarket(s) {
+  const f = skillFilter();
+  const q = f.q.trim().toLowerCase();
+  return tabSkills(s, 'marketplace').filter((k) => {
+    if (f.category !== 'all' && k.category !== f.category) return false;
+    if (f.author !== 'all' && k.author !== f.author) return false;
+    if (f.license !== 'all' && k.license !== f.license) return false;
+    if (f.status !== 'all') {
+      if (f.status === 'installed' && k.installed === false) return false;
+      if (f.status === 'available' && k.installed !== false) return false;
+      if (f.status === 'restricted' && !k.unavailable) return false;
+    }
+    if (q && !(`${k.name} ${k.desc} ${k.category} ${k.author}`.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function filterBar(s) {
+  const f = skillFilter();
+  const pool = tabSkills(s, 'marketplace');
+  const uniq = (key) => ['all', ...[...new Set(pool.map((k) => k[key]).filter(Boolean))].sort()];
+  const chipRow = (key, label) => `
+    <div class="mx-filter-row" role="group" aria-label="Filter by ${label}">
+      <span class="tiny muted">${label}</span>
+      ${uniq(key).map((v) => `<button class="chip tiny ${f[key] === v ? 'brand on' : ''}" data-act="skill-filter" data-key="${key}" data-value="${esc(v)}" aria-pressed="${f[key] === v}">${esc(v === 'all' ? 'All' : v)}</button>`).join('')}
+    </div>`;
+  return `
+    <div class="skill-filters">
+      <label class="mx-search">
+        <span class="sr-only">Search marketplace</span>
+        ${icon('search', 14)}
+        <input class="input" id="skill-search" data-skill-search="1" value="${esc(f.q)}" placeholder="Search ${pool.length} skills">
+      </label>
+      ${chipRow('category', 'Category')}
+      ${chipRow('license', 'Licence')}
+      ${(f.category !== 'all' || f.license !== 'all' || f.status !== 'all' || f.q) ? '<button class="chip tiny" data-act="skill-filter-reset">Clear filters</button>' : ''}
+      <div class="mx-filter-row" role="group" aria-label="Filter by status">
+        <span class="tiny muted">Status</span>
+        ${[['all', 'All'], ['installed', 'Installed'], ['available', 'Available'], ['restricted', 'Unavailable here']]
+          .map(([v, l]) => `<button class="chip tiny ${f.status === v ? 'brand on' : ''}" data-act="skill-filter" data-key="status" data-value="${v}" aria-pressed="${f.status === v}">${l}</button>`).join('')}
+      </div>
+    </div>`;
+}
+
+function skillCard(k) {
+  const pending = k.status === 'pending';
+  const restricted = Boolean(k.unavailable);
+  return `
+    <button class="list-card" data-act="open-skill" data-id="${k.id}" style="width:100%;text-align:left">
+      <div class="avatar" style="background:${pending ? 'color-mix(in srgb, var(--warning) 25%, var(--elevated))' : 'var(--elevated)'};color:${pending ? 'var(--warning)' : 'var(--brand)'}">${icon('skill', 18)}</div>
+      <div class="grow">
+        <div class="row wrap" style="gap:6px">
+          <span class="strong small mono">${esc(k.name)}</span>
+          <span class="chip tiny">v${esc(k.version)}</span>
+          ${k.category ? `<span class="chip tiny">${esc(k.category)}</span>` : ''}
+          ${k.installed === false ? '<span class="chip tiny">not installed</span>' : ''}
+          ${restricted ? '<span class="chip tiny bad">unavailable here</span>' : ''}
+        </div>
+        <div class="tiny muted ellipsis">${esc(k.desc)}</div>
+        <div class="row wrap" style="gap:6px;margin-top:5px">
+          <span class="chip tiny ${k.origin === 'agent' ? 'warn' : k.origin === 'user' ? 'brand' : k.origin === 'import' ? 'brand' : ''}">${k.origin === 'agent' ? '⚗ agent-synthesized' : k.origin === 'import' ? '⤓ imported' : esc(k.origin)}</span>
+          ${k.author ? `<span class="chip tiny">${esc(k.author)}</span>` : ''}
+          ${k.license ? `<span class="chip tiny">${esc(k.license)}</span>` : ''}
+          ${k.relations ? `<span class="chip tiny">${k.relations} links</span>` : ''}
+          <span class="chip tiny ${pending || restricted ? 'warn' : 'ok'}">${pending ? 'quarantined' : restricted ? 'not instrumented' : 'declared'}</span>
+        </div>
+      </div>
+      ${pending ? '<span class="chip tiny warn">review</span>' : icon('right', 16)}
+    </button>`;
+}
+
 views.skills = {
   title: 'Skills Hub',
   render() {
     const s = getState();
-    const tab = window.__skillsTab || 'installed';
-    const lists = {
-      installed: s.skills.filter((k) => k.status !== 'pending'),
-      marketplace: s.skills.filter((k) => k.origin === 'marketplace'),
-      mine: s.skills.filter((k) => k.origin === 'user'),
-      synthesized: s.skills.filter((k) => k.status === 'pending'),
-    };
+    const tab = skillTab();
+    const counts = Object.fromEntries(SKILL_TABS.map(([id]) => [id, tabSkills(s, id).length]));
+    const list = tab === 'marketplace' ? filteredMarket(s) : tabSkills(s, tab);
+    const relCount = (s.relations || []).length;
+    const installs = s.skillImports || [];
     return `
       <div class="page-head row between">
-        <div><h1>Skills Hub</h1><div class="sub">OpenClaw skills · versioned · eval-gated</div></div>
-        <button class="btn primary sm" data-act="new-skill">${icon('plus', 16)} New</button>
+        <div>
+          <h1>Skills Hub</h1>
+          <div class="sub">${(s.skills || []).length} skills · ${relCount} typed links · ${counts.marketplace} in the marketplace</div>
+        </div>
+        <div class="row" style="gap:6px">
+          <button class="btn primary sm" data-act="new-skill">${icon('plus', 16)} New</button>
+          <button class="btn sm" data-act="skill-import-open" title="Import SKILL.md, manifest, registry, YAML or package">${icon('upload', 16)} Import</button>
+          <button class="iconbtn" data-act="goto-matrix" aria-label="Open Skills Matrix" title="Skills Matrix">${icon('graph', 20)}</button>
+        </div>
       </div>
       <div class="tabs">
-        ${[['installed', 'Installed'], ['marketplace', 'Marketplace'], ['mine', 'Mine'], ['synthesized', `Synthesized (${lists.synthesized.length})`]]
-          .map(([id, l]) => `<button class="${tab === id ? 'active' : ''}" data-act="skills-tab" data-tab="${id}">${l}</button>`).join('')}
+        ${SKILL_TABS.map(([id, label]) => `<button class="${tab === id ? 'active' : ''}" data-act="skills-tab" data-tab="${id}">${label}${counts[id] ? ` (${counts[id]})` : ''}</button>`).join('')}
       </div>
-      ${lists[tab].length ? lists[tab].map((k) => `
-        <button class="list-card" data-act="open-skill" data-id="${k.id}" style="width:100%;text-align:left">
-          <div class="avatar" style="background:${k.origin === 'agent' ? 'color-mix(in srgb, var(--warning) 25%, var(--elevated))' : 'var(--elevated)'};color:${k.origin === 'agent' ? 'var(--warning)' : 'var(--brand)'}">${icon('skill', 18)}</div>
-          <div class="grow">
-            <div class="row" style="gap:6px"><span class="strong small mono">${esc(k.name)}</span><span class="chip tiny">v${esc(k.version)}</span></div>
-            <div class="tiny muted ellipsis">${esc(k.desc)}</div>
-            <div class="row" style="gap:6px;margin-top:5px">
-              <span class="chip tiny ${k.origin === 'agent' ? 'warn' : k.origin === 'user' ? 'brand' : ''}">${k.origin === 'agent' ? '⚗ agent-synthesized' : k.origin}</span>
-              <span class="chip tiny ok">${Math.round(k.success * 100)}% · ${k.invokes} runs</span>
-            </div>
-          </div>
-          ${k.status === 'pending' ? '<span class="chip tiny warn">review</span>' : icon('right', 16)}
-        </button>`).join('') : `
-        <div class="empty"><div class="e-ico">✦</div><div>Nothing here yet.</div></div>`}
+      ${tab === 'marketplace' ? filterBar(s) : ''}
+      <div id="skill-list-host">
+      ${list.length ? list.map(skillCard).join('') : `
+        <div class="empty"><div class="e-ico">✦</div>
+          <div>${tab === 'imported' ? 'No imports yet — use <strong>Import</strong> to add a skill package.' : 'Nothing here yet.'}</div>
+          ${tab === 'marketplace' ? '<button class="btn sm" data-act="skill-filter-reset" style="margin-top:8px">Clear filters</button>' : ''}
+        </div>`}
+      </div>
+      ${tab === 'imported' ? `
+        <div class="section-title">Import log (audit trail)</div>
+        <div class="card">
+          ${installs.length ? installs.map((i) => `
+            <div class="kv">
+              <span class="k mono tiny">${esc(i.file || '—')}</span>
+              <span class="tiny muted">${esc(i.format)} · ${i.rejected ? `rejected (${esc(i.reason || '')})` : `installed ${i.installed.length}`}${i.skipped?.length ? ` · skipped ${i.skipped.length}` : ''} · ${esc(fmtTime(i.at))}</span>
+            </div>`).join('') : '<div class="tiny muted">No import attempts recorded in this workspace.</div>'}
+        </div>` : ''}
       ${tab === 'synthesized' ? `
         <div class="banner warn" style="margin-top:14px">${icon('shield', 16)}
           <div>Agent-synthesized skills <strong>never auto-activate</strong> under policy “${esc(s.settings.selfImprove)}”. Approve after reviewing evals.</div>
+        </div>` : ''}
+      ${tab === 'installed' ? `
+        <div class="banner" style="margin-top:14px">${icon('graph', 16)}
+          <div>Typed dependencies, complements and conflicts live in the <a href="#/matrix">Skills Matrix</a> — ${relCount} links, versioned locally.</div>
         </div>` : ''}`;
   },
 };
 
-on('skills-tab', (el, ds) => { window.__skillsTab = ds.tab; import('./main.js').then((m) => m.rerender()); });
-
-on('open-skill', (el, ds) => {
-  const k = getState().skills.find((x) => x.id === ds.id);
+/** Open a skill's drawer. Exported so the Skills Matrix can reuse it. */
+export function openSkillDrawer(id) {
+  const s = getState();
+  const k = (s.skills || []).find((x) => x.id === id);
   if (!k) return;
+  const links = (s.relations || []).filter((r) => r.from === k.name || r.to === k.name);
+  const imported = k.imported;
   openSheet({
     title: `<span class="mono">${esc(k.name)}</span>`,
     body: `
-      <div class="row wrap" style="margin-bottom:10px">
+      <div class="row wrap" style="gap:6px;margin-bottom:10px">
         <span class="chip tiny">v${esc(k.version)}</span>
         <span class="chip tiny ${k.origin === 'agent' ? 'warn' : 'brand'}">${k.origin === 'agent' ? '⚗ synthesized' : esc(k.origin)}</span>
         <span class="chip tiny ${k.status === 'pending' ? 'warn' : 'ok'}">${esc(k.status)}</span>
+        ${k.category ? `<span class="chip tiny">${esc(k.category)}</span>` : ''}
+        ${k.unavailable ? `<span class="chip tiny bad">unavailable here</span>` : ''}
+        <button class="chip tiny brand" data-act="matrix-open-node" data-name="${esc(k.name)}" aria-label="Open ${esc(k.name)} in the Skills Matrix" title="Skills Matrix">
+          ${icon('graph', 13)} Matrix${links.length ? ` · ${links.length}` : ''}
+        </button>
       </div>
       <div class="small">${esc(k.desc)}</div>
+      ${k.unavailable ? `<div class="banner warn" style="margin-top:10px">${icon('shield', 16)}<div>${esc(k.unavailable)}</div></div>` : ''}
+      ${k.advisory ? `<div class="banner" style="margin-top:10px">${icon('bell', 16)}<div>${esc(k.advisory)}</div></div>` : ''}
       <div class="section-title">Manifest</div>
       <pre class="mono" style="background:var(--bg-2);border:1px solid var(--border-soft);border-radius:10px;padding:12px;overflow-x:auto">name: ${esc(k.name)}
 version: ${esc(k.version)}
-runtime: openclaw-skill/1
-tools: [${k.tools.map(esc).join(', ')}]
-permissions: [${k.perms.map(esc).join(', ')}]
-evals: ${Math.round(k.success * 100)}% pass (${k.invokes} invocations)</pre>
+origin: ${esc(k.origin)}${imported ? `\nimported_from: ${esc(imported.format)} (${esc(imported.file)})` : ''}
+author: ${esc(k.author || '—')}
+license: ${esc(k.license || '—')}
+runtime: ${k.origin === 'import' ? 'manifest-only (no skills runtime on this gateway)' : 'openclaw-skill/1'}
+compat: [${(k.compat || []).map(esc).join(', ')}]
+requires: [${(k.requires || []).map(esc).join(', ')}]
+tools: [${(k.tools || []).map(esc).join(', ')}]
+permissions: [${(k.perms || []).map(esc).join(', ')}]
+evals: ${Math.round((k.success || 0) * 100)}% pass (${k.invokes || 0} recorded invocations)</pre>
+      <div class="tiny muted" style="margin-top:6px">Tools and permissions above are <strong>declarations</strong>. Nothing is granted by installing or importing a skill.</div>
+      ${(k.inputs || []).length || (k.outputs || []).length ? `
+        <div class="section-title">Contract</div>
+        <div class="card">
+          <div class="kv"><span class="k">Inputs</span><span class="strong">${esc((k.inputs || []).join(', ') || '—')}</span></div>
+          <div class="kv"><span class="k">Outputs</span><span class="strong">${esc((k.outputs || []).join(', ') || '—')}</span></div>
+        </div>` : ''}
+      ${imported ? `
+        <div class="section-title">Import review</div>
+        <div class="card">
+          <div class="kv"><span class="k">Source</span><span class="strong">${esc(imported.format)} · ${esc(imported.file)}</span></div>
+          <div class="kv"><span class="k">Quarantined</span><span class="strong">${imported.quarantined ? 'yes — approve to activate' : 'no'}</span></div>
+          ${(imported.findings || []).length ? `<ul class="imp-findings">${imported.findings.map((f) => `<li class="sev-${f.severity}">${esc(f.message)}</li>`).join('')}</ul>` : '<div class="tiny muted">No findings recorded.</div>'}
+        </div>` : ''}
+      ${links.length ? `
+        <div class="section-title">Relationships</div>
+        <div class="card">
+          ${links.map((r) => `<div class="kv"><span class="k mono tiny">${esc(r.type.replace(/_/g, ' '))}</span><span class="tiny">${r.from === k.name ? `→ ${esc(r.to)}` : `← ${esc(r.from)}`}</span></div>`).join('')}
+        </div>` : ''}
       <div class="section-title">Eval trend</div>
-      <div class="card">${sparkline([62, 68, 71, 74, 78, 80, Math.round(k.success * 100)])}</div>
-      ${k.status === 'pending' ? `
-        <div class="row" style="gap:10px;margin-top:14px">
-          <button class="btn grow danger" data-act="skill-reject" data-id="${k.id}">Reject</button>
-          <button class="btn grow ok" data-act="skill-approve" data-id="${k.id}">Approve & activate</button>
-        </div>` : `
-        <div class="row" style="gap:10px;margin-top:14px">
-          <button class="btn grow" data-act="skill-add-agent" data-id="${k.id}">Add to agent</button>
-          <button class="btn grow danger" data-act="skill-uninstall" data-id="${k.id}">Uninstall</button>
-        </div>`}`,
+      <div class="card">${sparkline([62, 68, 71, 74, 78, 80, Math.round((k.success || 0) * 100)])}</div>
+      ${k.changelog?.length ? `<div class="section-title">Changelog</div><div class="card">${k.changelog.map((c) => `<div class="tiny muted">${esc(c)}</div>`).join('')}</div>` : ''}`,
+    foot: k.status === 'pending'
+      ? `<button class="btn grow danger" data-act="skill-reject" data-id="${k.id}">Reject</button>
+         <button class="btn grow ok" data-act="skill-approve" data-id="${k.id}">Approve & activate</button>`
+      : `<button class="btn grow" data-act="matrix-open-node" data-name="${esc(k.name)}">${icon('graph', 15)} Skills Matrix</button>
+         ${k.installed === false
+           ? `<button class="btn grow primary" data-act="skill-install-catalogue" data-id="${k.id}">${icon('plus', 15)} Add to workspace</button>`
+           : `<button class="btn grow" data-act="skill-add-agent" data-id="${k.id}">Add to agent</button>
+              <button class="btn grow danger" data-act="skill-uninstall" data-id="${k.id}">Uninstall</button>`}`,
   });
+}
+
+on('skills-tab', (el, ds) => { window.__skillsTab = ds.tab; import('./main.js').then((m) => m.rerender()); });
+on('skill-filter', (el, ds) => {
+  const f = skillFilter();
+  f[ds.key] = ds.value;
+  import('./main.js').then((m) => m.rerender());
+});
+on('skill-filter-reset', () => {
+  window.__skillFilter = { category: 'all', author: 'all', license: 'all', status: 'all', q: '' };
+  import('./main.js').then((m) => m.rerender());
+});
+if (typeof document !== 'undefined') {
+  document.addEventListener('input', (e) => {
+    const t = e.target.closest('[data-skill-search]');
+    if (!t) return;
+    skillFilter().q = t.value;
+    const host = document.getElementById('skill-list-host');
+    const s = getState();
+    const list = filteredMarket(s);
+    if (host) host.innerHTML = list.length ? list.map(skillCard).join('') : '<div class="empty"><div>No skills match that filter.</div></div>';
+  });
+}
+
+on('open-skill', (el, ds) => openSkillDrawer(ds.id));
+
+on('skill-install-catalogue', (el, ds) => {
+  const k = getState().skills.find((x) => x.id === ds.id);
+  if (!k) return;
+  setState((s) => {
+    const t = s.skills.find((x) => x.id === ds.id);
+    if (t) { t.installed = true; logEvent('skill', `Catalogue skill ${t.name} added to workspace (manifest only)`); }
+  }, 'skill-install');
+  closeAllSheets();
+  toast(`${k.name} added — manifest only, nothing is executed`, 'ok');
+  import('./main.js').then((m) => m.rerender());
 });
 
 on('skill-approve', (el, ds) => {
   setState((s) => {
     const k = s.skills.find((x) => x.id === ds.id);
-    if (k) { k.status = 'active'; logEvent('skill', `Skill ${k.name} approved & activated`); }
+    if (!k) return;
+    k.status = 'active';
+    k.installed = true;
+    if (k.imported) k.imported.quarantined = false;
+    logEvent('skill', `Skill ${k.name} approved & activated${k.imported ? ' (imported package released from quarantine)' : ''}`);
   }, 'skill-approve');
   closeAllSheets(); toast('Skill activated ✓', 'ok'); import('./main.js').then((m) => m.rerender());
 });
@@ -99,7 +278,15 @@ on('skill-reject', (el, ds) => {
   closeAllSheets(); toast('Rejected — agent notified with feedback'); import('./main.js').then((m) => m.rerender());
 });
 on('skill-uninstall', (el, ds) => {
-  setState((s) => { s.skills = s.skills.filter((x) => x.id !== ds.id); }, 'skill-uninstall');
+  const k = getState().skills.find((x) => x.id === ds.id);
+  setState((s) => {
+    s.skills = s.skills.filter((x) => x.id !== ds.id);
+    if (k) {
+      const dropped = (s.relations || []).filter((r) => r.from === k.name || r.to === k.name).length;
+      s.relations = (s.relations || []).filter((r) => r.from !== k.name && r.to !== k.name);
+      logEvent('skill', `Skill uninstalled${dropped ? ` — removed ${dropped} matrix link(s)` : ''}`);
+    }
+  }, 'skill-uninstall');
   closeAllSheets(); toast('Skill uninstalled'); import('./main.js').then((m) => m.rerender());
 });
 on('skill-add-agent', (el, ds) => {
@@ -115,7 +302,8 @@ on('new-skill', () => {
       <div class="field"><label>Skill body (markdown)</label><textarea class="input" id="ns-body" style="min-height:120px" placeholder="# Skill&#10;1. Fetch the page…&#10;2. Summarize with citations…"></textarea></div>
       <div class="field"><label>Permissions</label>
         <div class="row wrap">${['network.egress', 'artifacts.write', 'fs.write', 'process.exec'].map((p) => `<button class="chip tiny" data-act="toggle-perm">${p}</button>`).join('')}</div>
-      </div>`,
+      </div>
+      <div class="tiny muted">Importing an existing SKILL.md, manifest or package? Use <strong>Import</strong> instead — it validates, scans and quarantines.</div>`,
     foot: `<button class="btn grow primary" data-act="skill-create-go">Create skill</button>`,
   });
   on('skill-create-go', () => {
@@ -123,8 +311,12 @@ on('new-skill', () => {
     const name = sheet.querySelector('#ns-name').value.trim() || 'user.new-skill';
     setState((s) => {
       s.skills.unshift({
-        id: uid('sk'), name, version: '0.1.0', origin: 'user', status: 'active', perms: ['artifacts.write'],
-        tools: [], success: 1, invokes: 0, desc: sheet.querySelector('#ns-desc').value.trim() || 'User-authored skill.',
+        id: uid('sk'), name, version: '0.1.0', origin: 'user', status: 'active', installed: true,
+        category: 'Custom', author: 'workspace', license: 'internal', compat: [],
+        perms: ['artifacts.write'], tools: [], success: 1, invokes: 0,
+        requires: [], inputs: [], outputs: [],
+        desc: sheet.querySelector('#ns-desc').value.trim() || 'User-authored skill.',
+        updated: new Date().toISOString().slice(0, 10), changelog: ['0.1.0 — created in the Skills Hub'],
       });
       logEvent('skill', `Skill ${name} created`);
     }, 'create-skill');

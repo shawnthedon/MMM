@@ -337,6 +337,23 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
     memory backend, tool executor, artifact route, canvas graph, sandbox test run. See
     [`copilot/agent-designer.md`](copilot/agent-designer.md).
 
+- [x] **4.8 Skills Hub interoperability + Skills Matrix** — `src/skillsData.js`,
+  `src/skillsImport.js`, `src/skillsImportView.js`, `src/skillsMatrix.js`, routes `#/skills`, `#/matrix`
+  - 24-skill catalogue (21 marketplace, 1 user, 2 synthesized) with category/author/licence/
+    compatibility/inputs/outputs/changelog, plus 8 typed relationship types and 24 seeded edges.
+  - Import accepts SKILL.md (YAML frontmatter), skill.json, registry JSON, skill.yaml, SwarmOS
+    portable packages and .zip/.skill bundles; each package is schema-checked, scanned for embedded
+    secrets, instruction injection and path traversal, dependency/version resolved, permission
+    reviewed, then installed **into quarantine** or rejected into the audit log. Imports grant no
+    tools and no permissions.
+  - Skills Matrix: typed edges with distinct line styles, legend/filter, accessible table view,
+    validation (self-link, duplicate, cycle), versioned changes with undo, and honest
+    “not instrumented” for the absent runtime overlay.
+  - Matrix shortcut (graph glyph) sits next to Import in the hub and in every skill drawer.
+  - Evidence: `npm run test:skills` (23 checks). Design + limits:
+    [`copilot/skills-hub.md`](copilot/skills-hub.md).
+  - Deliberately not implemented: skill execution, evals, gateway skills routes, URL fetch on import.
+
 - [ ] **4.6 Wire Agent Manager UI to reality**
   - “Run” starts a real run; the **Logs** tab streams real trace lines; tool calls show real args/results (redacted per policy); memory tab shows real counts + search.
 
