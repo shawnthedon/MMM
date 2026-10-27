@@ -40,11 +40,12 @@
     "audit:verify": "node -e \"import('./apps/gateway/src/db.js').then(m=>console.log(m.verifyAuditChain()))\"",
     "icons": "node scripts/gen-icons.mjs",
     "smoke": "node --import ./scripts/register-css-stub.mjs scripts/smoke.mjs",
-    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:gateway",
+    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:gateway",
     "test:copilot": "node --import ./scripts/register-css-stub.mjs scripts/copilot-tour.mjs",
     "test:auth": "node --import ./scripts/register-css-stub.mjs scripts/auth-ui-test.mjs",
     "test:gateway": "node --no-warnings scripts/gateway-auth-test.mjs",
-    "test:readsync": "node --import ./scripts/register-css-stub.mjs scripts/readsync-test.mjs"
+    "test:readsync": "node --import ./scripts/register-css-stub.mjs scripts/readsync-test.mjs",
+    "test:designer": "node --import ./scripts/register-css-stub.mjs scripts/designer-test.mjs"
   },
   "devDependencies": {
     "happy-dom": "^21.0.1",

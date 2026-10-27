@@ -80,7 +80,16 @@
 - 🟨 **Phase 8** Hardening & acceptance — server-side enforcement for actions ✅; device/browser
   screenshots, screen-reader passes, 2FA/SSO, per-object ACLs and read sync outstanding.
 
-## Phase 4 🤖 Agents & adapters — ⬜ (FAI + 7 adapters)
+## Phase 4 🤖 Agents & adapters — 🟨 (designer + definition storage ✅; adapters & run ⬜)
+- ✅ **4.7 Agent Designer** — `#/designer`: goal/templates → component map → inspector → dual
+  validation (definition vs activation) → summary; saves an **idle** definition to the gateway
+  (`POST /api/v1/agents`) or the local store, and refuses when the gateway is not serving agents.
+  Voice/image and scheduled behaviour are blocked at selection because no media service or
+  scheduler exists. Shortcuts: New-agent flow, Quick create, All modules, Agents header.
+  Evidence: `npm run test:designer` (18 checks). See
+  [`copilot/agent-designer.md`](copilot/agent-designer.md).
+- ⬜ Adapters (FAI + 7), run pipeline, memory subsystem — unchanged, still blocked by the same gaps
+  the designer now reports at the point of creation.
 ## Phase 5 🐝 Parallel execution engine — ⬜ (scheduler, DAG)
 ## Phase 6 🧠 Model gateway (real LLM calls) — ⬜
 ## Phase 7 🧩 MCP plugins (real integrations) — ⬜

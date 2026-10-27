@@ -12,6 +12,7 @@ import { initDataSync, isLive as sliceIsLive } from './datastore.js';
 views.login = loginView;
 import './terminal.js';
 import './copilot.js';
+import './designer.js';
 
 let currentRoute = 'home';
 let currentParams = {};

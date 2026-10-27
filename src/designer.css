@@ -1,0 +1,82 @@
+/* ---------- Agent Designer ---------- */
+.dsn-steps {
+  display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.dsn-steps::-webkit-scrollbar { display: none; }
+.dsn-step {
+  display: flex; align-items: center; gap: 6px; flex: none;
+  padding: 7px 11px; border-radius: 999px; font-size: 12px;
+  background: var(--surface); color: var(--text-2); border: 1px solid var(--border);
+}
+.dsn-step .n {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--elevated); color: var(--text-2); font-size: 10px; font-weight: 700;
+}
+.dsn-step.on { color: var(--text); border-color: color-mix(in srgb, var(--brand) 55%, var(--border)); background: color-mix(in srgb, var(--brand) 14%, var(--surface)); }
+.dsn-step.on .n { background: var(--brand); color: #0b0f17; }
+.dsn-step:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.dsn-map { display: flex; flex-direction: column; gap: 0; }
+.dsn-node {
+  display: flex; align-items: stretch; gap: 4px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  overflow: hidden;
+}
+.dsn-node.sel { border-color: color-mix(in srgb, var(--brand) 60%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 30%, transparent); }
+.dsn-node-main {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
+  padding: 11px 12px; text-align: left; background: none; border: 0; color: inherit;
+}
+.dsn-node-main:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: 12px; }
+.dsn-ico {
+  width: 34px; height: 34px; border-radius: 10px; flex: none; display: grid; place-items: center;
+  background: var(--elevated); color: var(--brand);
+}
+.dsn-edge {
+  width: 2px; height: 14px; margin-left: 28px;
+  background: linear-gradient(var(--border), color-mix(in srgb, var(--brand) 45%, var(--border)));
+}
+
+.dsn-note {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: 8px;
+  padding: 9px 11px; border-radius: 11px; font-size: 12px; line-height: 1.45;
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--border));
+}
+.dsn-note > div { min-width: 0; }
+.dsn-note svg { flex: none; margin-top: 1px; }
+
+.dsn-fix {
+  display: flex; align-items: flex-start; gap: 6px; margin-top: 8px;
+  color: var(--warning); line-height: 1.4;
+}
+.dsn-fix svg { flex: none; margin-top: 1px; }
+
+.dsn-check {
+  display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px;
+  border-radius: 11px; background: var(--surface); border: 1px solid var(--border);
+}
+.dsn-check.limited { opacity: .82; border-style: dashed; }
+.dsn-check input { margin-top: 3px; flex: none; accent-color: var(--brand); }
+.dsn-check > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.dsn-finding { padding: 9px 0; border-top: 1px solid var(--border-soft); }
+.dsn-finding:first-of-type { border-top: 0; padding-top: 2px; }
+
+.dsn-verdict-wrap { margin-bottom: 8px; }
+.dsn-verdict {
+  padding: 11px 13px; border-radius: 13px; display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid var(--border);
+}
+.dsn-verdict.ok { background: color-mix(in srgb, var(--success) 12%, var(--surface)); border-color: color-mix(in srgb, var(--success) 40%, var(--border)); }
+.dsn-verdict.bad { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+
+/* Icon-only remove control inside a component node */
+.iconbtn.sm { width: 34px; height: auto; min-height: 34px; border-radius: 10px; align-self: center; }
+.dsn-node .iconbtn.sm { margin-right: 6px; }
+.dsn-node .iconbtn.sm:active { background: var(--elevated); }
+
+/* Findings inside a sheet keep the same rhythm as in the validate step */
+.sheet .dsn-finding { border-top: 1px solid var(--border-soft); }
+.sheet .dsn-finding:first-child { border-top: 0; }

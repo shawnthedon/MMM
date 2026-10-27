@@ -111,7 +111,10 @@ views.agents = {
     return `
       <div class="page-head row between">
         <div><h1>Agents</h1><div class="sub">${s.agents.length} profiles · ${s.agents.filter((a) => a.status === 'running').length} running ${sourceTagHTML('agents')}</div></div>
-        <button class="btn primary sm" data-act="new-agent">${icon('plus', 16)} New</button>
+        <div class="row" style="gap:8px">
+          <button class="btn sm" data-act="open-designer">${icon('spark', 16)} Designer</button>
+          <button class="btn primary sm" data-act="new-agent">${icon('plus', 16)} New</button>
+        </div>
       </div>
       ${sourceBannerHTML('agents')}
       <div class="scroll-x" style="margin-bottom:12px">
@@ -207,6 +210,13 @@ export function agentWizard() {
     body: `<div id="wiz-body"></div>`,
     foot: `<button class="btn" data-act="wiz-cancel">Cancel</button><button class="btn primary" data-act="wiz-next">Next</button>`,
   });
+  // Shortcut into the full Agent Designer, carrying whatever has been typed so far.
+  const shortcut = document.createElement('button');
+  shortcut.className = 'btn block';
+  shortcut.dataset.act = 'wizard-designer';
+  shortcut.innerHTML = `${icon('spark', 15)} Open the Agent Designer instead`;
+  shortcut.style.cssText = 'margin-top:8px';
+  el.querySelector('.sheet-body')?.appendChild(shortcut);
   const renderStep = () => {
     const b = el.querySelector('#wiz-body');
     const steps = `
@@ -258,6 +268,22 @@ export function agentWizard() {
       renderStep();
     }
   });
+  actions['wizard-designer'] = () => {
+    const read = (sel, fallback) => {
+      const node = el.querySelector(sel);
+      return node ? node.value : fallback;
+    };
+    const snapshot = {
+      name: read('#w-name', draft.name),
+      role: read('#w-role', draft.role),
+      framework: draft.framework,
+      model: read('#w-model', draft.model),
+      autonomy: Number(read('#w-aut', draft.autonomy)) || draft.autonomy,
+      tools: draft.tools,
+    };
+    close();
+    import('./designer.js').then((m) => m.openDesigner({ seed: snapshot }));
+  };
   actions['wiz-cancel'] = () => close();
   actions['wiz-next'] = () => {
     if (step === 0) {

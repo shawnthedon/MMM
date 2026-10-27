@@ -325,6 +325,18 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   - Retrieval hook: before each agent step, fetch top-k relevant memories (configurable per agent).
   - Retention job (daily): prune episodes older than the agent's retention setting.
 
+- [x] **4.7 Agent Designer (agent-creation module)** — `src/designer.js`, route `#/designer`
+  - Goal → components → configure → validate → summary, with shortcuts in the New-agent flow, Quick
+    create, All modules and the Agents header.
+  - Validation is split into *definition* checks (what can be stored) and *activation* checks (what
+    running would need); capabilities that cannot work (voice/image, scheduled/proactive) are
+    refused at selection time with the reason.
+  - Saving writes an idle definition — `POST /api/v1/agents` when signed in with `agent:write`, the
+    local store in demo mode, and **nothing** when the gateway is not serving agents.
+  - Deliberately not implemented: execution/activation, framework adapters, provider credentials,
+    memory backend, tool executor, artifact route, canvas graph, sandbox test run. See
+    [`copilot/agent-designer.md`](copilot/agent-designer.md).
+
 - [ ] **4.6 Wire Agent Manager UI to reality**
   - “Run” starts a real run; the **Logs** tab streams real trace lines; tool calls show real args/results (redacted per policy); memory tab shows real counts + search.
 
