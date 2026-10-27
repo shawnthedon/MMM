@@ -98,6 +98,18 @@ a { color: var(--brand); text-decoration: none; }
   color: var(--text-2); position: relative; flex: none;
 }
 .iconbtn:active { background: var(--elevated); }
+.iconbtn.active { color: var(--brand); background: color-mix(in srgb, var(--brand) 14%, transparent); }
+.iconbtn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* The header carries four actions now (Chat, notifications, settings, account): tighten the
+ * cluster so it still fits a 360 px viewport without shrinking the tap targets below 36 px. */
+.topbar { gap: 6px; }
+.topbar .iconbtn { width: 36px; height: 36px; border-radius: 10px; }
+@media (max-width: 380px) {
+  .topbar { padding-left: 8px; padding-right: 8px; gap: 4px; }
+  .topbar .iconbtn { width: 34px; height: 34px; }
+  .topbar .title { font-size: 12px; }
+}
 .iconbtn .badge {
   position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; border-radius: 8px;
   background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px;

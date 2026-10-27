@@ -48,12 +48,13 @@ export const KNOWLEDGE = [
     tags: ['navigation', 'tabs', 'routes', 'screens', 'where', 'open'],
     status: 'verified',
     version: PACK.version,
-    updated: '2026-10-26',
+    updated: '2026-10-27',
     sensitivity: 'public',
     body:
       'Hash router: one route at a time in <main id="view">, rendered from the `views` registry.\n' +
       'Modules: home, agents, teams (teams + swarms + DAG monitor), tasks (Kanban), chat, skills, models, plugins, telegram, analytics, artifacts (File Manager), terminal, settings.\n' +
-      'Bottom tab bar holds four module slots plus the Copilot launcher in the centre: Home · Agents · ✦ Copilot · Tasks · More. “More” lists every remaining module.',
+      'Bottom tab bar holds four module slots plus the Copilot launcher in the centre: Home · Agents · ✦ Copilot · Tasks · More. “More” lists every remaining module.\n' +
+      'Chat is not a tab: it is the 💬 header button immediately left of the notifications bell (it highlights while #/chat is open). The header also carries the account chip, notifications and settings, and the workspace mark without its name text.',
     sources: [
       { label: 'src/shell.js — routes, TABS, tab bar', ref: 'src/shell.js' },
       { label: 'src/main.js — hash router', ref: 'src/main.js' },

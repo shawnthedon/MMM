@@ -25,8 +25,9 @@ export const routes = [
   { id: 'login', label: 'Account', icon: 'shield', title: 'Account & Access' },
 ];
 
-/* Bottom navigation: four module slots with the Copilot launcher in the centre slot. */
-const TABS = ['home', 'agents', 'tasks', 'chat'];
+/* Bottom navigation: four module slots with the Copilot launcher in the centre slot.
+ * Chat lives in the header (next to notifications) so Tasks keeps a bottom-bar slot. */
+const TABS = ['home', 'agents', 'tasks'];
 
 export const actions = {};
 export function on(name, fn) { actions[name] = fn; }
@@ -220,7 +221,7 @@ function notificationsSheet(navigate) {
 
 /* ---------- bottom navigation with the central Copilot launcher ---------- */
 function tabbarHTML() {
-  const [a, b, , d] = TABS;
+  const [a, b, c] = TABS;
   const tab = (id) => {
     const r = routes.find((x) => x.id === id);
     return `<button data-act="nav" data-to="${r.id}" data-tab="${r.id}"><span class="tab-ico">${icon(r.icon, 20)}</span>${r.label}</button>`;
@@ -232,7 +233,7 @@ function tabbarHTML() {
       <span class="cp-fab-ico" aria-hidden="true">${icon('spark', 22)}</span>
       <span class="cp-fab-text">Copilot</span>
     </button>
-    ${tab(d)}
+    ${tab(c)}
     <button data-act="more"><span class="tab-ico">${icon('grid', 20)}</span>More</button>`;
 }
 
@@ -248,6 +249,7 @@ export function renderShell(root) {
         </div>
         <div class="title" id="page-title"></div>
         <button class="identity-btn" id="identity-chip" data-act="nav" data-to="login" aria-label="Account and access"></button>
+        <button class="iconbtn" id="chat-btn" data-act="nav" data-to="chat" aria-label="Chat" title="Chat" aria-current="false">${icon('chat', 21)}</button>
         <button class="iconbtn" data-act="notifications" aria-label="Notifications">
           ${icon('bell', 21)}<span class="badge" id="notif-badge">0</span>
         </button>
@@ -349,10 +351,17 @@ export function refreshChrome(routeId) {
         : 'Account and access — not signed in to a gateway'
     );
   }
-  // map the current route onto the nearest tab (the centre slot is the Copilot launcher)
-  const tabFor = { home: 'home', agents: 'agents', tasks: 'tasks', chat: 'chat' };
+  // map the current route onto the nearest tab (the centre slot is the Copilot launcher; Chat is a
+  // header action rather than a tab, so it is highlighted on its own button instead)
+  const tabFor = { home: 'home', agents: 'agents', tasks: 'tasks' };
   const active = tabFor[routeId] || null;
   document.querySelectorAll('#tabbar [data-tab]').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === active);
   });
+  const chatBtn = document.getElementById('chat-btn');
+  if (chatBtn) {
+    const onChat = routeId === 'chat';
+    chatBtn.classList.toggle('active', onChat);
+    chatBtn.setAttribute('aria-current', onChat ? 'page' : 'false');
+  }
 }

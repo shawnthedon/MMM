@@ -98,7 +98,7 @@ labels them. Swarms, teams and usage still have no server store, so they are alw
 Gateway rows are never written to `localStorage`, so a signed-out browser only ever holds fixtures.
 
 ### 🧭 Navigate
-Bottom tabs: **Home · Agents · ✦ Copilot · Tasks · More** (all modules). The **✦ Copilot** button is the centre action of the bottom navigation — tap it to open the floating panel; `Esc` closes it and your draft is kept.
+Bottom tabs: **Home · Agents · ✦ Copilot · Tasks · More** (all modules). **Chat** lives in the header, next to the notifications bell, so the bar keeps all four module slots. The **✦ Copilot** button is the centre action of the bottom navigation — tap it to open the floating panel; `Esc` closes it and your draft is kept.
 
 ### 🤖 Create an agent (60 seconds)
 **Agents → ➕ New** → name & role → pick a **framework** → pick **any model** → bind tools → set governance → **Create**. Tap **▶ Run** to start it.
