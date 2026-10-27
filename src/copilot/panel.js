@@ -7,6 +7,8 @@ import { getState, esc, icon, now, uid } from '../core.js';
 import { toast, actions as shellActions } from '../shell.js';
 import { MODES, SUGGESTIONS, handle, runProposal, cancelProposal, proposalExpired, resolveMode, modeMeta } from './orchestrator.js';
 import { getRuntime, probeGateway, subscribeRuntime, runtimeLabel } from './runtime.js';
+import { getAuth, isAuthenticated, subscribeAuth } from '../auth.js';
+import { isApiMode } from '../api.js';
 import { saveWorking, getWorking, memorySummary, exportMemory, redact } from './memory.js';
 import { knowledgeStats } from './knowledge.js';
 import { STATUS_LABEL } from './capabilities.js';
@@ -29,6 +31,7 @@ let workEl = null;
 let pendingTimer = null;
 let draftTimer = null;
 let runtimeUnsub = null;
+let runtimeUnsubAuth = null;
 
 function matchesNarrow() {
   try {
@@ -131,7 +134,13 @@ function paintRuntime() {
   const rt = getRuntime();
   const el = panel.querySelector('#cp-runtime');
   if (el) {
-    el.innerHTML = `<span class="cp-dot ${rt.gateway.status === 'reachable' ? 'ok' : rt.gateway.status === 'checking' ? 'run' : 'warn'}"></span>${esc(runtimeLabel(rt))}`;
+    const auth = getAuth();
+    const who = isApiMode()
+      ? isAuthenticated()
+        ? ` · ${auth.principal.role} (${auth.principal.name})`
+        : ` · ${auth.status}`
+      : ' · demo, unenforced';
+    el.innerHTML = `<span class="cp-dot ${rt.gateway.status === 'reachable' ? 'ok' : rt.gateway.status === 'checking' ? 'run' : 'warn'}"></span>${esc(runtimeLabel(rt) + who)}`;
   }
   const ctxEl = panel.querySelector('#cp-context');
   if (ctxEl) ctxEl.innerHTML = contextHTML();
@@ -514,13 +523,19 @@ export function send(text) {
   session.pending = true;
   paint();
   clearTimeout(pendingTimer);
-  pendingTimer = setTimeout(() => respond(raw), 220);
+  pendingTimer = setTimeout(() => {
+    respond(raw).catch((err) => {
+      session.pending = false;
+      pushMessage({ role: 'copilot', text: `Copilot failed: ${err?.message || err}`, mode: session.mode });
+      paint();
+    });
+  }, 220);
 }
 
-function respond(raw) {
+async function respond(raw) {
   let res;
   try {
-    res = handle(raw, { mode: session.mode, route: session.route, history: session.history });
+    res = await handle(raw, { mode: session.mode, route: session.route, history: session.history });
   } catch (err) {
     res = { text: `Copilot failed to handle that: ${err?.message || err}`, card: null, mode: session.mode };
   }
@@ -570,10 +585,20 @@ function confirm(msgId) {
     arm(msgId);
     return;
   }
-  const out = runProposal(card, { mode: session.mode });
   card.resolved = 'confirmed';
-  pushMessage({ role: 'copilot', text: out.text, card: out.card, mode: session.mode });
+  pushMessage({ role: 'copilot', text: 'Running the action…', mode: session.mode });
   paint();
+  Promise.resolve(runProposal(card, { mode: session.mode }))
+    .then((out) => {
+      pushMessage({ role: 'copilot', text: out.text, card: out.card, mode: session.mode });
+    })
+    .catch((err) => {
+      pushMessage({ role: 'copilot', text: `Action failed before completing: ${err?.message || err}. No change was confirmed.`, mode: session.mode });
+    })
+    .finally(() => {
+      paint();
+      import('../main.js').then((m) => m.rerender()).catch(() => {});
+    });
 }
 
 function cancel(msgId) {
@@ -644,7 +669,15 @@ export function openCopilot({ mode, message } = {}) {
   const fab = document.querySelector('[data-act="copilot-open"]');
   fab?.setAttribute('aria-expanded', 'true');
 
-  runtimeUnsub = subscribeRuntime(() => paintRuntime());
+  runtimeUnsub = () => {
+    runtimeUnsubRuntime?.();
+    runtimeUnsubAuth?.();
+  };
+  const runtimeUnsubRuntime = subscribeRuntime(() => paintRuntime());
+  const runtimeUnsubAuth = subscribeAuth(() => {
+    paintRuntime();
+    paintTray();
+  });
   paint();
   probeGateway().catch(() => {});
   // Move focus into the panel without summoning the mobile keyboard.

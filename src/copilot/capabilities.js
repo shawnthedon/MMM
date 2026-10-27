@@ -4,6 +4,8 @@
  * status: available | demo | blocked | unconfigured | unverified
  */
 import { getRuntime } from './runtime.js';
+import { isApiMode } from '../api.js';
+import { getAuth, can } from '../auth.js';
 import { knowledgeStats } from './knowledge.js';
 import { memorySummary } from './memory.js';
 
@@ -42,6 +44,63 @@ const CAPS = {
     evidence: () => {
       const rt = getRuntime();
       return `store: ${rt.store.mode} · gateway: ${rt.gateway.status}`;
+    },
+    // Recomputed on every read so the card always matches the live session.
+    dynamic() {
+      const rt = getRuntime();
+      const auth = getAuth();
+      if (!isApiMode()) {
+        return {
+          status: 'demo',
+          summary: 'Operating the seeded demo store in this browser — not the gateway.',
+          detail:
+            'No gateway is configured, so agent/task/approval actions are written to localStorage. Nothing is enforced, authorised or audited by a server. Configure a gateway and sign in to enable server-side RBAC.',
+          requirements: ['Set a gateway URL and sign in (npm run dev:gateway)'],
+          evidence: `store: ${rt.store.mode} · no gateway configured`,
+        };
+      }
+      if (auth.status === 'unreachable') {
+        return {
+          status: 'unconfigured',
+          summary: 'Gateway unreachable — actions cannot be authorised right now.',
+          detail: 'Requests are refused locally rather than written to the demo store, so you never get an unreviewed change that only exists in one place.',
+          requirements: ['Gateway reachable at the configured URL'],
+          evidence: auth.error || 'network error',
+        };
+      }
+      if (auth.status !== 'authenticated') {
+        return {
+          status: 'unconfigured',
+          summary: 'Not signed in — the gateway cannot authorise any action.',
+          detail: 'Sign in from the Account screen. Without a session every write would be a 401.',
+          requirements: ['Sign in with a principal that holds agent:write / task:write'],
+          evidence: 'no session',
+        };
+      }
+      const mayWrite = can('agent:write') || can('task:write');
+      if (!mayWrite) {
+        return {
+          status: 'blocked',
+          summary: `Signed in as ${auth.principal.name} (${auth.principal.role}) — this role may not write.`,
+          detail:
+            'The gateway enforces the RBAC matrix server-side, so read-only roles cannot create agents, tasks or approvals. Ask an Owner or Admin to grant a higher role.',
+          requirements: ['A role holding agent:write / task:write (Operator or above)'],
+          evidence: `${auth.permissions.length} permissions held · role ${auth.principal.role}`,
+        };
+      }
+      const canDecide = can('approval:decide');
+      return {
+        status: 'available',
+        summary: `Server-enforced actions as ${auth.principal.role} (${auth.principal.name}).`,
+        detail:
+          `Agent and task writes are authorised by gateway RBAC and recorded in the hash-chained audit log. ` +
+          (canDecide
+            ? 'Approval gates can be decided here, subject to separation of duties.'
+            : 'Approval gates can be requested but not decided by this role.') +
+          ' Swarm deployment is still local: the gateway has no swarm endpoint yet.',
+        requirements: canDecide ? [] : ['Reviewer/Admin/Owner role to decide approval gates'],
+        evidence: `gateway ${rt.gateway.url} · ${auth.permissions.length} permissions · audit chain live`,
+      };
     },
   },
   training: {
@@ -124,12 +183,16 @@ export function getCapability(id) {
   const cap = CAPS[id];
   if (!cap) return null;
   let evidence = '';
+  let dynamic = null;
   try {
     evidence = cap.evidence ? cap.evidence() : '';
+    dynamic = cap.dynamic ? cap.dynamic() : null;
   } catch {
-    evidence = '';
+    evidence = evidence || '';
+    dynamic = null;
   }
-  return { ...cap, evidence };
+  const { dynamic: _dyn, ...base } = cap;
+  return { ...base, ...(dynamic || {}), evidence: dynamic?.evidence || evidence };
 }
 
 export function capabilityList() {

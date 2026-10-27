@@ -118,6 +118,8 @@ main.view {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   color: var(--text-3); font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
 }
+.identity-btn { display: flex; align-items: center; gap: 4px; flex: none; }
+.identity-btn .chip { height: 24px; font-size: 10.5px; }
 .tabbar button.active { color: var(--brand); }
 .tabbar button.active .tab-ico { background: color-mix(in srgb, var(--brand) 18%, transparent); }
 .tab-ico { width: 42px; height: 26px; border-radius: 13px; display: grid; place-items: center; transition: background 0.2s; }

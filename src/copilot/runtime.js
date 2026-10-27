@@ -10,13 +10,11 @@ let state = {
 
 const listeners = new Set();
 
+import { gatewayUrl } from '../api.js';
+
+/** The gateway the app is actually configured to use (falls back to the dev default). */
 function defaultUrl() {
-  try {
-    const env = import.meta?.env;
-    return env?.VITE_GATEWAY_URL || 'http://localhost:8787';
-  } catch {
-    return 'http://localhost:8787';
-  }
+  return gatewayUrl() || 'http://localhost:8787';
 }
 
 export function getRuntime() {
@@ -62,6 +60,7 @@ export async function probeGateway({ timeoutMs = 1500 } = {}) {
       method: 'GET',
       signal: controller?.signal,
       headers: { Accept: 'application/json' },
+      credentials: 'include',
       cache: 'no-store',
     });
     clearTimeout(timer);
@@ -75,7 +74,9 @@ export async function probeGateway({ timeoutMs = 1500 } = {}) {
           status: 'reachable',
           url,
           checkedAt: Date.now(),
-          detail: body?.ok ? `ok · sqlite ${body.db || 'unknown'}` : 'responded without ok flag',
+          detail: body?.ok
+            ? `ok · sqlite ${body.db || 'unknown'} · ${body.auth?.mode === 'dev-open' ? 'auth OPEN (dev)' : 'auth ' + (body.auth?.mode || 'unknown')}`
+            : 'responded without ok flag',
         },
       };
     }

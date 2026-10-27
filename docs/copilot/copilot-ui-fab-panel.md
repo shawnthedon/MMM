@@ -125,8 +125,8 @@ navigation restructure did not regress them.
 - Screen-reader verification (VoiceOver/TalkBack/NVDA) is outstanding; the markup uses dialog
   semantics, labelled controls, `aria-live` for the work area and visible focus, but that is
   not the same as a screen-reader pass.
-- Server-side enforcement of approvals, budgets and permissions is **not** implemented
-  (gateway auth/RBAC is an open blocker).
+- Server-side enforcement of approvals, budgets and permissions landed on 2026-10-27
+  (`copilot-governance-auth.md`); budget enforcement is still missing.
 - No LLM is called; answers are deterministic retrieval + live state.
 
 ## 9. Next increments (need decisions first)

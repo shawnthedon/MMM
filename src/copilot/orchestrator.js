@@ -8,6 +8,8 @@
  *   runProposal(card, ctx) -> assistant message (and records episodic evidence)
  */
 import { getState, setState, logEvent, now, uid, pendingApprovals } from '../core.js';
+import { api, ApiError, isApiMode } from '../api.js';
+import { getAuth, isAuthenticated, can as canDo, role as currentRole } from '../auth.js';
 import { searchKnowledge, knowledgeStats, describeScreen, getEntry } from './knowledge.js';
 import { pushEpisode, listEpisodes, memorySummary, clearMemory, getPreferences } from './memory.js';
 import { getRuntime, probeGateway } from './runtime.js';
@@ -36,7 +38,41 @@ export function resolveMode(id) {
 export const modeMeta = (id) => MODES.find((m) => m.id === resolveMode(id)) || MODES[0];
 
 /* ---------- helpers ---------- */
-const REF_STATE = (label) => ({ label, ref: 'live app state (observed)', status: 'observed' });
+const REF_STATE = (label) => ({ label, ref: 'browser demo store (observed)', status: 'observed' });
+
+/** True when a gateway session is live and the caller may act through the API. */
+export const apiReady = () => isApiMode() && isAuthenticated();
+
+const apiRef = (label, ref = 'gateway /api/v1') => ({ label, ref, status: 'verified' });
+
+/**
+ * Prefer the gateway when it is connected: it is the authoritative store. Falls back to the
+ * local demo mirror and says so, rather than silently mixing the two.
+ */
+async function liveData() {
+  if (!apiReady()) {
+    return { source: 'local', reason: isApiMode() ? 'not signed in to the gateway' : 'no gateway configured' };
+  }
+  try {
+    const [summary, agents, tasks, approvals] = await Promise.all([
+      api.summary(), api.agents(), api.tasks(), api.approvals(),
+    ]);
+    return {
+      source: 'gateway',
+      summary: summary.body,
+      agents: agents.body,
+      tasks: tasks.body.map((t) => ({ ...t, column: t.column_name || t.column })),
+      approvals: approvals.body,
+    };
+  } catch (err) {
+    return { source: 'local', reason: `gateway error: ${err?.message || err}` };
+  }
+}
+
+const sourceLine = (data) =>
+  data.source === 'gateway'
+    ? 'Source: gateway (authoritative, RBAC-checked).'
+    : `Source: local demo store — ${data.reason}.`;
 
 function refsFrom(results) {
   const out = [];
@@ -69,37 +105,59 @@ function knowledgeCard(query, results, kstats = knowledgeStats()) {
 }
 
 /* ---------- deterministic app-state answers (observed) ---------- */
-function liveStatusAnswer() {
-  const s = getState();
+async function liveStatusAnswer() {
   const rt = getRuntime();
+  const data = await liveData();
+  const auth = getAuth();
+  if (data.source === 'gateway') {
+    const sum = data.summary || {};
+    return answer(
+      [
+        `Agents: ${sum.running ?? '?'} running / ${sum.agents ?? '?'} total.`,
+        `Swarms: ${sum.swarmsLive ?? '?'} live · Teams: ${sum.teams ?? '?'}.`,
+        `Tasks: ${sum.tasks ?? '?'} · Approvals pending: ${sum.approvalsPending ?? '?'}.`,
+        `Principals active: ${sum.principals ?? '?'}.`,
+        `Signed in as ${auth.principal?.name} (${auth.principal?.role}) via ${auth.principal?.via}.`,
+        `Gateway ${rt.gateway.url} · ${rt.gateway.detail}.`,
+      ].join('\n'),
+      {
+        title: 'Live status (gateway)',
+        confidence: 'observed',
+        refs: [apiRef('GET /api/v1/summary')],
+      }
+    );
+  }
+  const s = getState();
   const pend = pendingApprovals().length;
   const running = s.agents.filter((a) => a.status === 'running').length;
   const spend = s.agents.reduce((a, x) => a + (x.costToday || 0), 0);
   return answer(
     [
-      `Agents: ${running} running / ${s.agents.length} total (seeded state).`,
+      `Agents: ${running} running / ${s.agents.length} total (seeded demo state).`,
       `Swarms: ${s.swarms.filter((w) => w.status === 'live').length} live of ${s.swarms.length}.`,
       `Approvals: ${pend} pending.`,
       `Spend today: $${spend.toFixed(2)} — demo figures, not metered usage.`,
-      `Gateway: ${rt.gateway.status} (${rt.gateway.detail}) at ${rt.gateway.url}.`,
-      `Store: ${rt.store.detail}.`,
+      `Gateway: ${rt.gateway.status} (${rt.gateway.detail}) at ${rt.gateway.url}. ${sourceLine(data)}`,
     ].join('\n'),
     {
-      title: 'Live status (observed)',
+      title: 'Live status (demo store)',
       confidence: 'observed',
       refs: [REF_STATE('agents/swarms/approvals'), { label: 'src/core.js — store', ref: 'src/core.js', status: 'verified' }],
     }
   );
 }
 
-function agentListAnswer() {
-  const s = getState();
-  if (!s.agents.length) return una('No agents exist in the store yet. Operate mode can propose one.');
+function agentListAnswer(agents = null, data = null) {
+  const list = agents || getState().agents;
+  if (!list.length) return una('No agents exist in this store yet. Operate mode can propose one.');
   return answer(
-    s.agents
-      .map((a) => `${a.name} — ${a.framework} · ${a.model} · trust ${a.trust} · status ${a.status} (demo)`)
-      .join('\n'),
-    { title: 'Agents in this workspace', confidence: 'observed', refs: [REF_STATE('agent list'), { label: 'src/core.js — agents', ref: 'src/core.js', status: 'verified' }] }
+    list.map((a) => `${a.name} — ${a.framework} · ${a.model} · trust ${a.trust} · status ${a.status}`).join('\n') +
+      (data ? `\n\n${sourceLine(data)}` : ''),
+    {
+      title: `Agents (${list.length})`,
+      confidence: 'observed',
+      refs: data?.source === 'gateway' ? [apiRef('GET /api/v1/agents')] : [REF_STATE('agent list'), { label: 'src/core.js — agents', ref: 'src/core.js', status: 'verified' }],
+    }
   );
 }
 
@@ -109,30 +167,42 @@ function swarmListAnswer() {
   return answer(
     s.swarms
       .map((w) => `${w.name} — ${w.status} · ${Math.round((w.progress || 0) * 100)}% · $${w.budget?.spent ?? 0}/$${w.budget?.cap ?? 0} (simulated progress)`)
-      .join('\n'),
+      .join('\n') + '\n\nSwarms are not persisted by the gateway yet, so this is the local demo mirror.',
     { title: 'Swarm instances', confidence: 'observed', refs: [REF_STATE('swarm list'), { label: 'src/main.js — ticker', ref: 'src/main.js', status: 'verified' }] }
   );
 }
 
-function taskListAnswer() {
-  const s = getState();
-  const open = s.tasks.filter((t) => t.column !== 'done');
+function taskListAnswer(tasks = null, data = null) {
+  const list = tasks || getState().tasks;
+  const open = list.filter((t) => (t.column || t.column_name) !== 'done');
   if (!open.length) return answer('Every Kanban card is in Done.', { confidence: 'observed', title: 'Tasks' });
   return answer(
-    open.slice(0, 12).map((t) => `[${t.column}] ${t.title} → ${t.assignee}`).join('\n'),
-    { title: `Open tasks (${open.length})`, confidence: 'observed', refs: [REF_STATE('kanban')] }
+    open.slice(0, 12).map((t) => `[${t.column || t.column_name}] ${t.title} → ${t.assignee || 'unassigned'}`).join('\n') +
+      (data ? `\n\n${sourceLine(data)}` : ''),
+    {
+      title: `Open tasks (${open.length})`,
+      confidence: 'observed',
+      refs: data?.source === 'gateway' ? [apiRef('GET /api/v1/tasks')] : [REF_STATE('kanban')],
+    }
   );
 }
 
-function approvalsAnswer() {
-  const pend = pendingApprovals();
-  if (!pend.length) return answer('No approval gates are pending.', { confidence: 'observed', title: 'Approvals' });
+function approvalsAnswer(approvals = null, data = null) {
+  const list = (approvals || getState().approvals).filter((a) => a.status === 'pending');
+  if (!list.length) return answer('No approval gates are pending.', { confidence: 'observed', title: 'Approvals' });
+  const role = currentRole();
+  const canDecide = canDo('approval:decide');
   return answer(
-    pend.map((a) => `${a.id} — ${a.action} on ${a.target} · risk ${a.risk} · requested by ${a.principal}`).join('\n'),
+    list.map((a) => `${a.id} — ${a.action} on ${a.target} · risk ${a.risk} · requested by ${a.principal}`).join('\n') +
+      (data?.source === 'gateway'
+        ? `\n\nDecisions are enforced by the gateway: ${canDecide ? `your role (${role}) may decide gates, subject to separation of duties.` : `your role (${role}) may not decide gates — ask a Reviewer or Admin.`}`
+        : '\n\nDemo store: the gateway is not connected, so nothing here is enforced.'),
     {
-      title: `${pend.length} pending approval(s)`,
+      title: `${list.length} pending approval(s)`,
       confidence: 'observed',
-      refs: [REF_STATE('approval gates'), { label: 'docs/copilot/PHASE0_DISCOVERY.md §5 — enforcement is UI-level', ref: 'docs/copilot/PHASE0_DISCOVERY.md', status: 'verified' }],
+      refs: data?.source === 'gateway'
+        ? [apiRef('GET /api/v1/approvals'), { label: 'apps/gateway/src/rbac.js — canDecideApproval', ref: 'apps/gateway/src/rbac.js', status: 'verified' }]
+        : [REF_STATE('approval gates'), { label: 'docs/copilot/PHASE0_DISCOVERY.md — enforcement', ref: 'docs/copilot/PHASE0_DISCOVERY.md', status: 'verified' }],
     }
   );
 }
@@ -314,21 +384,69 @@ function createAgentProposal(inputName, mode) {
   ];
   return proposal({
     title: 'Create agent',
-    summary: `A new agent definition will be written to the demo store. Nothing is deployed or started.`,
+    summary: apiReady()
+      ? 'Creates an agent definition on the gateway. The request is authorised by RBAC and recorded in the hash-chained audit log.'
+      : 'A new agent definition will be written to the demo store. Nothing is deployed or started.',
     risk: 'reversible',
     rows: rows(),
     params,
     editable: ['name', 'role'],
     effects: 'Adds one agent to the Agents screen and one event to the feed.',
-    permissions: 'Local demo store write only.',
+    permissions: apiReady() ? `Gateway write as ${currentRole()} (agent:write), audited server-side.` : 'Local demo store write only — not enforced.',
     rollback: 'Delete the agent, or clear site data to restore fixtures.',
     confirm: 'Create agent',
     mode,
-    execute: (p) => {
+    execute: async (p) => {
       if (!validName(p.name)) return { status: 'failed', summary: `“${p.name}” is not a valid agent name (2–40 chars, letters/numbers/space . _ -).` };
       if (getState().agents.some((a) => a.name.toLowerCase() === p.name.trim().toLowerCase())) {
         return { status: 'failed', summary: `An agent named ${p.name} already exists. Choose another name.` };
       }
+
+      // Gateway is authoritative when a session exists; the server re-checks the permission.
+      if (apiReady()) {
+        if (!canDo('agent:write')) {
+          return {
+            status: 'blocked',
+            summary: `Refused locally: your role (${currentRole()}) lacks “agent:write”. The gateway would reject this too.`,
+            steps: [{ label: 'Check permission', state: 'blocked', detail: 'agent:write required' }],
+          };
+        }
+        try {
+          const created = await api.createAgent({
+            name: p.name.trim(),
+            role: p.role,
+            framework: p.framework,
+            model: p.model,
+            fallback: p.fallback,
+            status: 'idle',
+            trust: p.trust,
+            prompt: `You are ${p.name}. Be concise, cite sources, ask when unsure.`,
+            tools: ['web.search'],
+            skills: ['core.citations'],
+          });
+          const agent = created.body;
+          return {
+            status: 'ok',
+            summary: `Agent ${agent.name} created on the gateway with status ${agent.status}. It is defined, not running.`,
+            steps: [
+              { label: 'Validate name', state: 'ok' },
+              { label: 'Authorise with gateway RBAC', state: 'ok', detail: `${currentRole()} · agent:write` },
+              { label: 'Persist agent', state: 'ok', detail: `id ${agent.id}` },
+              { label: 'Write audit entry', state: 'ok', detail: 'hash-chained audit_log' },
+            ],
+            refs: [apiRef('POST /api/v1/agents'), { label: 'request id', ref: created.requestId || 'n/a', status: 'observed' }],
+            verify: `GET /api/v1/agents and confirm ${agent.id} with status idle; run npm run audit:verify.`,
+          };
+        } catch (err) {
+          const denied = err instanceof ApiError && (err.forbidden || err.unauthenticated);
+          return {
+            status: denied ? 'blocked' : 'failed',
+            summary: `Gateway rejected the request: ${err.message}${err.requestId ? ` (request ${err.requestId})` : ''}`,
+            steps: [{ label: 'POST /api/v1/agents', state: denied ? 'blocked' : 'failed', detail: err.message }],
+          };
+        }
+      }
+
       const id = uid('ag');
       setState((st) => {
         st.agents.unshift({
@@ -391,11 +509,13 @@ function deploySwarmProposal(objective, mode) {
     params,
     editable: ['objective'],
     effects: 'Adds a live swarm to Teams & Swarms; the demo ticker advances its nodes and spend.',
-    permissions: 'Demo store write. No provider, tool or budget is actually invoked.',
+    permissions: apiReady()
+      ? 'Gateway has no swarm endpoint yet: this instance stays in the browser mirror even when signed in. No provider, tool or budget is invoked.'
+      : 'Demo store write. No provider, tool or budget is actually invoked.',
     rollback: 'Stop the swarm. Simulated spend is not recoverable, but nothing real was spent.',
     confirm: 'Deploy swarm',
     mode,
-    execute: (p) => {
+    execute: async (p) => {
       if (!String(p.objective || '').trim()) return { status: 'failed', summary: 'An objective is required.' };
       const id = uid('sw');
       const slug = p.objective.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24) || 'swarm';
@@ -427,7 +547,7 @@ function deploySwarmProposal(objective, mode) {
           { label: 'Validate objective', state: 'ok' },
           { label: 'Create swarm instance', state: 'ok', detail: `id ${id}` },
           { label: 'Schedule nodes', state: 'blocked', detail: 'no scheduler/runtime — nodes are seeded' },
-          { label: 'Confirm with gateway', state: 'blocked', detail: 'gateway not used by the front end' },
+          { label: 'Persist on gateway', state: 'blocked', detail: apiReady() ? 'POST /swarms/:id/deploy is still planned, not implemented' : 'no gateway session' },
         ],
         refs: [REF_STATE('swarm list'), { label: 'src/main.js — simulated progress', ref: 'src/main.js', status: 'verified' }],
         verify: 'Open Teams & Swarms and watch nodes move — remember the movement is simulated.',
@@ -450,12 +570,32 @@ function createTaskProposal(title, mode) {
     params,
     editable: ['title'],
     effects: 'Adds one card to the Kanban board.',
-    permissions: 'Demo store write.',
+    permissions: apiReady() ? `Gateway write as ${currentRole()} (task:write).` : 'Demo store write — not enforced.',
     rollback: 'Delete the card.',
     confirm: 'Create task',
     mode,
-    execute: (p) => {
+    execute: async (p) => {
       if (!String(p.title || '').trim()) return { status: 'failed', summary: 'A title is required.' };
+      if (apiReady()) {
+        if (!canDo('task:write')) {
+          return { status: 'blocked', summary: `Refused locally: your role (${currentRole()}) lacks “task:write”.`, steps: [{ label: 'Check permission', state: 'blocked', detail: 'task:write required' }] };
+        }
+        try {
+          const created = await api.createTask({ title: p.title.trim(), column: 'todo', priority: 'med' });
+          return {
+            status: 'ok',
+            summary: `Task “${created.body.title}” created on the gateway in ${created.body.column || 'todo'}.`,
+            steps: [
+              { label: 'Authorise with gateway RBAC', state: 'ok', detail: `${currentRole()} · task:write` },
+              { label: 'Persist task', state: 'ok', detail: `id ${created.body.id}` },
+            ],
+            refs: [apiRef('POST /api/v1/tasks')],
+            verify: 'Open Tasks — the gateway list now contains this card.',
+          };
+        } catch (err) {
+          return { status: err?.forbidden ? 'blocked' : 'failed', summary: `Gateway rejected the task: ${err.message}` };
+        }
+      }
       const id = uid('tk');
       setState((st) => {
         st.tasks.unshift({ id, title: p.title.trim(), column: 'todo', assignee: 'ag-researcher', priority: 'med', deps: [], desc: 'Created via Copilot.' });
@@ -492,16 +632,51 @@ function approvalProposal(match, mode, decision = 'allow') {
       ['Risk', gate.risk],
       ['Evidence', gate.evidence],
       ['Decision', params.decision === 'allow' ? 'Allow once' : 'Deny'],
-      ['Enforcement', 'UI-only in this build'],
+      ['Enforcement', apiReady() ? `gateway RBAC (${currentRole()}) + separation of duties` : 'UI-only — no gateway session'],
     ],
     params,
     editable: [],
-    effects: params.decision === 'allow' ? 'Releases the action to the requesting principal (demo state).' : 'Denies the action and notifies the principal (demo state).',
-    permissions: 'Requires an authorised approver; not verifiable server-side yet.',
+    effects: params.decision === 'allow' ? 'Releases the action to the requesting principal.' : 'Denies the action and notifies the principal.',
+    permissions: apiReady()
+      ? `Gateway decides for ${currentRole()} (approval:decide), with separation of duties enforced server-side.`
+      : 'UI-only in this build: no gateway session, so the decision is not enforced.',
     rollback: 'A decision cannot be un-made in the audit sense; re-request the gate instead.',
     confirm: params.decision === 'allow' ? 'Allow once' : 'Deny',
     mode,
-    execute: (p) => {
+    execute: async (p) => {
+      if (apiReady()) {
+        if (!canDo('approval:decide')) {
+          return {
+            status: 'blocked',
+            summary: `Your role (${currentRole()}) cannot decide approval gates. Ask a Reviewer, Admin or Owner.`,
+            steps: [{ label: 'Check permission', state: 'blocked', detail: 'approval:decide required' }],
+          };
+        }
+        try {
+          const out = await api.decideApproval(p.id, p.decision);
+          return {
+            status: 'ok',
+            summary: `${out.body.action} ${out.body.status} on the gateway (decider ${out.body.decider_id}). Recorded in the audit chain.`,
+            steps: [
+              { label: 'Authorise with gateway RBAC', state: 'ok', detail: `${currentRole()} · approval:decide` },
+              { label: 'Apply decision', state: 'ok', detail: out.body.status },
+              { label: 'Write audit entry', state: 'ok', detail: 'hash-chained audit_log' },
+            ],
+            refs: [apiRef(`POST /api/v1/approvals/${p.id}/${p.decision}`)],
+            verify: 'GET /api/v1/approvals and npm run audit:verify.',
+          };
+        } catch (err) {
+          const denied = err instanceof ApiError && err.forbidden;
+          return {
+            status: denied ? 'blocked' : 'failed',
+            summary: denied
+              ? `Gateway refused: ${err.message}. Separation of duties blocks approving your own request.`
+              : `Gateway error: ${err.message}`,
+            steps: [{ label: 'Decide gate', state: denied ? 'blocked' : 'failed', detail: err.message }],
+          };
+        }
+      }
+
       const target = getState().approvals.find((a) => a.id === p.id);
       if (!target) return { status: 'failed', summary: 'That gate no longer exists.' };
       if (target.status !== 'pending') return { status: 'failed', summary: `${target.id} was already ${target.status}.` };
@@ -638,7 +813,7 @@ function showPromptAnswer(query) {
 }
 
 /* ---------- ask mode routing ---------- */
-function askIntent(lc, raw, ctx) {
+async function askIntent(lc, raw, ctx) {
   if (/^(help|what can you do|capabilities|commands)\b/.test(lc)) {
     return answer(
       [
@@ -654,10 +829,19 @@ function askIntent(lc, raw, ctx) {
     );
   }
   if (/^(status|health|gateway|overview)\b/.test(lc)) return liveStatusAnswer();
-  if (/(list|show|what|which).*(agent)/.test(lc)) return agentListAnswer();
+  if (/(list|show|what|which).*(agent)/.test(lc)) {
+    const data = await liveData();
+    return agentListAnswer(data.agents, data);
+  }
   if (/(list|show).*(swarm)/.test(lc)) return swarmListAnswer();
-  if (/(list|show).*(task|kanban)/.test(lc)) return taskListAnswer();
-  if (/(approv|pending).*(gate|approval|pending)|pending approvals/.test(lc)) return approvalsAnswer();
+  if (/(list|show).*(task|kanban)/.test(lc)) {
+    const data = await liveData();
+    return taskListAnswer(data.tasks, data);
+  }
+  if (/(approv|pending).*(gate|approval|pending)|pending approvals/.test(lc)) {
+    const data = await liveData();
+    return approvalsAnswer(data.approvals, data);
+  }
   if (/spend|cost|budget|analy/.test(lc)) return spendAnswer();
   if (/this (screen|page)|where am i|what am i looking at|explain this/.test(lc)) {
     const text = describeScreen(ctx.route);
@@ -665,12 +849,20 @@ function askIntent(lc, raw, ctx) {
     return answer(text, { title: `This screen · ${ctx.route}`, confidence: 'observed', refs: [{ label: 'live route', ref: `route:${ctx.route}`, status: 'observed' }, ...refsFrom(hit)] });
   }
   if (/live|real|demo|fake|simulat|actually running/.test(lc)) {
+    const auth = getAuth();
+    const enforcement =
+      isApiMode() && isAuthenticated()
+        ? `The gateway is connected and enforcing RBAC for ${auth.principal.name} (${auth.principal.role}); agent/task/approval actions from this panel are checked server-side.`
+        : isApiMode()
+          ? 'A gateway is configured but you are not signed in, so no call can be authorised.'
+          : 'No gateway is configured, so nothing is enforced by a server.';
     return answer(
       [
         'Honest answer: this build is demo data plus a real UI.',
         '• Agents, swarms, tasks, approvals, files and provider costs are seeded in the browser store; a ticker animates live swarms.',
-        '• The gateway (port 8787, SQLite, audit chain) exists but the front end never calls it.',
+        `• ${enforcement}`,
         '• No LLM, scheduler, tool, training job, voice engine or SMS connector is invoked.',
+        '• Swarm progress is animated by the local ticker; the gateway does not persist swarms yet.',
         'The panel header always shows the runtime status so this cannot be mistaken for live execution.',
       ].join('\n'),
       {
@@ -699,7 +891,7 @@ function askIntent(lc, raw, ctx) {
 }
 
 /* ---------- operate mode routing ---------- */
-function operateIntent(lc, raw, ctx) {
+async function operateIntent(lc, raw, ctx) {
   const openM = raw.match(/^(?:open|go to|navigate to|show)\s+(.+)/i);
   if (openM) {
     const nav = navigateIntent(openM[1].trim().split(/\s+/)[0]);
@@ -740,10 +932,19 @@ function operateIntent(lc, raw, ctx) {
   const runM = raw.match(/^(?:run|start)\s+(.+)/i);
   if (runM && !/swarm/.test(lc)) return runAgentIntent(runM[1]);
   if (/^(status|health)\b/.test(lc)) return liveStatusAnswer();
-  if (/(list|show).*agent/.test(lc)) return agentListAnswer();
+  if (/(list|show).*agent/.test(lc)) {
+    const data = await liveData();
+    return agentListAnswer(data.agents, data);
+  }
   if (/(list|show).*swarm/.test(lc)) return swarmListAnswer();
-  if (/(list|show).*task/.test(lc)) return taskListAnswer();
-  if (/pending|approv/.test(lc)) return approvalsAnswer();
+  if (/(list|show).*task/.test(lc)) {
+    const data = await liveData();
+    return taskListAnswer(data.tasks, data);
+  }
+  if (/pending|approv/.test(lc)) {
+    const data = await liveData();
+    return approvalsAnswer(data.approvals, data);
+  }
   if (/diagnos|troubleshoot|check/.test(lc)) return { text: 'Running real checks now — no canned results.', card: null, defer: 'diagnose' };
 
   return answer(
@@ -762,7 +963,7 @@ function operateIntent(lc, raw, ctx) {
  * @param {{mode?:string, route?:string, history?:{role:string,text?:string}[]}} ctx
  * @returns {{text:string, card:object|null, defer?:string, mode:string}}
  */
-export function handle(text, ctx = {}) {
+export async function handle(text, ctx = {}) {
   const raw = String(text || '').trim();
   const mode = resolveMode(ctx.mode);
   const route = ctx.route || 'home';
@@ -839,7 +1040,7 @@ export function handle(text, ctx = {}) {
               rollback: 'No — deleted records are gone.',
               confirm: 'Clear memory',
               mode,
-              execute: () => {
+              execute: async () => {
                 clearMemory();
                 return {
                   status: 'ok',
@@ -863,7 +1064,7 @@ export function handle(text, ctx = {}) {
         const promptM = raw.match(/(?:prompt|instruction)s?\s+(?:for|of)\s+(.+)/i) || raw.match(/show prompt\s+(.+)/i);
         const createM = raw.match(/^create (?:a |new )?agent(?: called| named)?\s+(.+)/i);
         if (promptM) {
-          res = { text: 'Here is the stored prompt (demo data — no evaluation or versioning).', card: showPromptAnswer(promptM[1]) };
+          res = { text: 'Here is the stored prompt (no evaluation or versioning exists yet).', card: showPromptAnswer(promptM[1]) };
         } else if (createM) {
           const [namePart, rolePart] = createM[1].split(/\s+as\s+/i);
           const card = createAgentProposal(namePart.trim(), mode);
@@ -887,10 +1088,10 @@ export function handle(text, ctx = {}) {
         break;
       }
       case 'operate':
-        res = operateIntent(lc, raw, base);
+        res = await operateIntent(lc, raw, base);
         break;
       default:
-        res = askIntent(lc, raw, base);
+        res = await askIntent(lc, raw, base);
         break;
     }
     return normalize(res, mode);
@@ -932,7 +1133,7 @@ export function rearmProposal(card) {
  * Execute a confirmed proposal. The panel calls this; it is exported so tests can drive it.
  * Returns an assistant message with a result card and records episodic evidence.
  */
-export function runProposal(card, { mode = 'operate' } = {}) {
+export async function runProposal(card, { mode = 'operate' } = {}) {
   if (!card || card.type !== 'proposal') return { text: 'No action to run.', card: null };
   if (proposalExpired(card)) {
     const out = {
@@ -944,7 +1145,7 @@ export function runProposal(card, { mode = 'operate' } = {}) {
   }
   let result;
   try {
-    result = card.execute(card.params) || { status: 'ok', summary: 'Action completed.' };
+    result = (await card.execute(card.params)) || { status: 'ok', summary: 'Action completed.' };
   } catch (err) {
     result = { status: 'failed', summary: `Execution error: ${String(err && err.message ? err.message : err)}` };
   }

@@ -94,7 +94,7 @@ export const KNOWLEDGE = [
       'Knowledge — search the versioned, source-linked knowledge pack; shows verification status and freshness.\n' +
       'Training / Voice — no backend or verified engine exists, so these modes only report the blocker and run real local dataset checks.\n' +
       'Activity — recent Copilot actions from episodic memory plus the app event feed and pending approvals.\n' +
-      'Mode selection is not authorisation: every consequential action still needs explicit confirmation, and server-side enforcement is pending gateway auth/RBAC.',
+      'Mode selection is not authorisation: every consequential action needs explicit confirmation, and when a gateway session exists the server re-checks the permission and records an audit entry.',
     sources: [
       { label: 'src/copilot/orchestrator.js — MODES', ref: 'src/copilot/orchestrator.js' },
       { label: 'src/copilot/capabilities.js — capability registry', ref: 'src/copilot/capabilities.js' },
@@ -179,21 +179,47 @@ export const KNOWLEDGE = [
   },
   {
     id: 'gateway.auth',
-    title: 'Gateway has no authentication yet',
-    type: 'limitation',
+    title: 'Gateway authentication and session model',
+    type: 'reference',
     module: 'gateway',
-    tags: ['auth', 'rbac', 'security', 'permissions', 'blocker', 'governance'],
+    tags: ['auth', 'authentication', 'login', 'session', 'cookie', 'csrf', 'password', 'scrypt', 'lockout', 'security'],
     status: 'verified',
     version: PACK.version,
-    updated: '2026-10-26',
+    updated: '2026-10-27',
     sensitivity: 'internal',
     body:
-      'The gateway serves the API without authentication, RBAC or rate limiting; the file header records that Auth/RBAC is Phase 3 work and the progress tracker marks it not started.\n' +
-      'Consequence: Copilot approvals and policy checks cannot be enforced server-side today. The panel blocks self-approval and requires explicit confirmation in the UI, but that is a usability guard, not a security boundary.\n' +
-      'Do not expose port 8787 publicly until auth, TLS termination and rate limits exist.',
+      'Every data route now requires a credential; only GET /healthz and POST /api/v1/auth/login are public. Health reports nothing operational to an anonymous caller.\n' +
+      'Sessions: POST /api/v1/auth/login with email + password (override with --user/-u and --data for curl). The reply sets an HttpOnly, SameSite=Strict cookie (Secure behind TLS) and returns the principal, its permission list and an HMAC CSRF token. Mutations made with the cookie must send x-swarmos-csrf.\n' +
+      'Passwords are stored as scrypt hashes with a per-user salt (N=16384, r=8, p=1) in the principals table. Argon2id would be stronger but needs a native dependency; that trade-off is documented rather than hidden.\n' +
+      'API tokens: POST /api/v1/tokens issues swk_… secrets that are hashed at rest, carry explicit scopes (a subset of the holder’s permissions) and optional expiry. Bearer callers skip CSRF. Revocation is immediate.\n' +
+      'Lockout: 5 failed logins within 5 minutes lock that email for 15 minutes; 20 attempts per address per 5 minutes are throttled. Attempts are persisted in auth_attempts and audited.\n' +
+      'Bootstrap: the first start creates an Owner from SWARMOS_BOOTSTRAP_EMAIL / SWARMOS_BOOTSTRAP_PASSWORD, or (in development) prints a generated password once. Production refuses to start without an owner.\n' +
+      'Not implemented: 2FA, SSO/OIDC, email password reset, per-object ACLs, and multi-node rate limiting.',
     sources: [
-      { label: 'apps/gateway/server.js:1-5 header comment', ref: 'apps/gateway/server.js' },
-      { label: 'docs/PROGRESS.md — 3.4 Auth + RBAC ⬜', ref: 'docs/PROGRESS.md' },
+      { label: 'apps/gateway/src/auth.js', ref: 'apps/gateway/src/auth.js' },
+      { label: 'apps/gateway/migrations/002_auth.sql', ref: 'apps/gateway/migrations/002_auth.sql' },
+      { label: 'scripts/gateway-auth-test.mjs — 28 acceptance checks', ref: 'scripts/gateway-auth-test.mjs' },
+    ],
+  },
+  {
+    id: 'gateway.roles',
+    title: 'RBAC roles, permissions and separation of duties',
+    type: 'reference',
+    module: 'governance',
+    tags: ['rbac', 'roles', 'permissions', 'owner', 'admin', 'operator', 'reviewer', 'observer', 'approval', 'separation'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-27',
+    sensitivity: 'internal',
+    body:
+      'Five roles: Owner > Admin > Operator / Reviewer > Observer. They are deliberately not a single ladder: an Operator runs agents, tasks and swarms but cannot decide approval gates; a Reviewer decides gates and reads the audit trail but cannot run agents.\n' +
+      'Owner: everything, including seeding demo data and principal administration. Admin: operations + review + principal/token administration, but cannot create or modify an Owner. Operator: read + agent/task/swarm writes + request approvals. Reviewer: read + decide approvals + read/verify the audit log. Observer: read-only.\n' +
+      'Guards: nobody can change their own role or status; a token’s scopes can never exceed the holder’s role; role or status changes revoke that principal’s sessions immediately; separation of duties blocks a principal from deciding a gate they requested; only user/bot principals may decide gates, never copilot or agent principals.\n' +
+      'Every denial is written to the hash-chained audit log with actor, role, route and permission. GET /api/v1/roles returns the live matrix.',
+    sources: [
+      { label: 'apps/gateway/src/rbac.js', ref: 'apps/gateway/src/rbac.js' },
+      { label: 'apps/gateway/server.js — route permission map', ref: 'apps/gateway/server.js' },
+      { label: 'docs/copilot/copilot-governance-auth.md', ref: 'docs/copilot/copilot-governance-auth.md' },
     ],
   },
   {
@@ -276,7 +302,7 @@ export const KNOWLEDGE = [
       '3. Risk classes: read-only (no gate), reversible (confirm once), consequential (confirm twice + preview).\n' +
       '4. Decide allow-once or deny. Copilot never decides for you and cannot approve a request it raised itself.\n' +
       '5. Evidence: approval status becomes allowed/denied and an event records “<action> <status> by you via Copilot”.\n' +
-      'Server-side enforcement is pending gateway auth/RBAC.',
+      'Enforcement: the gateway re-checks approval:decide, applies separation of duties against the requester, and writes the decision to the hash-chained audit log. Without a gateway session the decision stays local and is labelled as unenforced.',
     sources: [
       { label: 'src/copilot/orchestrator.js — decideApproval()', ref: 'src/copilot/orchestrator.js' },
       { label: 'src/shell.js — notifications sheet', ref: 'src/shell.js' },
@@ -526,8 +552,8 @@ export const KNOWLEDGE = [
     updated: '2026-10-26',
     sensitivity: 'public',
     body:
-      'Built: PWA shell and 13 module views, demo state + fixtures, SQLite schema/migrations, gateway API slice with WebSocket broadcast and hash-chained audit, terminal, smoke test suite, design/progress docs, and now the Copilot FAB + panel + modes + knowledge + memory + capability reporting.\n' +
-      'Not built: real LLM calls, agent execution, swarm scheduling, skills runtime, MCP integrations, auth/RBAC, API-backed front end, training, voice, real channel connectors, browser control, analytics from real telemetry.\n' +
+      'Built: PWA shell and 13 module views, demo state + fixtures, SQLite schema/migrations, gateway API with WebSocket broadcast and hash-chained audit, gateway authentication + RBAC (sessions, scoped tokens, lockout, separation of duties), sign-in UI and an API client, terminal, four test suites, design/progress docs, and the Copilot FAB + panel + modes + knowledge + memory + capability reporting.\n' +
+      'Not built: real LLM calls, agent execution, swarm scheduling, skills runtime, MCP integrations, full API-backed data sync (only actions are wired), training, voice, real channel connectors, browser control, analytics from real telemetry.\n' +
       'Source of truth for the tracker is docs/PROGRESS.md; this entry summarises it and should be re-verified when that file changes.',
     sources: [
       { label: 'docs/PROGRESS.md', ref: 'docs/PROGRESS.md' },

@@ -264,9 +264,10 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   - Event envelope per spec §20.3: `{id, cursor, ts, topic, entity, type, payload, trust_context}`.
   - Implement **cursor replay**: on reconnect the client sends `lastCursor` and receives missed events (store recent events in the `events` table).
 
-- [ ] **3.4 Authentication & RBAC (Layer 1 of governance)**
+- [x] **3.4 Authentication & RBAC (Layer 1 of governance)** ✅ 2026-10-27 — see `docs/copilot/copilot-governance-auth.md`
   - Session login (email + password) for the app; bootstrap first Owner from env (`BOOTSTRAP_ADMIN_EMAIL/PASSWORD`).
   - Hash passwords with **argon2** or **bcrypt**. Sessions: signed, HTTP-only, SameSite=Strict cookies.
+    *(Implemented with scrypt — no native dependency; Argon2id remains the recommended upgrade.)*
   - Roles: `Owner, Admin, Operator, Reviewer, Observer` — enforce in a `requireRole('Operator')` middleware per route.
   - API tokens (for CLI/Telegram) in `capability_tokens` with scopes + expiry.
 

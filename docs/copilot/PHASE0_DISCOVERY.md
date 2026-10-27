@@ -54,7 +54,7 @@ point and the panel internals while keeping every integration point
 
 | Service | Reality in this repo | Evidence |
 | --- | --- | --- |
-| Gateway REST/WS | `apps/gateway/server.js` (Node `http` + `ws` + `better-sqlite3`), port `8787`: `/healthz`, `/api/v1/summary`, `agents`, `tasks`, `approvals`, `events`, `audit/verify`, `dev/seed`, `WS /ws`. CORS `*`. **No auth/RBAC** — file header says "Auth/RBAC arrives in Phase 3". | `apps/gateway/server.js:1-60`, `packages/shared/api-routes.json` |
+| Gateway REST/WS | `apps/gateway/server.js` (Node `http` + `ws` + SQLite), port `8787`: auth/session/roles/principals/tokens, `summary`, `agents`, `tasks`, `approvals`, `events`, `audit`, `audit/verify`, `dev/seed`, `WS /ws`. **At baseline** these were unauthenticated with `CORS *`; auth/RBAC was added on 2026-10-27 (see `copilot-governance-auth.md`). | `apps/gateway/server.js`, `packages/shared/api-routes.json` |
 | Database | SQLite (WAL) with 17 tables, migration runner, hash-chained `audit_log`, `npm run audit:verify`. | `apps/gateway/migrations/001_init.sql`, `apps/gateway/src/db.js`, `docs/PROGRESS.md` |
 | Frontend ↔ gateway | **Not wired.** The PWA renders seeded fixtures from `core.js`; `docs/PROGRESS.md` lists "2.5 Frontend switch to API mode" as not started. | `src/core.js:seed()`, `docs/PROGRESS.md` |
 | Agent/task runtime | None. Agent "running" status and swarm progress come from seeded demo state and a `setInterval` simulation in `src/main.js`. | `src/main.js:74-113` |
@@ -65,7 +65,7 @@ point and the panel internals while keeping every integration point
 | Voice service | None. No engine adapter, no audio pipeline. | — |
 | Communication gateway | Telegram screen is a UI simulation only (`src/views2.js`); no outbound transport. | `src/views2.js:400-530` |
 | Browser control | None. | — |
-| Governance | Audit chain exists server-side; approval gates exist as **client-side demo** objects in `state.approvals`. | `src/shell.js:notificationsSheet`, `apps/gateway/src/db.js` |
+| Governance | Audit chain server-side; **auth + RBAC added 2026-10-27** (sessions, scoped tokens, role matrix, separation of duties). Approval gates in the browser are still demo objects, but Copilot decisions are enforced by the gateway when signed in. | `src/shell.js:notificationsSheet`, `apps/gateway/src/db.js` |
 | File/artifact service | `state.files` metadata + inline text content; no binary storage or upload. | `src/core.js:files` |
 
 ## 4. Requirement coverage (before this change)
@@ -91,12 +91,11 @@ point and the panel internals while keeping every integration point
 
 ## 5. Blockers requiring a decision (do not guess)
 
-1. **Server-side Copilot.** Grounding, memory, approvals and audit must be enforced in a
-   backend (§11, §12). The gateway has no auth/RBAC yet (`docs/PROGRESS.md` 3.4 ⬜), so the
-   Copilot implemented here is explicitly a **client-side, demo-mode** surface. Consequential
-   actions are confirmed in the UI and recorded locally; they are **not** server-enforced.
-   Decision needed: land gateway auth/RBAC (3.4) before any Copilot action is treated as
-   governed.
+1. ~~**Server-side Copilot.**~~ **RESOLVED 2026-10-27** — gateway authentication + RBAC landed
+   (`apps/gateway/src/auth.js`, `apps/gateway/src/rbac.js`, migration `002_auth.sql`), and Copilot's
+   agent/task/approval actions now go through it. See
+   [`copilot-governance-auth.md`](copilot-governance-auth.md). Remaining gaps: 2FA/SSO, per-object
+   ACLs, and read sync of the module screens (checklist 2.5).
 2. **Frontend ↔ gateway contract.** Nothing in the PWA calls `:8787` today. The panel probes
    `/healthz` and reports `reachable` / `unreachable` truthfully, but no data is read from the
    gateway. Decision needed: approve the API client + auth token strategy (Phase 2.5 / 3.4)

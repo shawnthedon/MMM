@@ -8,8 +8,10 @@ const j = (name) => JSON.parse(readFileSync(join(FIXTURES_DIR, name), 'utf8'));
 export function seed({ reset = false } = {}) {
   migrate();
   if (reset) {
-    const tables = ['audit_log', 'jobs', 'settings', 'files', 'messages', 'threads', 'model_policies', 'providers',
-      'plugins', 'skills', 'events', 'approvals', 'tasks', 'swarms', 'team_members', 'teams', 'agents', 'principals'];
+    // Identity and credential tables are deliberately excluded: re-seeding demo content must
+    // never delete the workspace owner, active sessions, API tokens, or the lockout history.
+    const tables = ['audit_log', 'jobs', 'files', 'messages', 'threads', 'model_policies', 'providers',
+      'plugins', 'skills', 'events', 'approvals', 'tasks', 'swarms', 'team_members', 'teams', 'agents'];
     db.transaction(() => { for (const t of tables) db.prepare(`DELETE FROM ${t}`).run(); })();
   }
 
@@ -17,8 +19,9 @@ export function seed({ reset = false } = {}) {
 
   db.transaction(() => {
     // principals
-    const pIns = db.prepare(`INSERT OR REPLACE INTO principals (id,type,name,role,trust,created_at) VALUES (?,?,?,?,?,?)`);
-    pIns.run('user-maya', 'user', 'Maya', 'Owner', 100, Date.now());
+    // Identity is intentionally NOT seeded: the gateway bootstraps a real Owner (env or
+    // generated) and every other principal is created through the admin API so credentials and
+    // audit attribution are always explicit.
     for (const a of j('agents.json')) {
       db.prepare(`INSERT OR REPLACE INTO agents
         (id,name,role,framework,framework_config,model,fallback,status,trust,autonomy,success_rate,cost_today,runs,last_active,tools,skills,prompt,memory,created_by)

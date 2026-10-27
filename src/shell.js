@@ -1,5 +1,7 @@
 /* ============ SwarmOS shell: chrome, sheets, toasts, actions ============ */
 import { getState, setState, commit, esc, icon, pendingApprovals, logEvent, uid, now } from './core.js';
+import { identityChipHTML } from './authview.js';
+import { getAuth } from './auth.js';
 
 export const routes = [
   { id: 'home', label: 'Home', icon: 'home', title: 'Command Deck' },
@@ -15,6 +17,7 @@ export const routes = [
   { id: 'artifacts', label: 'Files', icon: 'folder', title: 'Artifacts & Files' },
   { id: 'terminal', label: 'Terminal', icon: 'terminal', title: 'Terminal' },
   { id: 'settings', label: 'Settings', icon: 'gear', title: 'Settings' },
+  { id: 'login', label: 'Account', icon: 'shield', title: 'Account & Access' },
 ];
 
 /* Bottom navigation: four module slots with the Copilot launcher in the centre slot. */
@@ -235,6 +238,7 @@ export function renderShell(root) {
           <span class="ws-dot" id="gw-dot"></span>
         </div>
         <div class="title" id="page-title"></div>
+        <button class="identity-btn" id="identity-chip" data-act="nav" data-to="login" aria-label="Account and access"></button>
         <button class="iconbtn" data-act="notifications" aria-label="Notifications">
           ${icon('bell', 21)}<span class="badge" id="notif-badge">0</span>
         </button>
@@ -284,6 +288,18 @@ export function refreshChrome(routeId) {
   }
   const dot = document.getElementById('gw-dot');
   if (dot) dot.className = `ws-dot ${s.gateway.status === 'healthy' ? '' : 'warn'}`;
+  // identity comes from the gateway session, not from demo state
+  const chip = document.getElementById('identity-chip');
+  if (chip) {
+    chip.innerHTML = identityChipHTML();
+    const auth = getAuth();
+    chip.setAttribute(
+      'aria-label',
+      auth.status === 'authenticated'
+        ? `Account: ${auth.principal?.name}, role ${auth.principal?.role}`
+        : 'Account and access — not signed in to a gateway'
+    );
+  }
   // map the current route onto the nearest tab (the centre slot is the Copilot launcher)
   const tabFor = { home: 'home', agents: 'agents', tasks: 'tasks', chat: 'chat' };
   const active = tabFor[routeId] || null;

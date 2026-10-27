@@ -1,8 +1,94 @@
-/* Gateway DB layer — SQLite (WAL), zero external dependencies */
-import Database from 'better-sqlite3';
+/* Gateway DB layer — SQLite (WAL), zero external dependencies
+ *
+ * Driver order:
+ *   1. `better-sqlite3` (native, recommended, what npm install builds)
+ *   2. `node:sqlite` (Node ≥ 22.5 built-in, experimental) as a fallback so the gateway and its
+ *      tests can run on machines where the native module could not be compiled.
+ * The public surface is identical for both: exec / prepare().run/get/all / pragma / transaction.
+ */
 import { mkdirSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/* ---------- driver selection ---------- */
+function nodeSqliteAdapter(DatabaseSync) {
+  // Thin shim so callers can treat both drivers the same. Rows from node:sqlite have a null
+  // prototype, which breaks spread/JSON patterns in subtle ways, so they are copied.
+  const plain = (row) => (row ? { ...row } : row);
+  return class Database {
+    constructor(file) {
+      this.raw = new DatabaseSync(file);
+    }
+    pragma(statement) {
+      try {
+        return this.raw.prepare(`PRAGMA ${statement}`).all();
+      } catch {
+        return [];
+      }
+    }
+    exec(sql) {
+      this.raw.exec(sql);
+      return this;
+    }
+    prepare(sql) {
+      const stmt = this.raw.prepare(sql);
+      return {
+        run: (...args) => stmt.run(...args),
+        get: (...args) => plain(stmt.get(...args)),
+        all: (...args) => stmt.all(...args).map(plain),
+        pluck: () => {
+          throw new Error('pluck() is not supported by the node:sqlite fallback driver');
+        },
+      };
+    }
+    transaction(fn) {
+      return (...args) => {
+        this.raw.exec('BEGIN');
+        try {
+          const out = fn(...args);
+          this.raw.exec('COMMIT');
+          return out;
+        } catch (err) {
+          try { this.raw.exec('ROLLBACK'); } catch { /* already rolled back */ }
+          throw err;
+        }
+      };
+    }
+    close() {
+      this.raw.close();
+    }
+  };
+}
+
+let Database = null;
+export let DB_DRIVER = 'unavailable';
+
+/* Importing better-sqlite3 can succeed while its native binding is missing, so probe by
+ * actually opening an in-memory database rather than trusting the import. */
+try {
+  const native = (await import('better-sqlite3')).default;
+  const probe = new native(':memory:');
+  probe.close();
+  Database = native;
+  DB_DRIVER = 'better-sqlite3';
+} catch (nativeErr) {
+  try {
+    const { DatabaseSync } = await import('node:sqlite');
+    Database = nodeSqliteAdapter(DatabaseSync);
+    DB_DRIVER = 'node:sqlite';
+    process.emitWarning?.(
+      `better-sqlite3 unusable (${String(nativeErr?.message || nativeErr).split('\n')[0]}). ` +
+        'Falling back to the experimental node:sqlite driver — run `npm rebuild better-sqlite3` ' +
+        'for the supported configuration.',
+      'SwarmOSWarning'
+    );
+  } catch (fallbackErr) {
+    throw new Error(
+      'No SQLite driver available. Install better-sqlite3 (npm install) or run Node >= 22.5 for the ' +
+        `node:sqlite fallback. better-sqlite3: ${nativeErr?.message}; node:sqlite: ${fallbackErr?.message}`
+    );
+  }
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const ROOT = join(here, '..', '..', '..');

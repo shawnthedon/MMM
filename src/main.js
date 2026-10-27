@@ -4,6 +4,11 @@ import { getState, setState, subscribe, logEvent, now, uid, fmtMoney, commit, es
 import { renderShell, refreshChrome, applyTheme, toast, closeAllSheets } from './shell.js';
 import { views } from './views1.js';
 import './views2.js';
+import { loginView } from './authview.js';
+import { getAuth, refreshSession, subscribeAuth } from './auth.js';
+import { isApiMode } from './api.js';
+
+views.login = loginView;
 import './terminal.js';
 import './copilot.js';
 
@@ -55,6 +60,12 @@ subscribe((state, label) => {
   }
   rerender();
 });
+
+/** Avoid re-rendering the login form while the user is typing into it. */
+function sessionGatePaused() {
+  const active = document.activeElement;
+  return currentRoute === 'login' && active && ['INPUT', 'TEXTAREA'].includes(active.tagName);
+}
 
 /* ---------- live simulation ticker ---------- */
 function tick() {
@@ -114,6 +125,29 @@ function boot() {
   rerender();
   registerSW();
   setInterval(tick, 4200);
+
+  // Identity first: the gateway is the authority on who is signed in and what they may do.
+  refreshSession()
+    .then(() => {
+      const auth = getAuth();
+      rerender();
+      if (isApiMode() && auth.status === 'anonymous' && currentRoute !== 'login') navigate('login');
+      else if (isApiMode() && auth.status === 'unreachable' && currentRoute !== 'login') navigate('login');
+    })
+    .catch(() => {});
+
+  subscribeAuth(() => {
+    refreshChrome(currentRoute);
+    // The sign-in view owns its own form state and repaints itself, so a session poll must not
+    // clobber what the user is typing.
+    if (currentRoute === 'login' || sessionGatePaused()) return;
+    rerender();
+  });
+
+  // A 401 from any API call drops straight back to the sign-in screen.
+  window.addEventListener('swarmos:unauthenticated', () => {
+    if (currentRoute !== 'login') navigate('login');
+  });
 
   // offline banner
   const updateNet = () => {
