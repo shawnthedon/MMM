@@ -86,6 +86,15 @@ Without a gateway the app stays in **demo mode** and says so — nothing is enfo
 Copilot actions (create agent, create task, decide an approval gate) are authorised by the gateway
 on every request, and the card reports the server's answer — including refusals.
 
+**Where the data comes from.** Once signed in, agents, tasks, approvals and the event feed are read
+from the gateway instead of the bundled fixtures. The top-bar chip shows `live` (WebSocket open) or
+`synced` (HTTP only); every module header carries a `live gateway` / `demo data` tag, and the chip
+opens a *Where this data comes from* sheet with the endpoint, the session, the last sync and a
+per-slice table. If a refresh fails you get `stale gateway` plus a strip explaining that the rows
+are the last server copy; if the gateway is unreachable the app falls back to demo fixtures and
+labels them. Swarms, teams and usage still have no server store, so they are always marked demo.
+Gateway rows are never written to `localStorage`, so a signed-out browser only ever holds fixtures.
+
 ### 🧭 Navigate
 Bottom tabs: **Home · Agents · ✦ Copilot · Tasks · More** (all modules). The **✦ Copilot** button is the centre action of the bottom navigation — tap it to open the floating panel; `Esc` closes it and your draft is kept.
 
@@ -161,8 +170,11 @@ Or: push to GitHub → **vercel.com/new** → import `swarmos` → Framework: **
 ## 🧪 Quality checks
 
 ```bash
-npm run smoke   # boots the real app — all 12 modules render
-npm run lint    # code style (after Phase-1 tooling)
+npm test            # smoke 28 · copilot 6 · auth client 16 · read sync 12 · gateway 28
+npm run smoke       # boots the real app — all 12 modules render
+npm run test:readsync  # gateway rows replace fixtures, provenance labels, no persistence
+npm run test:gateway   # RBAC, CSRF, lockout, separation of duties, audit chain
+npm run lint        # code style (after Phase-1 tooling)
 ```
 
 ---
@@ -174,6 +186,7 @@ npm run lint    # code style (after Phase-1 tooling)
 | 📐 [Design Spec](docs/DESIGN_SPEC.md) | Full 12-module spec, governance, data model, providers |
 | ✅ [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) | Functional build: 19 phases, seed data & restore guide |
 | 🗺 [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | Non-functional track to production + 100+ resource links |
+| 🔄 [Read Sync](docs/copilot/read-sync.md) | How module screens read the gateway and how demo vs live data is labelled |
 
 ---
 

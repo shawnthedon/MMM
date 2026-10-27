@@ -145,9 +145,12 @@ WS   /ws                           authenticated; topic-filtered by permission
 3. **Rate limiting is in-process**, so it is per-node; a clustered gateway would need shared state.
 4. **RBAC is role-based, not per-object** (no row-level ACLs, no per-team scoping). Approval gates
    carry separation of duties but no risk-based thresholds yet.
-5. **The PWA reads demo data while writes go to the gateway** — full read sync (checklist 2.5) is
-   still open, so a signed-in app can show local agents that the gateway does not have. Copilot
-   labels its source every time, but the module screens do not yet.
+5. **Read sync is done for agents, tasks, approvals and events** (checklist 2.5) but not for
+   swarms, teams or usage: there is no server-side store for those yet, so they stay in the browser
+   and are labelled *demo* even when signed in. Gateway rows never enter `localStorage`, demo rows
+   never mix into a live screen, and a failed refresh is labelled (`stale gateway` / `demo · offline`).
+   `POST /agents/:id/run` and `DELETE /agents/:id` do not exist, so the UI refuses those actions
+   instead of faking them.
 6. **TLS termination is external.** `SWARMOS_SECURE_COOKIES=1` must be set behind HTTPS;
    the gateway itself only speaks HTTP.
 7. **WS tokens in query strings** are accepted for CLI convenience (`?token=`); prefer the cookie.
@@ -176,14 +179,15 @@ npm run test:gateway   → 28/28
   WebSocket rejects anonymous upgrades, identifies the principal, refuses unheld topics
 
 npm run test:auth      → 16/16   (client: demo mode, gating, CSRF, 403/401 handling, no secret in storage)
+npm run test:readsync  → 12/12   (read sync: gateway rows replace fixtures, provenance labels, no persistence)
 npm run smoke          → 28/28   (existing UI still boots and renders)
 npm run test:copilot   → 6/6
 ```
 
 ## 10. Next
 
-1. Read sync (checklist 2.5): load agents/tasks/approvals from the gateway into the views and drop
-   the demo mirror when signed in.
+1. `POST /swarms/:id/deploy|pause|cancel` and `POST /agents/:id/run` so swarm and run actions stop
+   being browser-only.
 2. Argon2id via `@node-rs/argon2` (or keep scrypt and document): rehash-on-login path is ready.
 3. 2FA/TOTP + session/device management, password reset by an Owner-issued one-time link.
 4. `POST /swarms/:id/deploy|pause|cancel` so swarm deployment becomes server-enforced too.

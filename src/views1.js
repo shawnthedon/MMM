@@ -4,6 +4,24 @@ import {
   logEvent, pendingApprovals, getAgent, commit, initials, avatarColor,
 } from './core.js';
 import { openSheet, toast, confirmModal, on, actions } from './shell.js';
+import { sourceTagHTML, sourceBannerHTML } from './sourceui.js';
+import { isLive, createAgent, updateAgent, createTask, updateTask } from './datastore.js';
+import { isApiMode } from './api.js';
+import { can } from './auth.js';
+
+/** True when this browser may not write the given slice itself (server owns it, or no session). */
+function writeBlocked(slice, label, action) {
+  if (!isApiMode()) return false;
+  toast(
+    isLive(slice)
+      ? `${label}: the gateway serves ${slice} but has no endpoint for ${action}. Nothing was changed.`
+      : `Sign in to a gateway to ${action}. Nothing was changed.`,
+    'bad'
+  );
+  return true;
+}
+
+const permissionDenied = (perm) => isApiMode() && !can(perm);
 
 export const views = {};
 
@@ -26,7 +44,7 @@ views.home = {
       ${pend.length ? `
         <div class="banner warn">
           ${icon('shield', 18)}
-          <div class="grow"><strong>${pend.length} approval${pend.length > 1 ? 's' : ''}</strong> need you · ${esc(pend[0].action)}</div>
+          <div class="grow"><strong>${pend.length} approval${pend.length > 1 ? 's' : ''}</strong> need you · ${esc(pend[0].action)} ${sourceTagHTML('approvals')}</div>
           <button class="btn sm" data-act="notifications">Review</button>
         </div>` : ''}
 
@@ -56,7 +74,7 @@ views.home = {
         <div class="empty"><div class="e-ico">⬡</div><div>No live swarms — deploy one in seconds.</div>
         <button class="btn primary" data-act="new-swarm" style="margin-top:12px">Deploy swarm</button></div>`}
 
-      <div class="section-title">Recent activity</div>
+      <div class="section-title row between">Recent activity ${sourceTagHTML('events')}</div>
       <div class="card">
         ${s.events.slice(0, 6).map((ev, i) => `
           <div class="row" style="padding:7px 0;${i ? 'border-top:1px solid var(--border-soft)' : ''};gap:10px">
@@ -92,9 +110,10 @@ views.agents = {
     const s = getState();
     return `
       <div class="page-head row between">
-        <div><h1>Agents</h1><div class="sub">${s.agents.length} profiles · ${s.agents.filter((a) => a.status === 'running').length} running</div></div>
+        <div><h1>Agents</h1><div class="sub">${s.agents.length} profiles · ${s.agents.filter((a) => a.status === 'running').length} running ${sourceTagHTML('agents')}</div></div>
         <button class="btn primary sm" data-act="new-agent">${icon('plus', 16)} New</button>
       </div>
+      ${sourceBannerHTML('agents')}
       <div class="scroll-x" style="margin-bottom:12px">
         <span class="chip brand">All</span><span class="chip">LangGraph</span><span class="chip">CrewAI</span>
         <span class="chip">Swarmzero</span><span class="chip">AutoPentest</span><span class="chip">A.I.M.A</span>
@@ -250,6 +269,29 @@ export function agentWizard() {
       draft.model = el.querySelector('#w-model').value;
     }
     if (step < 3) { step++; renderStep(); return; }
+    if (isApiMode()) {
+      if (permissionDenied('agent:write')) {
+        toast('Your role cannot create agents on the gateway', 'bad');
+        return;
+      }
+      const next = el.querySelector('[data-act="wiz-next"]');
+      if (next) { next.disabled = true; next.textContent = 'Creating…'; }
+      createAgent({
+        name: draft.name, role: draft.role, framework: draft.framework, model: draft.model,
+        autonomy: draft.autonomy, tools: draft.tools, skills: draft.skills,
+        prompt: `You are ${draft.name}. ${draft.role}`,
+      })
+        .then((row) => {
+          close();
+          toast(`Agent ${esc(row.name)} created on the gateway`, 'ok');
+          import('./main.js').then((m) => m.navigate('agents'));
+        })
+        .catch((err) => {
+          if (next) { next.disabled = false; next.textContent = 'Next'; }
+          toast(`Gateway refused: ${esc(err.message)}`, 'bad');
+        });
+      return;
+    }
     setState((s) => {
       s.agents.unshift({
         id: uid('ag'), name: draft.name, role: draft.role, framework: draft.framework, model: draft.model,
@@ -273,7 +315,7 @@ views.teams = {
     const s = getState();
     return `
       <div class="page-head row between">
-        <div><h1>Teams & Swarms</h1><div class="sub">Compose teams · deploy swarms · watch live</div></div>
+        <div><h1>Teams & Swarms</h1><div class="sub">Compose teams · deploy swarms · watch live ${sourceTagHTML('swarms')}</div></div>
         <button class="btn primary sm" data-act="new-swarm">${icon('plus', 16)} Deploy</button>
       </div>
       <div class="section-title" style="margin-top:0">Live swarms</div>
@@ -442,9 +484,10 @@ views.tasks = {
     const s = getState();
     return `
       <div class="page-head row between">
-        <div><h1>Tasks</h1><div class="sub">Drag cards between columns · tap for detail</div></div>
+        <div><h1>Tasks</h1><div class="sub">Drag cards between columns · tap for detail ${sourceTagHTML('tasks')}</div></div>
         <button class="btn primary sm" data-act="new-task">${icon('plus', 16)} New</button>
       </div>
+      ${sourceBannerHTML('tasks')}
       <div class="kanban" id="kanban">
         ${COLS.map((c) => {
           const cards = s.tasks.filter((t) => t.column === c.id);
@@ -566,8 +609,25 @@ export function taskSheet(id) {
     foot: `<button class="btn grow" data-act="task-run" data-id="${t.id}">${icon('play', 14)} Run with agent</button>`,
   });
   const sel = document.querySelector('.sheet.open #task-assignee');
-  sel && sel.addEventListener('change', (e) => {
-    setState((st) => { const x = st.tasks.find((y) => y.id === id); if (x) x.assignee = e.target.value; }, 'reassign');
+  sel && sel.addEventListener('change', async (e) => {
+    const assignee = e.target.value;
+    if (isLive('tasks')) {
+      if (permissionDenied('task:write')) {
+        toast('Your role cannot reassign tasks on the gateway', 'bad');
+        e.target.value = t.assignee || '';
+        return;
+      }
+      try {
+        await updateTask(id, { assignee });
+        toast('Reassigned on the gateway', 'ok');
+      } catch (err) {
+        e.target.value = t.assignee || '';
+        toast(`Gateway refused: ${esc(err.message)}`, 'bad');
+      }
+      import('./main.js').then((m) => m.rerender());
+      return;
+    }
+    setState((st) => { const x = st.tasks.find((y) => y.id === id); if (x) x.assignee = assignee; }, 'reassign');
     toast('Reassigned', 'ok');
     import('./main.js').then((m) => m.rerender());
   });
@@ -595,6 +655,31 @@ export function taskCreateSheet() {
   on('task-create-go', () => {
     const sheet = document.querySelector('.sheet.open');
     const title = sheet.querySelector('#nt-title').value.trim() || 'Untitled task';
+    if (isApiMode()) {
+      if (permissionDenied('task:write')) {
+        toast('Your role cannot create tasks on the gateway', 'bad');
+        return;
+      }
+      const btn = sheet.querySelector('[data-act="task-create-go"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+      createTask({
+        title,
+        desc: sheet.querySelector('#nt-desc').value.trim(),
+        column: sheet.querySelector('#nt-col').value,
+        priority: sheet.querySelector('#nt-pri').value,
+        assignee: sheet.querySelector('#nt-agent').value,
+      })
+        .then((row) => {
+          import('./shell.js').then((m) => m.closeAllSheets());
+          toast(`Task “${row.title}” created on the gateway`, 'ok');
+          import('./main.js').then((m) => m.navigate('tasks'));
+        })
+        .catch((err) => {
+          if (btn) { btn.disabled = false; btn.textContent = 'Create task'; }
+          toast(`Gateway refused: ${esc(err.message)}`, 'bad');
+        });
+      return;
+    }
     setState((s) => {
       s.tasks.unshift({
         id: uid('tk'), title, desc: sheet.querySelector('#nt-desc').value.trim() || '—',
@@ -617,13 +702,31 @@ on('new-agent', () => agentWizard());
 on('new-swarm', (el, ds) => swarmDeploySheet(ds.team));
 on('new-task', () => taskCreateSheet());
 
-on('toggle-agent', (el, ds) => {
+on('toggle-agent', async (el, ds) => {
+  const a = getAgent(ds.id);
+  if (!a) return;
+  const next = a.status === 'running' ? 'paused' : 'running';
+  if (isLive('agents')) {
+    if (permissionDenied('agent:write')) {
+      toast('Your role cannot change agent state on the gateway', 'bad');
+      return;
+    }
+    el?.setAttribute('disabled', 'disabled');
+    try {
+      const row = await updateAgent(ds.id, { status: next });
+      toast(`${row.name} is now ${row.status} on the gateway`, 'ok');
+    } catch (err) {
+      toast(`Gateway refused: ${esc(err.message)}`, 'bad');
+    }
+    import('./main.js').then((m) => m.rerender());
+    return;
+  }
   setState((s) => {
-    const a = s.agents.find((x) => x.id === ds.id);
-    if (a) {
-      a.status = a.status === 'running' ? 'paused' : 'running';
-      a.lastActive = now();
-      logEvent('agent', `${a.name} ${a.status}`);
+    const x = s.agents.find((y) => y.id === ds.id);
+    if (x) {
+      x.status = next;
+      x.lastActive = now();
+      logEvent('agent', `${x.name} ${x.status}`);
     }
   }, 'toggle-agent');
   toast('Agent state updated', 'ok');
@@ -632,6 +735,7 @@ on('toggle-agent', (el, ds) => {
 
 on('delete-agent', (el, ds) => {
   const a = getAgent(ds.id);
+  if (writeBlocked('agents', a?.name || 'Agent', 'delete')) return;
   confirmModal({
     title: `Delete ${esc(a?.name)}?`,
     body: 'Soft-deleted with 30-day restore. Runs and audit logs are preserved.',
@@ -644,9 +748,33 @@ on('delete-agent', (el, ds) => {
   });
 });
 
-on('clone-agent', (el, ds) => {
+on('clone-agent', async (el, ds) => {
   const a = getAgent(ds.id);
   if (!a) return;
+  if (isLive('agents')) {
+    if (permissionDenied('agent:write')) {
+      toast('Your role cannot create agents on the gateway', 'bad');
+      return;
+    }
+    el?.setAttribute('disabled', 'disabled');
+    try {
+      const row = await createAgent({
+        name: `${a.name}-clone`.slice(0, 120),
+        role: a.role,
+        framework: a.framework,
+        model: a.model,
+        fallback: a.fallback,
+        tools: a.tools,
+        skills: a.skills,
+        prompt: a.prompt,
+      });
+      toast(`Cloned as ${esc(row.name)} on the gateway`, 'ok');
+    } catch (err) {
+      toast(`Gateway refused: ${esc(err.message)}`, 'bad');
+    }
+    import('./main.js').then((m) => m.rerender());
+    return;
+  }
   setState((s) => {
     s.agents.unshift({ ...a, id: uid('ag'), name: `${a.name}-clone`, status: 'idle', runs: 0, costToday: 0, trust: 50, lastActive: now() });
     logEvent('agent', `Agent ${a.name} cloned`);
@@ -655,7 +783,22 @@ on('clone-agent', (el, ds) => {
   import('./main.js').then((m) => m.navigate('agents'));
 });
 
-on('task-move', (el, ds) => {
+on('task-move', async (el, ds) => {
+  if (isLive('tasks')) {
+    if (permissionDenied('task:write')) {
+      toast('Your role cannot move tasks on the gateway', 'bad');
+      return;
+    }
+    try {
+      await updateTask(ds.id, { column_name: ds.col });
+      toast(`Moved to ${ds.col} on the gateway`, 'ok');
+    } catch (err) {
+      toast(`Gateway refused: ${esc(err.message)}`, 'bad');
+    }
+    import('./shell.js').then((m) => m.closeAllSheets());
+    import('./main.js').then((m) => m.rerender());
+    return;
+  }
   setState((s) => {
     const t = s.tasks.find((x) => x.id === ds.id);
     if (t) t.column = ds.col;
@@ -667,6 +810,11 @@ on('task-move', (el, ds) => {
 
 on('task-run', (el, ds) => {
   const t = getState().tasks.find((x) => x.id === ds.id);
+  // Dispatching a task to an agent has no gateway runtime: refuse rather than fake a run.
+  if (isLive('tasks')) {
+    toast('No gateway run endpoint — a task cannot be dispatched from here yet. Nothing was changed.', 'bad');
+    return;
+  }
   setState((s) => {
     const x = s.tasks.find((y) => y.id === ds.id);
     if (x) x.column = 'doing';
