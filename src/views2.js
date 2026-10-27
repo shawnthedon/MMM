@@ -792,10 +792,10 @@ views.analytics = {
       <div class="section-title">MCP activity</div>
       <div class="card">
         ${s.plugins.filter((p) => p.installed).map((p) => `
-          <div class="row between" style="padding:6px 0">
-            <span class="small">${esc(p.name)}</span>
-            <div class="progress" style="width:120px"><i style="width:${Math.min(100, p.callsToday / 4)}%"></i></div>
-            <span class="tiny muted" style="width:52px;text-align:right">${p.callsToday}</span>
+          <div class="row between mcp-row">
+            <span class="small grow ellipsis">${esc(p.name)}</span>
+            <div class="progress mcp-bar"><i style="width:${Math.min(100, p.callsToday / 4)}%"></i></div>
+            <span class="tiny muted mcp-count">${p.callsToday}</span>
           </div>`).join('')}
       </div>`;
   },
@@ -896,13 +896,13 @@ views.settings = {
       <div class="section-title">Appearance</div>
       <div class="card">
         <div class="kv"><span class="k">Theme</span>
-          <div class="seg" style="width:150px">
+          <div class="seg seg-fit">
             <button class="${st.theme === 'dark' ? 'active' : ''}" data-act="set-theme" data-v="dark">Dark</button>
             <button class="${st.theme === 'light' ? 'active' : ''}" data-act="set-theme" data-v="light">Light</button>
           </div>
         </div>
         <div class="kv"><span class="k">Density</span>
-          <div class="seg" style="width:180px">
+          <div class="seg seg-fit">
             <button class="${st.density === 'comfortable' ? 'active' : ''}" data-act="set-density" data-v="comfortable">Comfort</button>
             <button class="${st.density === 'compact' ? 'active' : ''}" data-act="set-density" data-v="compact">Compact</button>
           </div>
@@ -919,12 +919,12 @@ views.settings = {
       <div class="section-title">Agents defaults</div>
       <div class="card">
         <div class="kv"><span class="k">Autonomy level</span>
-          <select class="input" data-model="settings.autonomyLevel" style="width:170px">
+          <select class="input compact" data-model="settings.autonomyLevel">
             ${[0, 1, 2, 3, 4].map((l) => `<option value="${l}" ${st.autonomyLevel === l ? 'selected' : ''}>L${l} · ${['ask-always', 'guided', 'supervised', 'guarded-auto', 'full-auto'][l]}</option>`).join('')}
           </select>
         </div>
         <div class="kv"><span class="k">Self-improvement policy</span>
-          <select class="input" data-model="settings.selfImprove" style="width:170px">
+          <select class="input compact" data-model="settings.selfImprove">
             ${['off', 'suggest', 'auto-with-review', 'full-auto'].map((m) => `<option ${st.selfImprove === m ? 'selected' : ''}>${m}</option>`).join('')}
           </select>
         </div>
@@ -934,7 +934,7 @@ views.settings = {
       <div class="section-title">Copilot</div>
       <div class="card">
         <div class="kv"><span class="k">Default mode</span>
-          <select class="input" data-model="settings.copilotMode" style="width:130px">
+          <select class="input compact" data-model="settings.copilotMode">
             ${['ask', 'operate', 'build', 'knowledge', 'training', 'voice', 'activity'].map((m) => `<option ${st.copilotMode === m ? 'selected' : ''}>${m}</option>`).join('')}
           </select>
         </div>

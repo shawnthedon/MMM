@@ -372,6 +372,16 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
     storage, outbound queue, agent event fan-out, Web Push. Spec + roadmap:
     [`comms/channels.md`](comms/channels.md), [`roadmap/next-up.md`](roadmap/next-up.md).
 
+- [x] **4.10 Mobile-first responsive pass** — all stylesheets + `docs/ui/responsive.md`
+  - Every media query is `min-width` (phone-first); desktop-first `max-width` rules removed from
+    `styles.css` (header cluster) and `copilot.css` (panel sheet is now the base state).
+  - Comms: one-column gateway grid → two at 560 px, stacked/clamped tiles, 44 px switch hit area,
+    settings button and enable switch as siblings (nested buttons double-fired on touch), stacked
+    delivery log, wrapping inbound endpoint.
+  - Global: `.kv` stacks under 480 px, `.grid-3` is 2 columns until 520 px, tabs scroll, inputs 16 px,
+    fluid `.input.compact` / `.seg-fit`, `overflow-wrap: anywhere` on long text, pinch zoom enabled.
+  - Evidence: `npm run test:responsive` (17 checks).
+
 - [ ] **4.6 Wire Agent Manager UI to reality**
   - “Run” starts a real run; the **Logs** tab streams real trace lines; tool calls show real args/results (redacted per policy); memory tab shows real counts + search.
 

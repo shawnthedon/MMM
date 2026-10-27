@@ -32,6 +32,18 @@
   banner/sheet); a failure downgrades to demo or labels the rows stale instead of mixing them.
   Evidence: `npm run test:readsync` (12 checks). Design + limits: [`copilot/read-sync.md`](copilot/read-sync.md).
 
+### Mobile-first responsive audit — ✅
+- ✅ Removed the last desktop-first breakpoints: every stylesheet is now authored phone-first
+  (`min-width` only; `test:responsive` fails on any `max-width` query).
+- ✅ Comms panel rebuilt mobile-first: single-column gateway grid that splits at 560 px, stacked
+  tile bodies with clamped descriptions and wrapped capability chips, a 44 × 44 switch target, a
+  separate settings button vs enable switch (no nested interactive elements), stacked delivery-log
+  rows, scrollable/wrapping inbound endpoint, safe-area-aware sheet.
+- ✅ Global fixes: `.kv` rows stack under 480 px, `.grid-3` is 2 columns until 520 px, setting tabs
+  scroll instead of squeezing, inputs are 16 px (no iOS zoom-on-focus), compact controls are fluid,
+  long strings wrap (`overflow-wrap: anywhere`), viewport allows pinch zoom.
+- ✅ Evidence: `npm run test:responsive` (17 checks). Rules: [`ui/responsive.md`](ui/responsive.md).
+
 ### Comms — communication gateways — ✅ (panel + adapters), ⬜ (gateway routes)
 - ✅ **Comms panel** `#/comms` (`src/comms.js`): Telegram · WhatsApp · Discord · Slack · SMS ·
   Browser, each with advanced settings — connection, routing (Copilot + agents), command surface,

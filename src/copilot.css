@@ -65,20 +65,19 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* mobile: near-full-height sheet, keeps the tab bar reachable */
-@media (max-width: 899px) {
-  .cp-layer > .cp-scrim { display: block; opacity: 1; pointer-events: auto; }
-  .cp-panel {
-    left: 8px;
-    right: 8px;
-    bottom: calc(var(--tabbar-h) + var(--safe-b) + 6px);
-    max-height: 82dvh;
-    height: 82dvh;
-    border-radius: 20px;
-  }
-  .cp-panel[data-min='true'] { height: auto; max-height: none; }
+/* mobile first: near-full-height sheet that keeps the tab bar reachable (this is the base state) */
+.cp-layer > .cp-scrim { display: block; opacity: 1; pointer-events: auto; }
+.cp-panel {
+  left: 8px;
+  right: 8px;
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 6px);
+  max-height: 82dvh;
+  height: 82dvh;
+  border-radius: 20px;
 }
-/* desktop: floating card anchored above the central launcher */
+.cp-panel[data-min='true'] { height: auto; max-height: none; }
+
+/* wider screens: floating card anchored above the central launcher */
 @media (min-width: 900px) {
   .cp-panel {
     left: 50%;
