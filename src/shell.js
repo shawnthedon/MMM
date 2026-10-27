@@ -115,7 +115,11 @@ export function openSheet({ title, body, foot = '', wide = false, onClose = null
 export function closeAllSheets() { sheetStack.slice().forEach((s) => s.close()); }
 
 /* ---------- modal confirm ---------- */
-export function confirmModal({ title, body, confirmText = 'Confirm', danger = false, onConfirm, requireText = '' }) {
+/**
+ * Centred confirmation dialog. Returns a promise that resolves to 'confirm' or 'cancel' so callers
+ * can `await` the user's decision; `onConfirm` is still supported for fire-and-forget callers.
+ */
+export function confirmModal({ title, body, confirmText = 'Confirm', danger = false, onConfirm, onCancel, requireText = '' }) {
   const root = document.getElementById('sheet-root');
   const scrim = document.createElement('div');
   scrim.className = 'scrim open';
@@ -133,7 +137,15 @@ export function confirmModal({ title, body, confirmText = 'Confirm', danger = fa
     </div>`;
   root.appendChild(scrim);
   root.appendChild(wrap);
-  const close = () => { scrim.remove(); wrap.remove(); };
+  let settle;
+  const answer = new Promise((resolve) => { settle = resolve; });
+  const finish = (result) => {
+    scrim.remove();
+    wrap.remove();
+    if (result === 'cancel') onCancel && onCancel();
+    settle(result);
+  };
+  const close = () => finish('cancel');
   scrim.addEventListener('click', close);
   wrap.querySelector('#confirm-cancel').addEventListener('click', close);
   wrap.querySelector('#confirm-ok').addEventListener('click', () => {
@@ -141,9 +153,13 @@ export function confirmModal({ title, body, confirmText = 'Confirm', danger = fa
       toast(`Type “${esc(requireText)}” exactly to confirm`, 'bad');
       return;
     }
-    close();
+    finish('confirm');
     onConfirm && onConfirm();
   });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && wrap.isConnected) close();
+  }, { once: true });
+  return answer;
 }
 
 /* ---------- FAB radial + quick create ---------- */

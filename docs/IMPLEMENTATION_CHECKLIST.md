@@ -401,6 +401,18 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   - Deliberately not implemented: phases 2–6 (runtime spike, model manager, offline text, image
     feasibility/feature).
 
+- [x] **4.13 Kanban board: zoom, dependency wires, confirmed moves, Copilot control** —
+  `src/kanban.js`, `src/kanban.css`, `src/views1.js`, `src/copilot/orchestrator.js`
+  - Zoom toolbar `− 100% + Fit` (10 % steps, 70–150 % clamp) persisted on the workspace store and
+    applied to the board track, so a drop at any zoom lands in the column under the pointer.
+  - Inert SVG wire layer draws one curve + arrowhead per `deps` edge (skips missing endpoints, dims
+    satisfied dependencies, auto-on below 900 px, chip to override).
+  - Every move — drag, drawer chip, Copilot — asks for confirmation first; cancel changes nothing.
+  - Copilot: move / assign / unassign / priority / rename / link / unlink / delete (two-step) /
+    create / zoom / wires / filter / board status, all through the same seam, with refusals rather
+    than guesses. Gateway moves use `PATCH /api/v1/tasks/:id` (`task:write`).
+  - Evidence: `npm run test:kanban` (26 checks). Doc: [`kanban/board.md`](kanban/board.md).
+
 - [ ] **4.6 Wire Agent Manager UI to reality**
   - “Run” starts a real run; the **Logs** tab streams real trace lines; tool calls show real args/results (redacted per policy); memory tab shows real counts + search.
 
