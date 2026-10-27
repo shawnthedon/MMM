@@ -8,6 +8,7 @@
  * This pack is a static snapshot. It is NOT an ingestion pipeline (that is Phase 2 work).
  */
 import { getState } from '../core.js';
+import { getDesignerSummary } from '../designerSummary.js';
 
 export const PACK = {
   version: 'repo:66b1bd3',
@@ -261,6 +262,31 @@ export const KNOWLEDGE = [
     sources: [
       { label: 'src/copilot/orchestrator.js — createAgent()', ref: 'src/copilot/orchestrator.js' },
       { label: 'src/views1.js — agent views', ref: 'src/views1.js' },
+    ],
+  },
+  {
+    id: 'ui.agent.designer',
+    title: 'Agent Designer (agent creation module)',
+    type: 'module',
+    module: 'designer',
+    tags: ['agent', 'designer', 'create', 'builder', 'validation', 'components', 'permissions', 'goal'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-27',
+    sensitivity: 'public',
+    body:
+      'Five steps: Goal → Components → Configure → Validate → Activate (summary).\n' +
+      'Goal: a sentence about what the agent should do, plus optional name/role and six starter templates. “Propose a configuration” is a deterministic keyword match on this device — no model is called — and every inferred choice is listed as an assumption.\n' +
+      'Components: a dependency map of runtime, AI brain (primary + fallback), behaviour, memory, interaction, tools/connectors, knowledge, permissions/gates and storage. Each node shows compatibility and availability separately (spec §8.2). Optional nodes can be added or removed.\n' +
+      'Configure: per-node controls (framework, model + fallback, preset + autonomy + limits, memory layers/scope/retention, interaction capabilities, skills and connectors, source files, derived scopes and gates, storage).\n' +
+      'Validate: “Definition checks” (what the app can store) are separated from “Activation checks” (what running it would need). Errors block saving; warnings and setup items do not. Every finding names the missing dependency, its practical effect and a fix action.\n' +
+      'Activate: summary rail (capabilities, permissions, budget, storage). “Save definition” writes an idle agent record (gateway when signed in, browser otherwise). “Activate & run” is unavailable and explains why.\n' +
+      'Honest limits: no framework adapter, provider client, credential store, memory backend, tool executor, scheduler or artifact route exists in this repository, so nothing can be started. Voice/image interaction and the scheduled preset are disabled at selection time because they cannot work. Knowledge files are metadata only and are never indexed.\n' +
+      'Shortcuts: Agents → Designer, the New-agent wizard footer, Quick create, and All modules.',
+    sources: [
+      { label: 'src/designer.js — builder, validation, save', ref: 'src/designer.js' },
+      { label: 'src/designer.css — designer styles', ref: 'src/designer.css' },
+      { label: 'docs/copilot/agent-designer.md — design + limits', ref: 'docs/copilot/agent-designer.md' },
     ],
   },
   {
@@ -693,6 +719,11 @@ export function describeScreen(route) {
     artifacts: () => `Artifacts & Files: ${s.files.length} entries, ${(s.files.reduce((a, f) => a + f.size, 0) / 1024).toFixed(0)} KB of metadata.`,
     terminal: () => `Terminal: local command shell; it can hand prompts to Copilot.`,
     settings: () => `Settings: theme, density, autonomy level, Copilot mode and memory toggles.`,
+    designer: () => {
+      const d = getDesignerSummary();
+      if (!d.started) return 'Agent Designer: no draft yet. Open it from Agents → Designer, Quick create or All modules.';
+      return `Agent Designer: draft “${d.name || 'untitled'}” (${d.framework}, ${d.model}) on step ${d.step + 1}. Definition checks: ${d.definition}; activation: ${d.activation}. ${d.canSave ? 'The definition can be saved' : 'Blocking definition errors remain'} — saving writes an idle definition only, because no runtime exists to start it.`;
+    },
   };
   return (map[route] || (() => `Module “${route}”.`))();
 }

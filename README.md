@@ -57,7 +57,9 @@
 
 ---
 
-## ✨ The 12 Modules
+## ✨ The Modules
+
+**🧭 Agent Designer** — guided creation: goal → dependency map → per-component configuration → dual validation → idle definition. [Design notes](docs/copilot/agent-designer.md).
 
 | | Module | | Module |
 | :---: | --- | :---: | --- |
@@ -100,6 +102,14 @@ Bottom tabs: **Home · Agents · ✦ Copilot · Tasks · More** (all modules). T
 
 ### 🤖 Create an agent (60 seconds)
 **Agents → ➕ New** → name & role → pick a **framework** → pick **any model** → bind tools → set governance → **Create**. Tap **▶ Run** to start it.
+
+**Or design it properly:** **Agents → 🧭 Designer** (also in Quick create and All modules, and from
+the New-agent sheet via *Open the Agent Designer instead*, which carries your input across). Describe
+the goal → review the proposed components → configure each one → validate → save. Two honest limits
+apply: the designer saves an **idle definition** (it cannot start an agent, because no runtime exists
+in this repository), and capabilities that cannot work — voice, images, scheduled triggers — are
+refused with the reason instead of appearing as toggles. See
+[Agent Designer](docs/copilot/agent-designer.md).
 
 ### 🐝 Deploy a swarm
 **Teams & Swarms → Deploy** → write the objective → pick team + budget cap → **Deploy**. Open the swarm to watch the **live DAG** and resource bars.
@@ -170,9 +180,10 @@ Or: push to GitHub → **vercel.com/new** → import `swarmos` → Framework: **
 ## 🧪 Quality checks
 
 ```bash
-npm test            # smoke 28 · copilot 6 · auth client 16 · read sync 12 · gateway 28
+npm test            # smoke 28 · copilot 6 · auth client 16 · read sync 12 · designer 18 · gateway 28
 npm run smoke       # boots the real app — all 12 modules render
 npm run test:readsync  # gateway rows replace fixtures, provenance labels, no persistence
+npm run test:designer  # designer shortcuts, validation split, definition save paths
 npm run test:gateway   # RBAC, CSRF, lockout, separation of duties, audit chain
 npm run lint        # code style (after Phase-1 tooling)
 ```
@@ -187,6 +198,7 @@ npm run lint        # code style (after Phase-1 tooling)
 | ✅ [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) | Functional build: 19 phases, seed data & restore guide |
 | 🗺 [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | Non-functional track to production + 100+ resource links |
 | 🔄 [Read Sync](docs/copilot/read-sync.md) | How module screens read the gateway and how demo vs live data is labelled |
+| 🧭 [Agent Designer](docs/copilot/agent-designer.md) | Guided agent creation: steps, validation states, honest boundaries, shortcuts |
 
 ---
 

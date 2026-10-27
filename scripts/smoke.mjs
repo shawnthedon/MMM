@@ -52,7 +52,7 @@ check('boot renders shell', () => {
 const { navigate, rerender } = await import('../src/main.js');
 
 const markers = {
-  home: 'Quick actions', agents: 'LangGraph', teams: 'Live swarms', tasks: 'Drag cards',
+  home: 'Quick actions', designer: 'Agent Designer', agents: 'LangGraph', teams: 'Live swarms', tasks: 'Drag cards',
   chat: 'chat-input', skills: 'Skills Hub', models: 'Model Gateway', plugins: 'Add MCP server',
   telegram: 'Telegram Bridge', analytics: 'Agent leaderboard', artifacts: 'Artifacts',
   terminal: 'term-screen', settings: 'Trust score weights',

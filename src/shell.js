@@ -8,6 +8,7 @@ import { api, ApiError, isApiMode } from './api.js';
 
 export const routes = [
   { id: 'home', label: 'Home', icon: 'home', title: 'Command Deck' },
+  { id: 'designer', label: 'Agent Designer', icon: 'spark', title: 'Agent Designer' },
   { id: 'agents', label: 'Agents', icon: 'robot', title: 'Agent Manager' },
   { id: 'teams', label: 'Swarms', icon: 'swarm', title: 'Teams & Swarms' },
   { id: 'tasks', label: 'Tasks', icon: 'board', title: 'Kanban Board' },
@@ -148,7 +149,8 @@ function quickCreateSheet() {
     body: `
       <div class="col" style="gap:8px">
         ${[
-          ['robot', 'New agent', 'Agent profile wizard', 'new-agent'],
+          ['spark', 'Design an agent', 'Guided builder → validated definition', 'open-designer'],
+          ['robot', 'Quick new agent', 'Short profile wizard', 'new-agent'],
           ['swarm', 'Deploy swarm', 'From team template', 'new-swarm'],
           ['board', 'New task', 'Add to Kanban', 'new-task'],
           ['chat', 'New chat', 'Message an agent', 'new-chat'],
@@ -168,7 +170,10 @@ function moreSheet(navigate) {
   const items = routes.filter((r) => !TABS.includes(r.id));
   openSheet({
     title: 'All modules',
-    body: `<button class="btn block" data-act="quick-create" style="margin-bottom:12px">${icon('plus', 16)} Quick create</button>
+    body: `<div class="row" style="gap:8px;margin-bottom:12px">
+      <button class="btn grow" data-act="quick-create">${icon('plus', 16)} Quick create</button>
+      <button class="btn grow primary" data-act="open-designer">${icon('spark', 16)} Agent Designer</button>
+    </div>
     <div class="grid-3" style="gap:10px">
       ${items.map((r) => `
         <button class="card col" data-act="nav" data-to="${r.id}" style="align-items:center;gap:8px;padding:16px 8px">
