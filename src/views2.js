@@ -630,6 +630,12 @@ on('new-chat', () => {
 views.telegram = {
   title: 'Telegram Bridge',
   render() {
+    // Telegram is now one channel inside Comms (spec: the bridge belongs to the comms panel).
+    // The old view is kept as a deep link that hands over to Comms with the Telegram sheet open.
+    setTimeout(() => {
+      import('./comms.js').then((m) => m.openCommsChannel('telegram'));
+      import('./main.js').then((m) => m.navigate('comms'));
+    }, 0);
     const s = getState();
     const tg = s.telegram;
     return `

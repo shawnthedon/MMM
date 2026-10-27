@@ -961,10 +961,35 @@ async function operateIntent(lc, raw, ctx) {
   }
   if (/diagnos|troubleshoot|check/.test(lc)) return { text: 'Running real checks now — no canned results.', card: null, defer: 'diagnose' };
 
+  // Communication gateways: one seam in src/comms.js owns the whole surface.
+  if (/\b(comms|channel|channels|gateway|telegram|whatsapp|discord|slack|sms|inbox|broadcast)\b/.test(lc)) {
+    const comms = await import('../comms.js');
+    const out = comms.commsCommand(raw);
+    if (out) {
+      if (out.ok === 'async' && out.run) {
+        const result = await out.run();
+        return answer(
+          result.ok
+            ? `${out.reply}\nResult: ${result.detail}`
+            : `${out.reply}\nResult: failed — ${result.error}`,
+          {
+            title: result.ok ? 'Channel test delivered' : 'Channel test failed',
+            confidence: 'verified',
+            refs: [{ label: 'src/commsAdapters.js — adapter + live delivery', ref: 'src/commsAdapters.js', status: 'verified' }],
+          }
+        );
+      }
+      return answer(out.reply, {
+        title: out.ok === false ? (out.reason === 'needs_credentials' ? 'Credentials required' : 'Comms declined') : 'Comms',
+        refs: [{ label: 'src/comms.js — comms command seam', ref: 'src/comms.js', status: 'verified' }],
+      });
+    }
+  }
+
   return answer(
     [
       `I do not have an authorised action for “${raw}”, and I will not invent one.`,
-      'Operate mode actions: create agent <name> [as <role>] · deploy swarm <objective> · create task <title> · approve|deny <gate> · run <agent> · theme dark|light · open <module>',
+      'Operate mode actions: create agent <name> [as <role>] · deploy swarm <objective> · create task <title> · approve|deny <gate> · run <agent> · theme dark|light · open <module> · comms status · test <channel> · route <agent> to <channel> · mute|wake <channel>',
       'Anything consequential asks for a two-step confirmation, and every confirmation is written to episodic memory with its evidence.',
     ].join('\n'),
     { title: 'No matching action', confidence: 'verified', refs: [{ label: 'src/copilot/orchestrator.js — operateIntent', ref: 'src/copilot/orchestrator.js', status: 'verified' }] }

@@ -354,6 +354,24 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
     [`copilot/skills-hub.md`](copilot/skills-hub.md).
   - Deliberately not implemented: skill execution, evals, gateway skills routes, URL fetch on import.
 
+- [x] **4.9 Comms — communication gateways** — `src/comms.js`, `commsChannels.js`,
+  `commsAdapters.js`, route `#/comms`
+  - Six channels (Telegram, WhatsApp, Discord, Slack, SMS, Browser) with advanced per-channel
+    settings, routing to the Copilot and individual agents, a command surface, delivery/safety
+    settings and a live **Send test**.
+  - Status honesty: `not_configured → configured_unverified → verified | failed`; only a
+    provider-accepted live test verifies a channel; credential changes clear verification.
+  - Adapters build real provider requests and verify inbound signatures (Telegram secret token,
+    Slack v0 HMAC with replay window, WhatsApp sha256 + GET handshake, Twilio HMAC-SHA1, Discord
+    ed25519). Delivery never reports success the provider did not return.
+  - Telegram is now the first channel (the old module deep-links into Comms); Chat, Skills Matrix
+    and Telegram were removed from the More panel.
+  - Copilot intents: comms status · test <channel> · route <agent> to <channel> · mute/wake.
+  - Evidence: `npm run test:comms` (18 checks).
+  - Deliberately not implemented yet: gateway `comms_*` tables and HTTP routes, encrypted secret
+    storage, outbound queue, agent event fan-out, Web Push. Spec + roadmap:
+    [`comms/channels.md`](comms/channels.md), [`roadmap/next-up.md`](roadmap/next-up.md).
+
 - [ ] **4.6 Wire Agent Manager UI to reality**
   - “Run” starts a real run; the **Logs** tab streams real trace lines; tool calls show real args/results (redacted per policy); memory tab shows real counts + search.
 

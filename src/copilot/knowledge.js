@@ -569,6 +569,28 @@ export const KNOWLEDGE = [
     ],
   },
   {
+    id: 'comms.gateways',
+    title: 'Comms: communication gateways (Telegram, WhatsApp, Discord, Slack, SMS, Browser)',
+    type: 'reference',
+    module: 'comms',
+    tags: ['comms', 'telegram', 'whatsapp', 'discord', 'slack', 'sms', 'browser', 'gateway', 'channel', 'inbox', 'webhook'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-27',
+    sensitivity: 'public',
+    body:
+      'Comms (#/comms) owns every communication gateway: Telegram, WhatsApp Cloud API, Discord, Slack, SMS (OpenSMS/Twilio-compatible) and Browser. Telegram is no longer a separate module — it is the first channel inside Comms.\n' +
+      'Each channel has: connection credentials (masked on read, cleared verification on change), routing (Copilot replies plus which agents report there), a command surface (/status, /agents, /tasks, /ask, and gated /approve, /copilot), delivery and safety settings (signature scheme, rate limit, redaction), an inbound endpoint and a real “Send test”.\n' +
+      'Status is honest: not_configured until every required outbound field exists; configured_unverified after saving; verified only when the provider accepted a live test. The Browser channel delivers into the in-app inbox and is the only one that works without credentials. Saving credentials never grants permissions and never claims a bot is polling.\n' +
+      'Copilot can drive it: “comms status”, “test telegram”, “route SRE-Bot to slack”, “mute discord”, “wake discord”. It refuses to accept secrets in chat — credentials are entered in the panel only. Gateway routes POST /api/v1/comms/:channel/inbound are specified but not implemented yet.',
+    sources: [
+      { label: 'src/comms.js', ref: 'src/comms.js' },
+      { label: 'src/commsChannels.js', ref: 'src/commsChannels.js' },
+      { label: 'src/commsAdapters.js', ref: 'src/commsAdapters.js' },
+      { label: 'docs/comms/channels.md', ref: 'docs/comms/channels.md' },
+    ],
+  },
+  {
     id: 'skills.import',
     title: 'Importing skills (formats, scanning, quarantine)',
     type: 'howto',
@@ -764,7 +786,14 @@ export function describeScreen(route) {
     matrix: () => `Skills Matrix: ${s.skills.length} skills, ${(s.relations || []).length} typed links, version v${s.matrixVersion || 1}. Relationships are configuration only — no runtime events exist, so nothing is shown as executed.`,
     models: () => `Model Gateway: ${s.providers.length} providers, ${s.policies.length} routing policies — demo catalogue, no live calls.`,
     plugins: () => `Plugin Marketplace: MCP servers and tool plugins.`,
-    telegram: () => `Telegram Bridge: UI simulation only (no bot transport).`,
+    telegram: () => `Telegram Bridge: now part of Comms (#/comms) as the Telegram channel — the bridge opens the channel settings; no bot transport is running.`,
+    comms: () => {
+      const comms = s.comms || {};
+      const chans = Object.entries(comms.channels || {});
+      const verified = chans.filter(([, r]) => r.verifiedAt).length;
+      const enabled = chans.filter(([, r]) => r.enabled).length;
+      return `Comms: ${chans.length} gateways, ${enabled} enabled, ${verified} verified by a live test. Browser inbox: ${(comms.inbox || []).length} message(s). Cloud channels need credentials and outbound network; nothing is claimed delivered until the provider accepts it.`;
+    },
     analytics: () => `Analytics: spend, usage and agent leaderboard from demo data.`,
     artifacts: () => `Artifacts & Files: ${s.files.length} entries, ${(s.files.reduce((a, f) => a + f.size, 0) / 1024).toFixed(0)} KB of metadata.`,
     terminal: () => `Terminal: local command shell; it can hand prompts to Copilot.`,
