@@ -277,21 +277,34 @@ function channelTile(channel) {
   const rec = record(channel.id);
   const status = channelStatus(channel.id, rec);
   const caps = capabilities()[channel.id] || {};
+  const capChips = [
+    caps.outbound ? 'outbound' : 'no outbound',
+    caps.inbound ? 'inbound' : 'no inbound',
+    caps.signature ? 'signed' : 'same-origin',
+  ];
+  // The tile is a container, not a button: the enable switch must be its own control, otherwise a
+  // tap on the switch would also open the settings sheet (nested interactive elements).
   return `
-    <button class="comms-tile ${rec.enabled ? 'on' : ''}" data-act="comms-open" data-id="${channel.id}" aria-label="${esc(`${channel.label} settings — ${CHANNEL_STATUS[status].label}`)}">
-      <div class="comms-tile-ico">${icon(channel.icon, 20)}</div>
-      <div class="grow" style="text-align:left">
-        <div class="row" style="gap:6px"><span class="strong small">${esc(channel.label)}</span>${statusChip(channel.id, rec)}</div>
-        <div class="tiny muted ellipsis">${esc(channel.summary)}</div>
-        <div class="row wrap" style="gap:4px;margin-top:4px">
-          <span class="chip tiny">${caps.outbound ? 'outbound' : 'no outbound'}</span>
-          <span class="chip tiny">${caps.inbound ? 'inbound' : 'no inbound'}</span>
-          <span class="chip tiny">${caps.signature ? 'signed webhooks' : 'same-origin'}</span>
-          ${rec.verifiedAt ? '<span class="chip tiny ok">verified</span>' : ''}
-        </div>
-      </div>
-      <span class="switch ${rec.enabled ? 'on' : ''}" role="switch" aria-checked="${rec.enabled}" aria-label="${esc(`Enable ${channel.label}`)}" data-act="comms-toggle" data-id="${channel.id}"></span>
-    </button>`;
+    <div class="comms-tile ${rec.enabled ? 'on' : ''}">
+      <button class="comms-main" data-act="comms-open" data-id="${channel.id}"
+              aria-label="${esc(`${channel.label} settings — ${CHANNEL_STATUS[status].label}`)}">
+        <span class="comms-tile-ico" aria-hidden="true">${icon(channel.icon, 20)}</span>
+        <span class="comms-body">
+          <span class="comms-name">${esc(channel.label)}</span>
+          ${statusChip(channel.id, rec)}
+          <span class="comms-desc">${esc(channel.summary)}</span>
+          <span class="comms-caps">
+            ${capChips.map((c) => `<span class="chip tiny">${esc(c)}</span>`).join('')}
+            ${rec.verifiedAt ? '<span class="chip tiny ok">verified</span>' : ''}
+          </span>
+        </span>
+        <span class="comms-chev" aria-hidden="true">${icon('right', 16)}</span>
+      </button>
+      <button class="switch-hit" data-act="comms-toggle" data-id="${channel.id}" role="switch"
+              aria-checked="${rec.enabled ? 'true' : 'false'}" aria-label="${esc(`${rec.enabled ? 'Disable' : 'Enable'} ${channel.label}`)}">
+        <span class="switch ${rec.enabled ? 'on' : ''}" aria-hidden="true"></span>
+      </button>
+    </div>`;
 }
 
 views.comms = {
@@ -302,8 +315,8 @@ views.comms = {
     const verified = CHANNELS.filter((c) => channelStatus(c.id, comms.channels[c.id]) === 'verified').length;
     const enabled = CHANNELS.filter((c) => comms.channels[c.id]?.enabled).length;
     return `
-      <div class="page-head row between">
-        <div>
+      <div class="page-head row between wrap comms-head">
+        <div class="grow">
           <h1>Comms</h1>
           <div class="sub">${CHANNELS.length} gateways · ${enabled} enabled · ${verified} verified · Copilot + agents</div>
         </div>
@@ -330,7 +343,14 @@ views.comms = {
       <div class="section-title">Inbox (browser channel)</div>
       <div class="card">
         ${(comms.inbox || []).length
-          ? comms.inbox.map((m) => `<div class="comms-inbox"><span class="pulse-dot live"></span><div class="grow"><div class="small">${esc(m.text)}</div><div class="tiny muted">${esc(m.title)} · ${new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div></div>`).join('')
+          ? comms.inbox.map((m) => `
+            <div class="comms-inbox">
+              <span class="pulse-dot live" aria-hidden="true"></span>
+              <div class="grow">
+                <div class="small break">${esc(m.text)}</div>
+                <div class="tiny muted">${esc(m.title)} · ${new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+            </div>`).join('')
           : '<div class="tiny muted">No in-app messages yet. The browser channel delivers here — it is the one gateway that works without credentials.</div>'}
         <button class="btn sm block" style="margin-top:8px" data-act="comms-test" data-id="browser">${icon('bell', 14)} Send test to inbox</button>
       </div>
@@ -339,9 +359,12 @@ views.comms = {
       <div class="card">
         ${(comms.log || []).length
           ? comms.log.slice(0, 12).map((l) => `
-            <div class="kv">
-              <span class="k tiny">${esc(l.channel)} · ${esc(l.direction)}${l.ok ? '' : ' · failed'}</span>
-              <span class="tiny muted" style="text-align:right">${esc(l.text)}</span>
+            <div class="comms-log-row">
+              <span class="comms-log-meta">
+                <span class="chip tiny ${l.ok ? 'ok' : 'bad'}">${l.ok ? 'ok' : 'failed'}</span>
+                <span class="tiny muted">${esc(l.channel)} · ${esc(l.direction)}</span>
+              </span>
+              <span class="comms-log-text tiny">${esc(l.text)}</span>
             </div>`).join('')
           : '<div class="tiny muted">Nothing sent or received yet.</div>'}
       </div>`;
@@ -411,7 +434,7 @@ function channelSheet(id) {
       </div>
 
       <div class="section-title">5 · Inbound endpoint</div>
-      <div class="card mono tiny" style="line-height:1.9">
+      <div class="card mono tiny comms-endpoint">
         POST /api/v1/comms/${id}/inbound<br>
         ${channel.kind === 'local' ? 'same-origin session · no signature' : `signature: ${esc(channel.signature)}`}<br>
         replies are sent back on the same channel

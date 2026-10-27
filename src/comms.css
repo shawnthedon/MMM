@@ -1,29 +1,51 @@
-/* ============ Comms panel ============ */
+/* ============ Comms panel — mobile first ============
+ * Every rule below starts from the smallest screen (one column, full-width rows, wrapping text)
+ * and only *adds* layout at wider viewports via min-width queries. No max-width breakpoints: a
+ * narrow screen is the default, not an exception.
+ */
 
+/* ---------- page head ---------- */
+.comms-head { row-gap: 8px; }
+.comms-head h1 { overflow-wrap: anywhere; }
+.comms-head .sub { overflow-wrap: anywhere; }
+
+/* ---------- gateway grid: one column on phones ---------- */
 .comms-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
 }
-@media (min-width: 560px) {
-  .comms-grid { grid-template-columns: 1fr 1fr; }
-}
 
+/* ---------- gateway tile ---------- */
 .comms-tile {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: stretch;
+  gap: 4px;
   width: 100%;
-  text-align: left;
-  padding: 12px;
+  min-width: 0;
+  padding: 4px 4px 4px 0;
   border-radius: 14px;
   border: 1px solid var(--border-soft);
   background: var(--surface);
-  cursor: pointer;
 }
-.comms-tile:active { background: var(--elevated); }
 .comms-tile.on { border-color: color-mix(in srgb, var(--brand) 45%, var(--border-soft)); }
-.comms-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* the tappable area that opens settings — no nested interactive elements inside it */
+.comms-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+  padding: 10px 4px 10px 12px;
+  border-radius: 14px;
+  color: inherit;
+}
+.comms-main:active { background: var(--elevated); }
+.comms-main:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+
 .comms-tile-ico {
   width: 38px; height: 38px; border-radius: 11px; flex: none;
   display: grid; place-items: center;
@@ -31,17 +53,107 @@
   color: var(--brand);
 }
 .comms-tile.on .comms-tile-ico { background: color-mix(in srgb, var(--brand) 20%, var(--elevated)); }
-.comms-tile .switch { flex: none; margin-top: 2px; }
 
+.comms-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.comms-name { font-weight: 700; font-size: 14px; }
+.comms-desc {
+  font-size: 12px;
+  color: var(--text-2);
+  /* two lines on phones, then ellipsis — keeps every tile the same height */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.comms-caps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.comms-chev { flex: none; color: var(--text-3); align-self: center; display: grid; place-items: center; }
+
+/* 44 px hit area for the enable switch, independent of the visual 48×28 pill */
+.switch-hit {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 6px;
+  align-self: center;
+  border-radius: 12px;
+}
+.switch-hit:active { background: var(--elevated); }
+
+/* ---------- inbox ---------- */
 .comms-inbox {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 7px 0;
+  padding: 8px 0;
   border-top: 1px solid var(--border-soft);
 }
 .comms-inbox:first-child { border-top: 0; }
+.comms-inbox .small { overflow-wrap: anywhere; }
 
-/* Channel sheet: keep the secret inputs legible but clearly masked. */
+/* ---------- delivery log: stacked on phones ---------- */
+.comms-log-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.comms-log-row:first-child { border-top: 0; }
+.comms-log-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.comms-log-text {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+  display: block;
+}
+
+/* ---------- inbound endpoint block ---------- */
+.comms-endpoint {
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+  line-height: 1.9;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- channel sheet ---------- */
 .sheet-body input[data-secret="1"] { letter-spacing: .04em; }
 .sheet-body .chip.tiny { vertical-align: middle; }
+/* long help text and env names must never widen the sheet */
+.sheet-body .field .tiny,
+.sheet-body .kv .small,
+.sheet-body .kv .k { overflow-wrap: anywhere; }
+
+/* =========================================================================================
+ * Wider screens
+ * =======================================================================================*/
+@media (min-width: 560px) {
+  .comms-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .comms-tile { padding: 2px 2px 2px 0; }
+  .comms-main { padding: 12px; }
+  .comms-log-row {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .comms-log-meta { flex: none; }
+  .comms-log-text { text-align: right; }
+}
+
+@media (min-width: 900px) {
+  .comms-tile-ico { width: 42px; height: 42px; }
+  .comms-desc { -webkit-line-clamp: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comms-main:active,
+  .switch-hit:active { transition: none; }
+}
