@@ -780,7 +780,16 @@ export function describeScreen(route) {
       `Command Deck. ${s.agents.filter((a) => a.status === 'running').length} of ${s.agents.length} agents report running, ${s.swarms.filter((w) => w.status === 'live').length} swarm(s) live, ${s.approvals.filter((a) => a.status === 'pending').length} approval(s) pending.`,
     agents: () => `Agent Manager: ${s.agents.length} agents (${s.agents.map((a) => a.name).join(', ')}).`,
     teams: () => `Teams & Swarms: ${s.teams.length} teams, ${s.swarms.length} swarm instances.`,
-    tasks: () => `Kanban: ${s.tasks.length} cards across todo/doing/review/done.`,
+    tasks: () => {
+      const counts = ['todo', 'doing', 'review', 'done'].map((c) => `${c} ${s.tasks.filter((t) => t.column === c).length}`).join(', ');
+      const ids = new Set(s.tasks.map((t) => t.id));
+      const edges = s.tasks.reduce((n, t) => n + (t.deps || []).filter((d) => ids.has(d)).length, 0);
+      const blocked = s.tasks.filter((t) => (t.deps || []).some((d) => s.tasks.find((x) => x.id === d)?.column !== 'done'));
+      const prefs = s.board || {};
+      const zoom = Math.round((prefs.zoom || 1) * 100);
+      const wires = prefs.wires === true ? 'on' : prefs.wires === false ? 'off' : 'auto';
+      return `Kanban: ${s.tasks.length} cards (${counts}). ${edges} dependency link(s), ${blocked.length} card(s) waiting on an unfinished blocker${blocked.length ? ` (${blocked.slice(0, 3).map((t) => `“${t.title}”`).join(', ')})` : ''}. Zoom ${zoom}%, wires ${wires}. Moves, assignments, priorities, renames, dependency links and deletes all go through src/kanban.js, and every move asks for confirmation first.`;
+    },
     chat: () => `Chat: ${s.threads.length} threads (${s.threads.map((t) => t.title).join(', ')}).`,
     skills: () => `Skills Hub: ${s.skills.length} skills (${s.skills.filter((k) => k.installed !== false).length} installed, ${s.skills.filter((k) => k.origin === 'marketplace').length} in the marketplace, ${s.skills.filter((k) => k.status === 'pending').length} awaiting review), ${(s.relations || []).length} typed relationships. Import (next to New) accepts SKILL.md, manifests, registries, YAML, packages and zip bundles; installed imports stay quarantined until approved and never grant tools.`,
     matrix: () => `Skills Matrix: ${s.skills.length} skills, ${(s.relations || []).length} typed links, version v${s.matrixVersion || 1}. Relationships are configuration only — no runtime events exist, so nothing is shown as executed.`,

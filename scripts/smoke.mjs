@@ -61,7 +61,7 @@ check('the header keeps the workspace mark but not the workspace name text', () 
 const { navigate, rerender } = await import('../src/main.js');
 
 const markers = {
-  home: 'Quick actions', designer: 'Agent Designer', agents: 'LangGraph', teams: 'Live swarms', tasks: 'Drag cards',
+  home: 'Quick actions', designer: 'Agent Designer', agents: 'LangGraph', teams: 'Live swarms', tasks: 'Drag a card, then confirm',
   chat: 'chat-input', skills: 'Skills Hub', matrix: 'Skills Matrix', models: 'Model Gateway', plugins: 'Add MCP server',
   comms: 'Comms', local: 'Local AI', telegram: 'Telegram Bridge', analytics: 'Agent leaderboard', artifacts: 'Artifacts',
   terminal: 'term-screen', settings: 'Trust score weights',

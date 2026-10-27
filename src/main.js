@@ -1,5 +1,6 @@
 /* ============ SwarmOS boot: router, simulation, PWA ============ */
 import './styles.css';
+import './kanban.css';
 import { getState, setState, subscribe, logEvent, now, uid, fmtMoney, commit, esc, pendingApprovals } from './core.js';
 import { renderShell, refreshChrome, applyTheme, toast, closeAllSheets } from './shell.js';
 import { views } from './views1.js';

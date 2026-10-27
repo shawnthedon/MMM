@@ -3,11 +3,17 @@ import {
   getState, setState, esc, icon, avatar, uid, now, fmtTime, fmtMoney, trustColor, trustTier,
   logEvent, pendingApprovals, getAgent, commit, initials, avatarColor,
 } from './core.js';
-import { openSheet, toast, confirmModal, on, actions } from './shell.js';
+import { openSheet, closeAllSheets, toast, confirmModal, on, actions } from './shell.js';
 import { sourceTagHTML, sourceBannerHTML } from './sourceui.js';
 import { isLive, createAgent, updateAgent, createTask, updateTask } from './datastore.js';
 import { isApiMode } from './api.js';
 import { can } from './auth.js';
+import {
+  COLUMNS as COLS, ZOOM_MIN, ZOOM_MAX, COLUMN_IDS, columnLabel, boardPrefs, boardStats,
+  visibleTasks, wiresEnabled, dependencyEdges, wirePaths, setZoom, zoomBy, fitZoom, toggleWires,
+  setFilter, clearFilter, moveTask, assignTask, setPriority, renameTask, linkDeps, unlinkDeps,
+  deleteTask,
+} from './kanban.js';
 
 /** True when this browser may not write the given slice itself (server owns it, or no session). */
 function writeBlocked(slice, label, action) {
@@ -497,61 +503,188 @@ export function swarmDeploySheet(teamId) {
 }
 
 /* ================= KANBAN ================= */
-const COLS = [
-  { id: 'todo', label: 'Backlog', dot: 'idle' },
-  { id: 'doing', label: 'In progress', dot: 'run' },
-  { id: 'review', label: 'Review', dot: 'warn' },
-  { id: 'done', label: 'Done', dot: 'live' },
-];
+/* Board rendering lives here; every write goes through src/kanban.js so the drawer, the drag and the
+ * Copilot share one code path (including the confirmation prompt). */
+
+function kbScroll(fn) {
+  const before = document.getElementById('kb-viewport')?.scrollLeft || 0;
+  fn();
+  const after = document.getElementById('kb-viewport');
+  if (after) after.scrollLeft = before;
+  drawWires();
+}
 
 views.tasks = {
   title: 'Kanban Board',
   render() {
     const s = getState();
+    const prefs = boardPrefs();
+    const shown = visibleTasks(s.tasks, prefs.filter);
+    const st = boardStats();
+    const wires = wiresEnabled(prefs);
+    const zoomPct = Math.round(prefs.zoom * 100);
+    const filtered = prefs.filter.agent !== 'all' || prefs.filter.priority !== 'all';
+    const agents = s.agents.filter((a) => a.id && a.name);
+
     return `
       <div class="page-head row between">
-        <div><h1>Tasks</h1><div class="sub">Drag cards between columns · tap for detail ${sourceTagHTML('tasks')}</div></div>
+        <div><h1>Tasks</h1><div class="sub">Drag a card, then confirm · tap for detail ${sourceTagHTML('tasks')}</div></div>
         <button class="btn primary sm" data-act="new-task">${icon('plus', 16)} New</button>
       </div>
       ${sourceBannerHTML('tasks')}
-      <div class="kanban" id="kanban">
-        ${COLS.map((c) => {
-          const cards = s.tasks.filter((t) => t.column === c.id);
-          return `
-            <div class="kanban-col" data-col="${c.id}">
-              <div class="col-head">
-                <div class="row" style="gap:6px"><span class="pulse-dot ${c.dot}"></span><strong class="small">${c.label}</strong></div>
-                <span class="chip tiny">${cards.length}</span>
-              </div>
-              <div class="kanban-cards" data-drop="${c.id}">
-                ${cards.map((t) => `
-                  <div class="kcard" data-task="${t.id}" data-act="open-task" data-id="${t.id}">
-                    <div class="t">${esc(t.title)}</div>
-                    <div class="row between" style="margin-top:8px">
-                      <div class="row" style="gap:6px">
-                        ${avatar(getAgent(t.assignee)?.name || 'Unassigned', 'sm')}
-                        <span class="chip tiny ${t.priority === 'high' ? 'bad' : t.priority === 'med' ? 'warn' : ''}">${t.priority}</span>
-                      </div>
-                      ${t.deps?.length ? `<span class="tiny muted">⛓ ${t.deps.length}</span>` : ''}
-                    </div>
-                  </div>`).join('')}
-              </div>
-            </div>`;
-        }).join('')}
+
+      <div class="kb-toolbar">
+        <div class="kb-zoom" role="group" aria-label="Board zoom">
+          <button class="kb-zbtn" data-act="kb-zoom-out" aria-label="Zoom out" ${prefs.zoom <= ZOOM_MIN + 0.001 ? 'disabled' : ''}>−</button>
+          <output class="kb-zval" id="kb-zoom-val" aria-live="polite">${zoomPct}%</output>
+          <button class="kb-zbtn" data-act="kb-zoom-in" aria-label="Zoom in" ${prefs.zoom >= ZOOM_MAX - 0.001 ? 'disabled' : ''}>+</button>
+          <button class="kb-fit" data-act="kb-zoom-fit" ${prefs.zoom === 1 ? 'disabled' : ''}>Fit</button>
+        </div>
+        <button class="kb-chip" data-act="kb-wires" aria-pressed="${wires}" title="Show dependency wires">
+          ${icon('link', 15)} Wires <span class="kb-chip-n">${st.edges}</span>
+        </button>
       </div>
-      <div class="banner info" style="margin-top:4px">${icon('board', 16)}<div>Tip: drag cards with your finger (or mouse). Swipe is disabled on the board — tap a card for actions.</div></div>`;
+
+      <div class="kb-filters">
+        <label class="kb-filter">
+          <span class="sr-only">Filter by agent</span>
+          <select class="input compact" id="kb-filter-agent">
+            <option value="all">All agents</option>
+            ${agents.map((a) => `<option value="${a.id}" ${prefs.filter.agent === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}
+          </select>
+        </label>
+        <label class="kb-filter">
+          <span class="sr-only">Filter by priority</span>
+          <select class="input compact" id="kb-filter-priority">
+            <option value="all">All priorities</option>
+            ${['high', 'med', 'low'].map((p) => `<option value="${p}" ${prefs.filter.priority === p ? 'selected' : ''}>${p === 'med' ? 'Medium' : p[0].toUpperCase() + p.slice(1)} priority</option>`).join('')}
+          </select>
+        </label>
+        ${filtered ? `<button class="chip tiny" data-act="kb-filter-clear">Clear filter</button>` : ''}
+      </div>
+
+      <div class="kb-stats" id="kb-stats">${shown.length} of ${st.total} cards · ${st.blocked} waiting on a blocker · ${wires ? `${st.edges} wire${st.edges === 1 ? '' : 's'}` : 'wires hidden'}</div>
+
+      <div class="kb-board" id="kb-board">
+        <div class="kanban kb-viewport ${prefs.zoom === 1 ? '' : 'kb-nosnap'}" id="kb-viewport">
+          <div class="kb-track" id="kb-track" style="--kb-zoom:${prefs.zoom}">
+            ${COLS.map((c) => {
+              const cards = shown.filter((t) => t.column === c.id);
+              return `
+                <div class="kanban-col" data-col="${c.id}" aria-label="${esc(c.label)} column, ${cards.length} cards">
+                  <div class="col-head">
+                    <div class="row" style="gap:6px"><span class="pulse-dot ${c.dot}"></span><strong class="small">${c.label}</strong></div>
+                    <span class="chip tiny">${cards.length}</span>
+                  </div>
+                  <div class="kanban-cards" data-drop="${c.id}">
+                    ${cards.map((t) => {
+                      const blockers = (t.deps || []).map((d) => s.tasks.find((x) => x.id === d)).filter(Boolean);
+                      const blocked = blockers.some((b) => b.column !== 'done');
+                      return `
+                      <div class="kcard ${blocked ? 'blocked' : ''}" data-task="${t.id}" data-act="open-task" data-id="${t.id}" role="button" tabindex="0">
+                        <div class="t">${esc(t.title)}</div>
+                        <div class="row between" style="margin-top:8px">
+                          <div class="row" style="gap:6px">
+                            ${avatar(getAgent(t.assignee)?.name || 'Unassigned', 'sm')}
+                            <span class="chip tiny ${t.priority === 'high' ? 'bad' : t.priority === 'med' ? 'warn' : ''}">${t.priority}</span>
+                          </div>
+                          ${blockers.length ? `<span class="kb-deps" title="Depends on ${esc(blockers.map((b) => b.title).join(', '))}">⛓ ${blockers.length}${blocked ? ' · blocked' : ''}</span>` : ''}
+                        </div>
+                      </div>`;
+                    }).join('')}
+                    ${cards.length ? '' : '<div class="kb-empty">No cards here</div>'}
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>
+        <svg class="kb-wires" id="kb-wires" aria-hidden="true" focusable="false"></svg>
+      </div>
+
+      <div class="banner info" style="margin-top:4px">${icon('board', 16)}<div>Every move asks first — cancel leaves the card where it was. Wires draw <strong>depends-on</strong> links; dimmed means the blocker is already done.</div></div>`;
   },
   mount() {
+    const wireLayer = document.getElementById('kb-wires');
+    if (wireLayer) wireLayer.style.display = wiresEnabled() ? '' : 'none';
     enableKanbanDrag();
+    bindBoardFilters();
+    observeBoard();
+    requestAnimationFrame(drawWires);
   },
 };
 
+/** Measure the rendered cards and draw one curve per dependency edge. */
+function drawWires() {
+  const layer = document.getElementById('kb-wires');
+  const viewport = document.getElementById('kb-viewport');
+  if (!layer || !viewport) return;
+  if (!wiresEnabled()) { layer.innerHTML = ''; layer.style.display = 'none'; return; }
+  layer.style.display = '';
+
+  const vp = viewport.getBoundingClientRect();
+  layer.setAttribute('width', String(Math.max(1, Math.round(vp.width))));
+  layer.setAttribute('height', String(Math.max(1, Math.round(vp.height))));
+  layer.setAttribute('viewBox', `0 0 ${Math.max(1, Math.round(vp.width))} ${Math.max(1, Math.round(vp.height))}`);
+
+  // Coordinates are viewport-relative, so scrolling is already accounted for by the rects.
+  const cards = [...document.querySelectorAll('.kcard[data-task]')].map((el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      id: el.dataset.task,
+      rect: { x: r.left - vp.left, y: r.top - vp.top, w: r.width, h: r.height },
+      onScreen: r.right > vp.left && r.left < vp.right && r.bottom > vp.top && r.top < vp.bottom,
+      done: getState().tasks.find((t) => t.id === el.dataset.task)?.column === 'done',
+    };
+  });
+  const visible = cards.filter((c) => c.onScreen);
+  const edges = dependencyEdges().filter((e) => visible.some((c) => c.id === e.from) && visible.some((c) => c.id === e.to));
+  const { paths } = wirePaths(visible, edges);
+
+  const defs = '<defs><marker id="kb-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="kb-wire-head" d="M0,0 L8,4 L0,8 z"></path></marker>'
+    + '<marker id="kb-arrow-dim" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="kb-wire-head dim" d="M0,0 L8,4 L0,8 z"></path></marker></defs>';
+  layer.innerHTML = defs + paths.map((p) => `<path class="kb-wire ${p.dim ? 'dim' : ''}" data-from="${p.from}" data-to="${p.to}" d="${p.d}" marker-end="url(#kb-arrow${p.dim ? '-dim' : ''})"></path>`).join('');
+  layer.dataset.drawn = String(paths.length);
+  const statEl = document.getElementById('kb-stats');
+  if (statEl) {
+    const st = boardStats();
+    const shown = visibleTasks();
+    statEl.textContent = `${shown.length} of ${st.total} cards · ${st.blocked} waiting on a blocker · ${paths.length} wire${paths.length === 1 ? '' : 's'} drawn`;
+  }
+}
+
+let kbObserver = null;
+let kbResizeBound = false;
+function observeBoard() {
+  if (kbObserver || typeof ResizeObserver === 'undefined') return;
+  const board = document.getElementById('kb-board');
+  if (!board) return;
+  kbObserver = new ResizeObserver(() => requestAnimationFrame(drawWires));
+  kbObserver.observe(board);
+  const track = document.getElementById('kb-track');
+  if (track) kbObserver.observe(track);
+}
+
+function bindBoardFilters() {
+  const agentSel = document.getElementById('kb-filter-agent');
+  const priSel = document.getElementById('kb-filter-priority');
+  agentSel?.addEventListener('change', (e) => { setFilter({ agent: e.target.value }); });
+  priSel?.addEventListener('change', (e) => { setFilter({ priority: e.target.value }); });
+  const viewport = document.getElementById('kb-viewport');
+  viewport?.addEventListener('scroll', () => requestAnimationFrame(drawWires), { passive: true });
+  // One window listener for the life of the page: mount() runs on every re-render.
+  if (!kbResizeBound) {
+    kbResizeBound = true;
+    window.addEventListener('resize', () => requestAnimationFrame(drawWires), { passive: true });
+  }
+}
+
 function enableKanbanDrag() {
-  const board = document.getElementById('kanban');
+  const board = document.getElementById('kb-board');
   if (!board) return;
   let ghost = null, srcCard = null, taskCol = null;
 
   board.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button, select, .kb-toolbar, .kb-chip')) return;
     const card = e.target.closest('.kcard');
     if (!card) return;
     srcCard = card;
@@ -565,6 +698,7 @@ function enableKanbanDrag() {
         window.__dragging = true;
         ghost = card.cloneNode(true);
         ghost.classList.add('drag-ghost');
+        ghost.style.width = `${card.getBoundingClientRect().width}px`;
         card.classList.add('lifted');
         document.body.appendChild(ghost);
       }
@@ -577,6 +711,8 @@ function enableKanbanDrag() {
         const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.kanban-col');
         ghost.style.display = '';
         under && under.classList.add('drop-hot');
+        // The wires follow the lifted card's column so the board never draws to a stale position.
+        drawWires();
       }
     };
     const up = (ev) => {
@@ -587,19 +723,20 @@ function enableKanbanDrag() {
         card.classList.remove('lifted');
         const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.kanban-col');
         document.querySelectorAll('.kanban-col').forEach((c) => c.classList.remove('drop-hot'));
-        if (under && under.dataset.col !== taskCol?.dataset.col) {
-          const taskId = card.dataset.task;
-          setState((s) => {
-            const t = s.tasks.find((x) => x.id === taskId);
-            if (t) { t.column = under.dataset.col; logEvent('task', `"${t.title}" → ${under.dataset.col}`); }
-          }, 'kanban-move');
-          toast(`Moved to ${under.querySelector('strong')?.textContent || under.dataset.col}`, 'ok');
-          import('./main.js').then((m) => m.rerender());
-        }
+        window.__dragging = false;
         window.__suppressClick = true;
-        setTimeout(() => { window.__suppressClick = false; window.__dragging = false; }, 350);
-      } else {
-        // tap → open detail via delegated click handler
+        setTimeout(() => { window.__suppressClick = false; }, 350);
+        drawWires();
+        const taskId = card.dataset.task;
+        if (under && under.dataset.col !== taskCol?.dataset.col) {
+          // Same seam as the drawer chips and the Copilot: confirm, then commit.
+          moveTask(taskId, under.dataset.col).then((out) => {
+            if (out.cancelled) { toast('Move cancelled — the card stayed put'); return; }
+            if (!out.ok) { toast(out.error, 'bad'); return; }
+            toast(`Moved to ${columnLabel(out.task?.column || under.dataset.col)}`, 'ok');
+            import('./main.js').then((m) => m.rerender());
+          });
+        }
       }
     };
     document.addEventListener('pointermove', move, { passive: false });
@@ -607,54 +744,109 @@ function enableKanbanDrag() {
   });
 }
 
+/* toolbar + drawer actions */
+on('kb-zoom-in', () => kbScroll(() => zoomBy('in')));
+on('kb-zoom-out', () => kbScroll(() => zoomBy('out')));
+on('kb-zoom-fit', () => kbScroll(() => fitZoom()));
+on('kb-wires', () => kbScroll(() => toggleWires()));
+on('kb-filter-clear', () => kbScroll(() => clearFilter()));
+on('kb-zoom-set', (el, ds) => kbScroll(() => setZoom(Number(ds.zoom))));
+
+on('kb-unlink', (el, ds) => {
+  const out = unlinkDeps(ds.id, ds.blocker);
+  toast(out.ok ? 'Dependency removed' : out.error, out.ok ? 'ok' : 'bad');
+  if (out.ok) { closeAllSheets(); taskSheet(ds.id); }
+});
+
+on('kb-delete', async (el, ds) => {
+  const out = await deleteTask(ds.id);
+  if (out.cancelled) return;
+  if (!out.ok) { toast(out.error, 'bad'); return; }
+  closeAllSheets();
+  toast('Card deleted', 'ok');
+  import('./main.js').then((m) => m.rerender());
+});
+
 export function taskSheet(id) {
   const s = getState();
   const t = s.tasks.find((x) => x.id === id);
   if (!t) return;
   const a = getAgent(t.assignee);
+  const deps = (t.deps || []).map((d) => s.tasks.find((x) => x.id === d)).filter(Boolean);
+  const candidates = s.tasks.filter((x) => x.id !== t.id && !(t.deps || []).includes(x.id));
   openSheet({
     title: esc(t.title),
     body: `
       <div class="row wrap" style="margin-bottom:10px">
-        <span class="chip tiny">${esc(t.column)}</span>
-        <span class="chip tiny ${t.priority === 'high' ? 'bad' : 'warn'}">${t.priority} priority</span>
-        ${t.deps?.length ? `<span class="chip tiny">⛓ depends on ${t.deps.length}</span>` : ''}
+        <span class="chip tiny">${esc(columnLabel(t.column))}</span>
+        <span class="chip tiny ${t.priority === 'high' ? 'bad' : t.priority === 'med' ? 'warn' : ''}">${esc(t.priority)} priority</span>
+        ${deps.length ? `<span class="chip tiny">⛓ ${deps.length} dependenc${deps.length === 1 ? 'y' : 'ies'}</span>` : ''}
       </div>
       <div class="small" style="margin-bottom:12px">${esc(t.desc)}</div>
       <div class="kv"><span class="k">Assignee</span><span class="row" style="gap:6px">${a ? avatar(a.name, 'sm') : ''}<span class="strong small">${esc(a?.name || 'Unassigned')}</span></span></div>
       <div class="field" style="margin-top:12px"><label>Move to</label>
         <div class="row wrap">
-          ${COLS.map((c) => `<button class="chip ${t.column === c.id ? 'brand' : ''}" data-act="task-move" data-id="${t.id}" data-col="${c.id}">${c.label}</button>`).join('')}
+          ${COLS.map((c) => `<button class="chip ${t.column === c.id ? 'brand' : ''}" data-act="task-move" data-id="${t.id}" data-col="${c.id}" ${t.column === c.id ? 'aria-current="true"' : ''}>${c.label}</button>`).join('')}
         </div>
+        <div class="tiny muted" style="margin-top:6px">Moving asks for confirmation first.</div>
       </div>
-      <div class="field"><label>Reassign</label>
-        <select class="input" data-act="noop" id="task-assignee">
+      <div class="field"><label for="task-assignee">Reassign</label>
+        <select class="input" id="task-assignee">
+          <option value="" ${t.assignee ? '' : 'selected'}>Unassigned</option>
           ${s.agents.map((ag) => `<option value="${ag.id}" ${ag.id === t.assignee ? 'selected' : ''}>${esc(ag.name)}</option>`).join('')}
         </select>
+      </div>
+      <div class="field"><label for="task-priority">Priority</label>
+        <select class="input" id="task-priority">
+          ${['high', 'med', 'low'].map((p) => `<option value="${p}" ${t.priority === p ? 'selected' : ''}>${p === 'med' ? 'Medium' : p[0].toUpperCase() + p.slice(1)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Depends on</label>
+        ${deps.length
+          ? `<div class="col" style="gap:6px;margin-bottom:8px">${deps.map((d) => `
+              <div class="row between" style="gap:8px">
+                <span class="small">${esc(d.title)} <span class="tiny muted">· ${esc(columnLabel(d.column))}</span></span>
+                <button class="chip tiny" data-act="kb-unlink" data-id="${t.id}" data-blocker="${d.id}" aria-label="Remove dependency on ${esc(d.title)}">Remove</button>
+              </div>`).join('')}</div>`
+          : '<div class="tiny muted" style="margin-bottom:8px">No dependencies — this card can start any time.</div>'}
+        ${candidates.length ? `
+          <label class="tiny muted" for="task-blocker">Link a blocker</label>
+          <select class="input" id="task-blocker">
+            <option value="">Choose a card…</option>
+            ${candidates.map((c) => `<option value="${c.id}">${esc(c.title)}</option>`).join('')}
+          </select>` : ''}
       </div>`,
-    foot: `<button class="btn grow" data-act="task-run" data-id="${t.id}">${icon('play', 14)} Run with agent</button>`,
+    foot: `<button class="btn grow" data-act="task-run" data-id="${t.id}">${icon('play', 14)} Run with agent</button>
+           <button class="btn danger" data-act="kb-delete" data-id="${t.id}" aria-label="Delete card">Delete</button>`,
   });
   const sel = document.querySelector('.sheet.open #task-assignee');
   sel && sel.addEventListener('change', async (e) => {
-    const assignee = e.target.value;
-    if (isLive('tasks')) {
-      if (permissionDenied('task:write')) {
-        toast('Your role cannot reassign tasks on the gateway', 'bad');
-        e.target.value = t.assignee || '';
-        return;
-      }
-      try {
-        await updateTask(id, { assignee });
-        toast('Reassigned on the gateway', 'ok');
-      } catch (err) {
-        e.target.value = t.assignee || '';
-        toast(`Gateway refused: ${esc(err.message)}`, 'bad');
-      }
-      import('./main.js').then((m) => m.rerender());
+    const out = await assignTask(id, e.target.value || 'unassigned');
+    if (!out.ok) {
+      e.target.value = t.assignee || '';
+      toast(out.error, 'bad');
       return;
     }
-    setState((st) => { const x = st.tasks.find((y) => y.id === id); if (x) x.assignee = assignee; }, 'reassign');
-    toast('Reassigned', 'ok');
+    toast(out.assignee ? `Assigned to ${out.agent.name}` : 'Unassigned', 'ok');
+    import('./main.js').then((m) => m.rerender());
+  });
+
+  const pri = document.querySelector('.sheet.open #task-priority');
+  pri && pri.addEventListener('change', async (e) => {
+    const out = await setPriority(id, e.target.value);
+    if (!out.ok) { toast(out.error, 'bad'); return; }
+    toast(`Priority set to ${out.priority}`, 'ok');
+    import('./main.js').then((m) => m.rerender());
+  });
+
+  const blocker = document.querySelector('.sheet.open #task-blocker');
+  blocker && blocker.addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    const out = linkDeps(id, e.target.value);
+    if (!out.ok) { toast(out.error, 'bad'); e.target.value = ''; return; }
+    toast('Dependency linked', 'ok');
+    closeAllSheets();
+    taskSheet(id);
     import('./main.js').then((m) => m.rerender());
   });
 }
@@ -810,27 +1002,13 @@ on('clone-agent', async (el, ds) => {
 });
 
 on('task-move', async (el, ds) => {
-  if (isLive('tasks')) {
-    if (permissionDenied('task:write')) {
-      toast('Your role cannot move tasks on the gateway', 'bad');
-      return;
-    }
-    try {
-      await updateTask(ds.id, { column_name: ds.col });
-      toast(`Moved to ${ds.col} on the gateway`, 'ok');
-    } catch (err) {
-      toast(`Gateway refused: ${esc(err.message)}`, 'bad');
-    }
-    import('./shell.js').then((m) => m.closeAllSheets());
-    import('./main.js').then((m) => m.rerender());
-    return;
-  }
-  setState((s) => {
-    const t = s.tasks.find((x) => x.id === ds.id);
-    if (t) t.column = ds.col;
-  }, 'task-move');
+  // Drawer chips, drag-and-drop and Copilot all land here (via kanban.moveTask) — same prompt,
+  // same single log event, same gateway call.
+  const out = await moveTask(ds.id, ds.col);
+  if (out.cancelled) { toast('Move cancelled — nothing changed'); return; }
+  if (!out.ok) { toast(out.error, 'bad'); return; }
   import('./shell.js').then((m) => m.closeAllSheets());
-  toast('Moved', 'ok');
+  toast(`Moved to ${columnLabel(out.task?.column || ds.col)}`, 'ok');
   import('./main.js').then((m) => m.rerender());
 });
 

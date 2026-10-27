@@ -32,6 +32,26 @@
   banner/sheet); a failure downgrades to demo or labels the rows stale instead of mixing them.
   Evidence: `npm run test:readsync` (12 checks). Design + limits: [`copilot/read-sync.md`](copilot/read-sync.md).
 
+### Kanban board — zoom, wires, confirmed moves, Copilot control — ✅
+- ✅ **One write seam** — `src/kanban.js` owns every board mutation (`moveTask`, `commitMove`,
+  `assignTask`, `setPriority`, `renameTask`, `linkDeps`, `unlinkDeps`, `deleteTask`, `setZoom`,
+  `toggleWires`, `setFilter`, `boardStats`). Drag-and-drop, the card drawer and the Copilot all call
+  it, so there is no second path to the data.
+- ✅ **Zoom** — `− 100% + Fit` toolbar, 10 % steps, clamped 70–150 %, persisted in the workspace store
+  (survives re-render and reload), applied as `--kb-zoom` + CSS `zoom` on the board track so every
+  card scales together and drops stay accurate at any level.
+- ✅ **Dependency wires** — inert SVG overlay over the board, one curve + arrowhead per `deps` edge,
+  recomputed on render/resize/scroll/zoom/drag; edges with a missing endpoint are skipped and counted,
+  edges whose blocker is done are dimmed; auto-on below 900 px with a Wires chip to override.
+- ✅ **Confirmation on every move** — drop, drawer chip and Copilot all go through `moveTask` →
+  `confirmModal`; cancel changes nothing and logs nothing, confirm applies one change and one event.
+- ✅ **Copilot control** — move / assign / unassign / priority / rename / link / unlink / delete
+  (two-step) / create / zoom / wires / filter / board status, with refusal instead of guessing on
+  ambiguous cards, unknown columns and dependency cycles.
+- ✅ **Honesty** — gateway moves use `PATCH /api/v1/tasks/:id` (`task:write`) and report refusals;
+  dependencies and deletes are refused on a gateway because no endpoint/column exists.
+- ✅ Evidence: `npm run test:kanban` (26 checks). Design + limits: [`kanban/board.md`](kanban/board.md).
+
 ### More panel — module grid — ✅
 - ✅ Four tiles per row at every width with fixed geometry (92/98 px height, 38 px icon badge,
   two-line label with reserved height), so icons line up and every tile is exactly the same size.

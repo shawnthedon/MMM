@@ -834,7 +834,7 @@ async function askIntent(lc, raw, ctx) {
         'I am deterministic: grounded in a versioned knowledge pack plus live app state. No model is called.',
         '',
         'Ask: “what is the gateway API”, “why are my approvals pending”, “explain this screen”, “is my data live?”',
-        'Operate: “create agent Nova”, “deploy swarm <objective>”, “create task <title>”, “approve ap-1”, “theme light”, “open analytics”',
+        'Operate: “create agent Nova”, “deploy swarm <objective>”, “create task <title>”, “move <card> to <column>”, “zoom the board to 120%”, “approve ap-1”, “theme light”',
         'Knowledge: search sources with verification status. Activity: see what you have confirmed here.',
         '',
         'Modes Training, Voice and the SMS/channel integrations report blockers rather than pretending to run.',
@@ -935,6 +935,22 @@ async function operateIntent(lc, raw, ctx) {
   if (taskM) {
     return { text: 'This adds a card to the Kanban backlog.', card: createTaskProposal(taskM[1], ctx.mode) };
   }
+  // Kanban: one seam in src/kanban.js owns moves, assignments, priorities, dependencies, zoom and
+  // wires, so the Copilot cannot take a path the board UI does not have. `kanbanCommand` returns
+  // null for text that is not about the board, letting the rest of the router continue.
+  {
+    const kanban = await import('../kanban.js');
+    const out = await kanban.kanbanCommand(raw);
+    if (out) {
+      const declined = out.ok === false;
+      return answer(out.reply, {
+        title: declined ? 'Board action not applied' : 'Board updated',
+        confidence: declined ? 'observed' : 'verified',
+        refs: [{ label: 'src/kanban.js — board command seam', ref: 'src/kanban.js', status: 'verified' }],
+      });
+    }
+  }
+
   const decideM = raw.match(/^(approve|deny|allow)\s+(.+)/i);
   if (decideM) {
     const decision = decideM[1].toLowerCase() === 'deny' ? 'deny' : 'allow';
@@ -989,7 +1005,7 @@ async function operateIntent(lc, raw, ctx) {
   return answer(
     [
       `I do not have an authorised action for “${raw}”, and I will not invent one.`,
-      'Operate mode actions: create agent <name> [as <role>] · deploy swarm <objective> · create task <title> · approve|deny <gate> · run <agent> · theme dark|light · open <module> · comms status · test <channel> · route <agent> to <channel> · mute|wake <channel>',
+      'Operate mode actions: create agent <name> [as <role>] · deploy swarm <objective> · create task <title> · move <card> to <column> · assign <card> to <agent> · set priority low|med|high on <card> · rename <card> to <title> · link <card> depends on <card> · zoom the board to <n>% · show|hide wires · approve|deny <gate> · run <agent> · theme dark|light · open <module> · comms status · test <channel> · route <agent> to <channel> · mute|wake <channel>',
       'Anything consequential asks for a two-step confirmation, and every confirmation is written to episodic memory with its evidence.',
     ].join('\n'),
     { title: 'No matching action', confidence: 'verified', refs: [{ label: 'src/copilot/orchestrator.js — operateIntent', ref: 'src/copilot/orchestrator.js', status: 'verified' }] }

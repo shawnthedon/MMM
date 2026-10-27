@@ -3,56 +3,30 @@
 Written to be picked up cold, without the chat that produced it. Each item lists the files, the data
 model, the edge cases that matter, and "done when" checks that a test can assert.
 
-Last updated: 2026-10-27 · Baseline: Comms panel shipped (`npm run test:comms` 18/18).
+Last updated: 2026-10-27 · Baseline: Kanban board shipped (`npm run test:kanban` 26/26); next up is live Comms then Local AI phase 2.
 
 ---
 
-## 1. Kanban board: zoom, dependency wires, drop confirmation, full Copilot control
+## 1. ✅ Kanban board: zoom, dependency wires, drop confirmation, Copilot control — SHIPPED
 
-**Files:** `src/views1.js` (`views.tasks`, `enableKanbanDrag`), new `src/kanban.js`,
-`src/styles.css` (`.kanban` block), `src/copilot/orchestrator.js`, new `scripts/kanban-test.mjs`.
+All acceptance criteria below are met; the implementation notes and the limits that remain are in
+[`../kanban/board.md`](../kanban/board.md), evidence is `npm run test:kanban` (26 checks).
 
-### 1a. Zoom + / −
-- Toolbar above the board: `−  100%  +  Fit`; steps of 10 %, clamped 70–150 %.
-- Implemented as `--kb-zoom` on the board track (`transform: scale(var(--kb-zoom))` on an inner
-  element, **not** on columns) so pointer hit-testing stays correct; divide pointer deltas by the
-  zoom factor when computing drops.
-- Persist the zoom in the workspace store; `Fit` resets to 100 %.
-- **Done when:** buttons change the value, it survives a re-render and a reload, and a drag-drop at
-  70 % and 150 % lands in the column under the pointer.
-
-### 1b. Connection wires
-- Each task already carries `deps: []` (blocker ids). Render an absolutely-positioned
-  `<svg class="kb-wires">` over the board with `pointer-events: none`, one curve + arrowhead per
-  dependency edge, from blocker card to dependent card.
-- Auto-enable below 900 px viewport; a “Wires” chip toggles it at any width.
-- Recompute on render, resize (`ResizeObserver`), zoom, drag, and horizontal scroll (subtract
-  `scrollLeft`/`scrollTop`).
-- Skip and count edges whose endpoints are not on screen (e.g. collapsed column); never draw a
-  guessed line. Dim edges whose blocker is `done`.
-- **Done when:** with a 6-card board at 380 px width, the number of drawn `<path>`s equals the number
-  of dependency edges with both endpoints rendered, positions match `getBoundingClientRect()` of the
-  cards within 1 px, and hiding wires removes the layer.
-
-### 1c. Confirmation on every drag-and-drop
-- Drop opens `confirmModal`: “Move *<title>* from **<from>** to **<to>**?” with **Move** / **Cancel**.
-- Cancel = no state change, no event, card snaps back.
-- Confirm = existing `setState` + `logEvent('task', …)`.
-- Same path reused by the drawer's column chips (`task-move`) and by Copilot.
-- **Done when:** tests cover drop→cancel (unchanged) and drop→confirm (moved + one event), and no
-  code path can move a card without the modal.
-
-### 1d. Copilot control of the board
-One seam, `src/kanban.js`, used by UI + Copilot: `moveTask`, `assignTask`, `setPriority`,
-`renameTask`, `linkDeps`, `unlinkDeps`, `deleteTask`, `filterBoard`, `setZoom`, `toggleWires`.
-Intents: `move <card> to <column>` · `assign <card> to <agent>` · `set priority <p> on <card>` ·
-`rename <card> to <title>` · `link <card> depends on <card>` · `unlink …` · `delete <card>`
-(two-step) · `zoom the board to <n>%` · `show/hide wires` · `filter board by <agent|priority>`.
-Gateway mode must go through `PATCH /api/v1/tasks/:id` (RBAC `task:write`) and report refusal.
-**Done when:** each intent has a test through `kanban.js`, the destructive one requires confirmation,
-and `describeScreen('tasks')` reports column counts + blockers.
-
----
+- Zoom `− 100% + Fit`, 10 % steps, clamped 70–150 %, persisted on the workspace store. Implemented as
+  `--kb-zoom` + CSS `zoom` on the board track rather than `transform: scale()`: a transform does not
+  extend the scrollable area (far columns become unreachable) and would scale hit targets
+  inconsistently. Drops land in the column under the pointer at every level with no pointer-delta
+  arithmetic because `elementFromPoint` stays truthful.
+- Wires: inert SVG overlay, one curve + arrowhead per dependency edge, recomputed on
+  render/resize/scroll/zoom/drag, endpoints-missing edges skipped and counted, done-blockers dimmed,
+  auto-on below 900 px with a chip override.
+- Confirmation on every move (drag, drawer chips, Copilot) via `confirmModal`, which now resolves
+  `'confirm' | 'cancel'`; cancel changes nothing and logs nothing, confirm writes one change and one
+  event.
+- One seam (`src/kanban.js`) with the full Copilot intent set; gateway moves go through
+  `PATCH /api/v1/tasks/:id` (`task:write`) and report refusals.
+- Not done (deliberately, no endpoint/column exists): server-side dependencies, card ordering,
+  delete on a gateway. These refuse rather than pretend.
 
 ## 2. Comms: make the gateways live
 
