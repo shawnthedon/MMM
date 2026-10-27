@@ -49,6 +49,15 @@ check('boot renders shell', () => {
   if (!html().includes('Good')) throw new Error('home not rendered');
 });
 
+check('the header keeps the workspace mark but not the workspace name text', () => {
+  const ws = win.document.querySelector('.topbar .ws');
+  if (!ws) throw new Error('workspace block missing');
+  if (ws.querySelector('#ws-name')) throw new Error('workspace name text still rendered');
+  if (/SwarmLab/.test(ws.textContent)) throw new Error('workspace name text still visible');
+  if (!ws.querySelector('.ws-logo')) throw new Error('workspace mark removed');
+  if (!/SwarmLab workspace/.test(ws.getAttribute('aria-label') || '')) throw new Error('workspace name no longer announced');
+});
+
 const { navigate, rerender } = await import('../src/main.js');
 
 const markers = {
