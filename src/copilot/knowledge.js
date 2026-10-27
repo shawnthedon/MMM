@@ -1,0 +1,698 @@
+/* ============ Copilot knowledge pack — versioned, source-linked, read-only ============
+ * Grounding rule (master spec §4.4): every entry states where the claim came from and how
+ * strongly it is supported. Statuses:
+ *   verified  — checked directly in this repository or a successful test at BUILD commit
+ *   observed  — read from live runtime state at answer time
+ *   inferred  — plausible explanation, not confirmed
+ *   unknown   — no evidence available; never fabricate
+ * This pack is a static snapshot. It is NOT an ingestion pipeline (that is Phase 2 work).
+ */
+import { getState } from '../core.js';
+
+export const PACK = {
+  version: 'repo:66b1bd3',
+  built: '2026-10-26',
+  scope: 'MMM V2 / SwarmOS repository as cloned for Phase 0 discovery',
+};
+
+/** @typedef {{id:string,title:string,type:string,module:string,tags:string[],status:'verified'|'observed'|'inferred'|'unknown',body:string,sources:{label:string,ref:string}[],updated:string,version:string,sensitivity:'internal'|'public'}} Entry */
+
+/** @type {Entry[]} */
+export const KNOWLEDGE = [
+  {
+    id: 'app.overview',
+    title: 'What SwarmOS (MMM V2) is',
+    type: 'concept',
+    module: 'product',
+    tags: ['overview', 'product', 'swarmos', 'mmm', 'scope', 'what'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'public',
+    body:
+      'SwarmOS is a mobile-first control plane for AI agent operations: agent profiles, teams, swarms, tasks, skills, MCP plugins, a model-routing catalogue, trust/governance, artifacts and an embedded Copilot.\n' +
+      'It ships as an installable PWA (Vite build) and is designed to run against one self-hosted gateway process (Node HTTP + WebSocket) with SQLite storage and a filesystem artifact directory.\n' +
+      'Today the PWA renders seeded demo state from the browser; the gateway exists but the front end does not call it yet.',
+    sources: [
+      { label: 'README.md — product summary', ref: 'README.md' },
+      { label: 'docs/DESIGN_SPEC.md §1 Executive Summary', ref: 'docs/DESIGN_SPEC.md' },
+      { label: 'docs/PROGRESS.md — phase tracker', ref: 'docs/PROGRESS.md' },
+    ],
+  },
+  {
+    id: 'ui.navigation',
+    title: 'Navigation model and routes',
+    type: 'procedure',
+    module: 'ui',
+    tags: ['navigation', 'tabs', 'routes', 'screens', 'where', 'open'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'public',
+    body:
+      'Hash router: one route at a time in <main id="view">, rendered from the `views` registry.\n' +
+      'Modules: home, agents, teams (teams + swarms + DAG monitor), tasks (Kanban), chat, skills, models, plugins, telegram, analytics, artifacts (File Manager), terminal, settings.\n' +
+      'Bottom tab bar holds four module slots plus the Copilot launcher in the centre: Home · Agents · ✦ Copilot · Tasks · More. “More” lists every remaining module.',
+    sources: [
+      { label: 'src/shell.js — routes, TABS, tab bar', ref: 'src/shell.js' },
+      { label: 'src/main.js — hash router', ref: 'src/main.js' },
+    ],
+  },
+  {
+    id: 'ui.copilot.launcher',
+    title: 'Where the Copilot lives and how it opens',
+    type: 'procedure',
+    module: 'copilot',
+    tags: ['copilot', 'fab', 'launcher', 'panel', 'open', 'close', 'keyboard'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'public',
+    body:
+      'The launcher is the central action of the bottom navigation (not a floating button over content). It has the accessible name “Open Copilot” and reflects open state through aria-expanded.\n' +
+      'Press it to open the floating panel. Escape closes it; the close button also closes it; on narrow screens the backdrop closes it. Your draft prompt, active mode and conversation survive closing and reopening.\n' +
+      'Keyboard focus is trapped inside the panel while it is open and returns to the launcher when it closes. A global “Copilot” action is also registered for other screens and the terminal.',
+    sources: [
+      { label: 'src/shell.js — tab bar launcher', ref: 'src/shell.js' },
+      { label: 'src/copilot/panel.js — panel, focus trap, draft', ref: 'src/copilot/panel.js' },
+    ],
+  },
+  {
+    id: 'ui.copilot.modes',
+    title: 'Copilot modes and what each one can do',
+    type: 'concept',
+    module: 'copilot',
+    tags: ['copilot', 'modes', 'ask', 'operate', 'build', 'knowledge', 'training', 'voice', 'activity'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'public',
+    body:
+      'Ask — grounded explanations about the app, this screen, settings and behaviour.\n' +
+      'Operate — propose and run authorised app actions on the demo store (agents, tasks, swarms, approvals, theme, navigation).\n' +
+      'Build — inspect agent/team/skill definitions and propose new agents from a reviewed template.\n' +
+      'Knowledge — search the versioned, source-linked knowledge pack; shows verification status and freshness.\n' +
+      'Training / Voice — no backend or verified engine exists, so these modes only report the blocker and run real local dataset checks.\n' +
+      'Activity — recent Copilot actions from episodic memory plus the app event feed and pending approvals.\n' +
+      'Mode selection is not authorisation: every consequential action needs explicit confirmation, and when a gateway session exists the server re-checks the permission and records an audit entry.',
+    sources: [
+      { label: 'src/copilot/orchestrator.js — MODES', ref: 'src/copilot/orchestrator.js' },
+      { label: 'src/copilot/capabilities.js — capability registry', ref: 'src/copilot/capabilities.js' },
+    ],
+  },
+  {
+    id: 'ui.copilot.holographic',
+    title: 'Holographic empty state rules',
+    type: 'concept',
+    module: 'copilot',
+    tags: ['copilot', 'holographic', 'empty', 'blank', 'motion', 'reduced-motion', 'css'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'public',
+    body:
+      'The decorative holographic layer is shown only when the work area has no substantive content. “Blank” is derived from real UI state: an empty conversation with no pending request, not a timer.\n' +
+      'The first message, card or approval fades the layer out (opacity only, so there is no layout shift); it never sits behind dense text, tables, logs or approvals. The layer is aria-hidden, pointer-events:none, and its animation pauses when not blank.\n' +
+      'With prefers-reduced-motion: reduce the gradient stops animating and the transition becomes near-instant.',
+    sources: [
+      { label: 'src/copilot/panel.js — isBlank()', ref: 'src/copilot/panel.js' },
+      { label: 'src/copilot.css — .cp-holo', ref: 'src/copilot.css' },
+    ],
+  },
+  {
+    id: 'data.store',
+    title: 'Where app state lives',
+    type: 'reference',
+    module: 'data',
+    tags: ['state', 'storage', 'localstorage', 'persistence', 'database', 'sqlite'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'The PWA keeps one mutable state object in memory and mirrors it to localStorage under the key swarmos-state-v1, debounced ~250 ms.\n' +
+      'It holds settings, gateway info, agents, teams, swarms, tasks, approvals, threads, files, events, usage, telegram and terminal lines. Terminal history is capped at 200 lines and events at 80.\n' +
+      'The server-side source of truth is SQLite (WAL) via the gateway, but the browser store is not synchronised with it yet. Clearing site data resets the app to seeded fixtures.',
+    sources: [
+      { label: 'src/core.js — load/persist/commit', ref: 'src/core.js' },
+      { label: 'apps/gateway/src/db.js', ref: 'apps/gateway/src/db.js' },
+    ],
+  },
+  {
+    id: 'data.demo',
+    title: 'Demo data vs live data',
+    type: 'concept',
+    module: 'data',
+    tags: ['demo', 'simulated', 'fixtures', 'seed', 'reset', 'live'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'On first load the app seeds a realistic fixture set (agents, swarms, tasks, approvals, files, events, provider catalogue). A ticker in main.js advances live swarms and adds simulated events while settings.simulate is on.\n' +
+      'Fixtures can be restored with `npm run seed -- --reset` (gateway) or by clearing the browser store. Nothing in the PWA is a live agent run today.\n' +
+      'The Copilot panel labels this explicitly with a “Demo data” runtime chip and shows whether the gateway health endpoint answered.',
+    sources: [
+      { label: 'src/core.js — seed()', ref: 'src/core.js' },
+      { label: 'src/main.js — simulation tick', ref: 'src/main.js' },
+      { label: 'fixtures/*.json', ref: 'fixtures/' },
+    ],
+  },
+  {
+    id: 'gateway.api',
+    title: 'Gateway HTTP API surface',
+    type: 'reference',
+    module: 'gateway',
+    tags: ['gateway', 'api', 'endpoints', 'rest', 'port', '8787', 'health'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'Run with `npm run dev:gateway`; listens on PORT or 8787 and allows any origin (Access-Control-Allow-Origin: *).\n' +
+      'GET /healthz · GET /api/v1/summary · GET|POST /api/v1/agents · GET|PATCH /api/v1/agents/:id · GET|POST /api/v1/tasks · PATCH /api/v1/tasks/:id · GET /api/v1/approvals · POST /api/v1/approvals/:id/allow|deny · GET /api/v1/events?cursor= · GET /api/v1/audit/verify · POST /api/v1/dev/seed.\n' +
+      'WebSocket /ws broadcasts { topic, type, entity?, payload?, ts, cursor? } for agents, tasks, approvals and system.',
+    sources: [
+      { label: 'apps/gateway/server.js', ref: 'apps/gateway/server.js' },
+      { label: 'packages/shared/api-routes.json', ref: 'packages/shared/api-routes.json' },
+    ],
+  },
+  {
+    id: 'gateway.auth',
+    title: 'Gateway authentication and session model',
+    type: 'reference',
+    module: 'gateway',
+    tags: ['auth', 'authentication', 'login', 'session', 'cookie', 'csrf', 'password', 'scrypt', 'lockout', 'security'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-27',
+    sensitivity: 'internal',
+    body:
+      'Every data route now requires a credential; only GET /healthz and POST /api/v1/auth/login are public. Health reports nothing operational to an anonymous caller.\n' +
+      'Sessions: POST /api/v1/auth/login with email + password (override with --user/-u and --data for curl). The reply sets an HttpOnly, SameSite=Strict cookie (Secure behind TLS) and returns the principal, its permission list and an HMAC CSRF token. Mutations made with the cookie must send x-swarmos-csrf.\n' +
+      'Passwords are stored as scrypt hashes with a per-user salt (N=16384, r=8, p=1) in the principals table. Argon2id would be stronger but needs a native dependency; that trade-off is documented rather than hidden.\n' +
+      'API tokens: POST /api/v1/tokens issues swk_… secrets that are hashed at rest, carry explicit scopes (a subset of the holder’s permissions) and optional expiry. Bearer callers skip CSRF. Revocation is immediate.\n' +
+      'Lockout: 5 failed logins within 5 minutes lock that email for 15 minutes; 20 attempts per address per 5 minutes are throttled. Attempts are persisted in auth_attempts and audited.\n' +
+      'Bootstrap: the first start creates an Owner from SWARMOS_BOOTSTRAP_EMAIL / SWARMOS_BOOTSTRAP_PASSWORD, or (in development) prints a generated password once. Production refuses to start without an owner.\n' +
+      'Not implemented: 2FA, SSO/OIDC, email password reset, per-object ACLs, and multi-node rate limiting.',
+    sources: [
+      { label: 'apps/gateway/src/auth.js', ref: 'apps/gateway/src/auth.js' },
+      { label: 'apps/gateway/migrations/002_auth.sql', ref: 'apps/gateway/migrations/002_auth.sql' },
+      { label: 'scripts/gateway-auth-test.mjs — 28 acceptance checks', ref: 'scripts/gateway-auth-test.mjs' },
+    ],
+  },
+  {
+    id: 'gateway.roles',
+    title: 'RBAC roles, permissions and separation of duties',
+    type: 'reference',
+    module: 'governance',
+    tags: ['rbac', 'roles', 'permissions', 'owner', 'admin', 'operator', 'reviewer', 'observer', 'approval', 'separation'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-27',
+    sensitivity: 'internal',
+    body:
+      'Five roles: Owner > Admin > Operator / Reviewer > Observer. They are deliberately not a single ladder: an Operator runs agents, tasks and swarms but cannot decide approval gates; a Reviewer decides gates and reads the audit trail but cannot run agents.\n' +
+      'Owner: everything, including seeding demo data and principal administration. Admin: operations + review + principal/token administration, but cannot create or modify an Owner. Operator: read + agent/task/swarm writes + request approvals. Reviewer: read + decide approvals + read/verify the audit log. Observer: read-only.\n' +
+      'Guards: nobody can change their own role or status; a token’s scopes can never exceed the holder’s role; role or status changes revoke that principal’s sessions immediately; separation of duties blocks a principal from deciding a gate they requested; only user/bot principals may decide gates, never copilot or agent principals.\n' +
+      'Every denial is written to the hash-chained audit log with actor, role, route and permission. GET /api/v1/roles returns the live matrix.',
+    sources: [
+      { label: 'apps/gateway/src/rbac.js', ref: 'apps/gateway/src/rbac.js' },
+      { label: 'apps/gateway/server.js — route permission map', ref: 'apps/gateway/server.js' },
+      { label: 'docs/copilot/copilot-governance-auth.md', ref: 'docs/copilot/copilot-governance-auth.md' },
+    ],
+  },
+  {
+    id: 'gateway.audit',
+    title: 'Audit chain',
+    type: 'reference',
+    module: 'governance',
+    tags: ['audit', 'hash', 'chain', 'verify', 'evidence'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'The gateway writes an append-only audit_log whose rows are hash-chained. Verify integrity with `npm run audit:verify` (calls verifyAuditChain from the db module) or GET /api/v1/audit/verify.\n' +
+      'This chain covers gateway mutations only. Copilot actions taken in the browser demo store are recorded in Copilot episodic memory, not the hash chain.',
+    sources: [
+      { label: 'apps/gateway/src/db.js — audit', ref: 'apps/gateway/src/db.js' },
+      { label: 'package.json — audit:verify', ref: 'package.json' },
+    ],
+  },
+  {
+    id: 'proc.agent.create',
+    title: 'Procedure: create an agent',
+    type: 'procedure',
+    module: 'agents',
+    tags: ['agent', 'create', 'procedure', 'preconditions', 'validation', 'evidence'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'public',
+    body:
+      '1. Preconditions: write access to the chosen scope; a model/provider already present in the catalogue; a name unique among agents.\n' +
+      '2. Define: name, role/objective, framework adapter, primary model + fallback, tools/skills allowlist, memory policy, autonomy level, prompt.\n' +
+      '3. Validate: name non-empty and unique; framework and model exist in the catalogue; autonomy within the workspace cap.\n' +
+      '4. Propose and review — Copilot shows a reversible-risk card with the exact values; nothing is written until you confirm.\n' +
+      '5. Evidence of success: the agent appears in the Agents list with status `idle` and a new event “Agent <name> created”. A created agent is not “running”.\n' +
+      '6. Rollback: delete the agent (or discard the demo state by clearing site data / re-seeding fixtures).\n' +
+      'In Copilot Operate/Build mode use: create agent <name> [as <role>].',
+    sources: [
+      { label: 'src/copilot/orchestrator.js — createAgent()', ref: 'src/copilot/orchestrator.js' },
+      { label: 'src/views1.js — agent views', ref: 'src/views1.js' },
+    ],
+  },
+  {
+    id: 'proc.swarm.deploy',
+    title: 'Procedure: deploy a swarm',
+    type: 'procedure',
+    module: 'swarms',
+    tags: ['swarm', 'deploy', 'team', 'procedure', 'budget', 'rollback'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'public',
+    body:
+      '1. Preconditions: a team with at least one agent; a budget cap; an objective written as an expected output.\n' +
+      '2. Compose nodes (planner → workers → assembler) with dependencies; choose hierarchical or flat topology.\n' +
+      '3. Check cost: cap × expected runtime, plus fallback-provider pricing.\n' +
+      '4. This is a consequential action: review the card (objective, team, topology, budget, gate) and confirm twice. Approval is bound to those exact values; editing them re-arms review.\n' +
+      '5. Evidence: a swarm node with status `live`, nodes transitioning queued → running → done, and event “Swarm deployed”.\n' +
+      '6. Rollback: stop the swarm; budget already spent is not recoverable.\n' +
+      'In the current demo runtime the swarm is a seeded/simulated instance — the ticker advances it. No real agents execute.',
+    sources: [
+      { label: 'src/copilot/orchestrator.js — deploySwarm()', ref: 'src/copilot/orchestrator.js' },
+      { label: 'src/main.js — simulation', ref: 'src/main.js' },
+    ],
+  },
+  {
+    id: 'proc.approval',
+    title: 'Procedure: resolve an approval gate',
+    type: 'procedure',
+    module: 'governance',
+    tags: ['approval', 'gate', 'allow', 'deny', 'risk', 'self-approval'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      '1. Read the gate: action, target, requesting principal, risk, evidence and expected effects.\n' +
+      '2. Check the evidence is sufficient for the exact target — a diff for a deploy, a DDL statement for a migration.\n' +
+      '3. Risk classes: read-only (no gate), reversible (confirm once), consequential (confirm twice + preview).\n' +
+      '4. Decide allow-once or deny. Copilot never decides for you and cannot approve a request it raised itself.\n' +
+      '5. Evidence: approval status becomes allowed/denied and an event records “<action> <status> by you via Copilot”.\n' +
+      'Enforcement: the gateway re-checks approval:decide, applies separation of duties against the requester, and writes the decision to the hash-chained audit log. Without a gateway session the decision stays local and is labelled as unenforced.',
+    sources: [
+      { label: 'src/copilot/orchestrator.js — decideApproval()', ref: 'src/copilot/orchestrator.js' },
+      { label: 'src/shell.js — notifications sheet', ref: 'src/shell.js' },
+    ],
+  },
+  {
+    id: 'proc.diagnose',
+    title: 'Procedure: diagnose the app',
+    type: 'procedure',
+    module: 'ops',
+    tags: ['diagnose', 'troubleshoot', 'offline', 'gateway', 'error', 'recovery', 'storage'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'Copilot runs real checks, never canned success:\n' +
+      '• Browser connectivity — navigator.onLine.\n' +
+      '• App store — presence, revision and size of swarmos-state-v1 (missing key means fixtures are in use).\n' +
+      '• Gateway — fetch <gateway>/healthz with a 1.5 s abort; reports reachable, unreachable or unknown.\n' +
+      '• Pending approvals — counted from live store state.\n' +
+      '• Service worker / install — presence of navigator.serviceWorker.\n' +
+      'Recovery: unreachable gateway is expected unless you run `npm run dev:gateway`; a stale or broken store can be reset by clearing site data (destroys demo edits).',
+    sources: [
+      { label: 'src/copilot/orchestrator.js — runDiagnostics()', ref: 'src/copilot/orchestrator.js' },
+      { label: 'src/copilot/runtime.js — probeGateway()', ref: 'src/copilot/runtime.js' },
+    ],
+  },
+  {
+    id: 'files.artifacts',
+    title: 'File Manager and artifacts',
+    type: 'reference',
+    module: 'files',
+    tags: ['files', 'artifacts', 'dataset', 'upload', 'storage', 'folder'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'The Artifacts screen lists entries from state.files: path, type, size, createdBy, timestamp and inline text content. Text artifacts (md/csv/yaml/log) open in a viewer.\n' +
+      'There is no binary upload, no object storage and no MIME sniffing; image entries carry a placeholder description only. Server artifacts live in the gateway artifact directory when the gateway is used.\n' +
+      'Copilot treats file contents as untrusted input: they never become instructions or permissions.',
+    sources: [
+      { label: 'src/core.js — files seed', ref: 'src/core.js' },
+      { label: 'src/views2.js — artifacts view', ref: 'src/views2.js' },
+    ],
+  },
+  {
+    id: 'training.methods',
+    title: 'Training methods are not interchangeable',
+    type: 'concept',
+    module: 'training',
+    tags: ['training', 'fine-tune', 'lora', 'inference', 'retrieval', 'rag', 'dataset', 'blocked'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'Inference only — use a model with its weights unchanged. Retrieval-augmented — fetch relevant data at task time; this is not training. Fine-tuning — update parameters with a training recipe. LoRA/adapters — parameter-efficient tuning. Full training — expensive and only with a backend that supports it. Task pipelines (vision/audio/voice) — only when model and data contract match.\n' +
+      'Pointing a model at a folder is none of these. Training also requires a compatible method, dataset contract, compute runtime, validation and a saved output.\n' +
+      'BLOCKED in this repo: there is no training worker, job queue, dataset decoder or model registry. Copilot reports that instead of showing simulated progress.',
+    sources: [
+      { label: 'docs/PROGRESS.md — Phase 4/5 ⬜', ref: 'docs/PROGRESS.md' },
+      { label: 'src/copilot/capabilities.js — training capability', ref: 'src/copilot/capabilities.js' },
+    ],
+  },
+  {
+    id: 'training.dataset.check',
+    title: 'What local dataset validation can and cannot do',
+    type: 'limitation',
+    module: 'training',
+    tags: ['dataset', 'validation', 'files', 'audio', 'images', 'licence', 'duplicates'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'Available now (real, over File Manager metadata): file count, type breakdown, total size, empty/oversized file flags, duplicate path detection, presence of labels for image sets (by filename convention only).\n' +
+      'Not available without a backend: audio decode/duration/sample-rate checks, image decoding and dimension checks, corruption scans, exact-duplicate hashing, annotation schema validation, licence/consent verification, and any compute/time estimate that would be defensible.\n' +
+      'Copilot labels each line as checked or unchecked so the checklist cannot be mistaken for a full audit.',
+    sources: [
+      { label: 'src/copilot/orchestrator.js — inspectDataset()', ref: 'src/copilot/orchestrator.js' },
+      { label: 'src/core.js — state.files', ref: 'src/core.js' },
+    ],
+  },
+  {
+    id: 'voice.candidates',
+    title: 'Voice engines and singing — unverified',
+    type: 'limitation',
+    module: 'voice',
+    tags: ['voice', 'cloning', 'tts', 'singing', 'opennvoice', 'neutts', 'consent', 'licence', 'blocked'],
+    status: 'unknown',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'The spec proposes Local TTS, NeuTTS and OpenVoice as candidate cloning frameworks. None of them are integrated, and their repositories, licences (code and weights), maintenance status, mobile/browser runtime requirements and singing capability were NOT verified in this environment.\n' +
+      'Voice cloning and text-to-speech do not imply singing. A request such as “now sing, could this be love” must either go through a verified singing-capable component or be reported unsupported — it is currently unsupported.\n' +
+      'Any implementation needs a consent/ownership confirmation, protected voice profiles, deletion controls and synthetic-output labelling. There is no storage or engine for that yet.',
+    sources: [
+      { label: 'Master spec §8.1–8.4', ref: 'Copilot_Master_MMM_V2.md §8' },
+      { label: 'src/copilot/capabilities.js — voice capability', ref: 'src/copilot/capabilities.js' },
+    ],
+  },
+  {
+    id: 'comms.channels',
+    title: 'Communication channels — actual status',
+    type: 'limitation',
+    module: 'comms',
+    tags: ['telegram', 'whatsapp', 'slack', 'discord', 'signal', 'imessage', 'channels', 'gateway'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'Telegram — a UI simulation on the Telegram screen (bot name, allowlist, topics, fake message log). No bot token, no polling, no outbound transport exists in the repo.\n' +
+      'WhatsApp, Slack, Discord, Signal, iMessage — not implemented and not verified; availability depends on each provider’s official API and terms. iMessage and Signal in particular have no generally available bot API for this use case.\n' +
+      'No channel can trigger privileged actions today because no inbound path exists. When one is added, identity mapping, allowlists, approval policy and audit must land first.',
+    sources: [
+      { label: 'src/views2.js — Telegram view', ref: 'src/views2.js' },
+      { label: 'docs/PROGRESS.md — Phase 10 ⬜', ref: 'docs/PROGRESS.md' },
+    ],
+  },
+  {
+    id: 'comms.opensms',
+    title: 'OpenSMS integration preconditions',
+    type: 'limitation',
+    module: 'comms',
+    tags: ['opensms', 'sms', 'android', 'api-key', 'proxy', 'consent', 'blocked'],
+    status: 'unknown',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'The master spec records a source review of github.com/daslearning-org/OpenSMS (Apache-2.0, Kivy Android app, FastAPI service, POST /sms/ on port 9292, Bearer auth, Start/Stop Server owned by the app, an unauthenticated /control/ route that does not actually start or stop the server). That review could not be re-verified here.\n' +
+      'Architecture: MMM V2 is a browser/PWA layer; it cannot inherit Python classes or Android runtime permissions. The only sound design is a thin typed adapter over the authenticated HTTP API, with OpenSMS remaining the authority for SMS permissions, API keys and server lifecycle.\n' +
+      'Prerequisites before any send path: a server-side secret store + proxy (never the key in browser JS), verified reachability (an HTTPS-hosted PWA cannot safely call plain http:// on a LAN), recipient preview, approval policy, rate limits and audit. No remote start/stop will be offered until an authenticated least-privilege bridge is designed and tested on a device.',
+    sources: [
+      { label: 'Master spec §9.2 (vendor source review)', ref: 'Copilot_Master_MMM_V2.md §9.2' },
+      { label: 'src/copilot/capabilities.js — opensms capability', ref: 'src/copilot/capabilities.js' },
+    ],
+  },
+  {
+    id: 'browser.control',
+    title: 'Browser control is not enabled',
+    type: 'limitation',
+    module: 'browser',
+    tags: ['browser', 'stealth', 'automation', 'playwright', 'policy'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'No browser-control adapter exists in this repository. The spec’s “stealth mode” requires evaluating two candidate projects on licence, activity, security, mobileness and testability before integration behind a feature flag.\n' +
+      'Policy: authorised automation only. “Stealth” is never authorisation to defeat anti-bot, authentication, paywall or access-control mechanisms. Nothing is enabled by default.',
+    sources: [
+      { label: 'Master spec §10', ref: 'Copilot_Master_MMM_V2.md §10' },
+      { label: 'src/copilot/capabilities.js — browser capability', ref: 'src/copilot/capabilities.js' },
+    ],
+  },
+  {
+    id: 'models.catalogue',
+    title: 'Model providers and routing are demo data',
+    type: 'reference',
+    module: 'models',
+    tags: ['model', 'provider', 'routing', 'fallback', 'llm', 'anthropic', 'openai', 'ollama', 'cost'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'The Models screen lists a catalogue of providers (frontier clouds, mid-tier clouds, local/self-hosted, specialised, enterprise) with auth type, latency and month-to-date spend, plus routing policies such as default-task-routing, cheap-night-shift and code-escalation.\n' +
+      'All of it is demo data. There is no API key handling, no provider health check, no model discovery and no real completion call — the real model gateway is an unstarted phase.\n' +
+      'Agents reference model ids like anthropic/claude-sonnet-4 with a fallback; those ids are illustrative and have not been validated against provider documentation here.',
+    sources: [
+      { label: 'src/core.js — providers/policies', ref: 'src/core.js' },
+      { label: 'docs/PROGRESS.md — Phase 6 ⬜', ref: 'docs/PROGRESS.md' },
+    ],
+  },
+  {
+    id: 'memory.layers',
+    title: 'How Copilot memory works today',
+    type: 'concept',
+    module: 'copilot',
+    tags: ['memory', 'context', 'episodic', 'preferences', 'draft', 'privacy', 'retention'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'Authoritative knowledge — the bundled, versioned knowledge pack behind Knowledge mode.\n' +
+      'Working memory — current conversation, selected mode and unsent draft, restored when the panel reopens.\n' +
+      'Episodic memory — one record per Copilot action (intent, outcome, evidence, references, timestamp), capped at 50 entries, shown in Activity mode.\n' +
+      'Preferences — default mode and panel detail preference, per browser.\n' +
+      'Not implemented: semantic memory, server-side procedural memory, cross-device continuity, and retention enforcement beyond the episode cap. Everything is scoped to this browser/workspace; nothing is shared with other users.\n' +
+      'Secret-looking strings (API keys, bearer tokens, passwords) are redacted before anything is written.',
+    sources: [
+      { label: 'src/copilot/memory.js', ref: 'src/copilot/memory.js' },
+      { label: 'src/copilot/orchestrator.js — episode recording', ref: 'src/copilot/orchestrator.js' },
+    ],
+  },
+  {
+    id: 'gov.risk-classes',
+    title: 'Risk classes used by Copilot',
+    type: 'concept',
+    module: 'governance',
+    tags: ['risk', 'governance', 'approval', 'confirm', 'consequential', 'policy'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'read-only — inspect, explain, search, diagnose. No card, no mutation.\n' +
+      'reversible — create an agent/task, change theme, navigate. A confirm card is shown; the action is local and undoable.\n' +
+      'consequential — deploy a swarm, resolve an approval gate, clear Copilot memory. Two-step confirmation with a preview of target, effects, permissions and rollback limits.\n' +
+      'Every proposal shows its risk class, and expires five minutes after creation or when its parameters change materially (edit re-arms review).',
+    sources: [
+      { label: 'src/copilot/orchestrator.js — risk + proposal builder', ref: 'src/copilot/orchestrator.js' },
+    ],
+  },
+  {
+    id: 'gov.secrets',
+    title: 'Secret handling rules',
+    type: 'policy',
+    module: 'governance',
+    tags: ['secrets', 'keys', 'redaction', 'privacy', 'security', 'tokens'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'internal',
+    body:
+      'Never place API keys, bearer tokens, passwords, session cookies or private keys in the app store, Copilot memory, a knowledge entry, a URL, a log line or a card. Copilot redacts secret-like patterns before persisting anything and does not echo them back.\n' +
+      'There is no secret store in this repo yet. Any integration needing a credential (OpenSMS, providers, channels) must pass through a server-side vault/proxy first.',
+    sources: [
+      { label: 'src/copilot/memory.js — redact()', ref: 'src/copilot/memory.js' },
+      { label: 'Master spec §11.2', ref: 'Copilot_Master_MMM_V2.md §11.2' },
+    ],
+  },
+  {
+    id: 'roadmap.status',
+    title: 'What is actually built vs planned',
+    type: 'reference',
+    module: 'product',
+    tags: ['roadmap', 'progress', 'status', 'planned', 'implemented', 'gap'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-26',
+    sensitivity: 'public',
+    body:
+      'Built: PWA shell and 13 module views, demo state + fixtures, SQLite schema/migrations, gateway API with WebSocket broadcast and hash-chained audit, gateway authentication + RBAC (sessions, scoped tokens, lockout, separation of duties), sign-in UI and an API client, terminal, four test suites, design/progress docs, and the Copilot FAB + panel + modes + knowledge + memory + capability reporting.\n' +
+      'Not built: real LLM calls, agent execution, swarm scheduling, skills runtime, MCP integrations, full API-backed data sync (only actions are wired), training, voice, real channel connectors, browser control, analytics from real telemetry.\n' +
+      'Source of truth for the tracker is docs/PROGRESS.md; this entry summarises it and should be re-verified when that file changes.',
+    sources: [
+      { label: 'docs/PROGRESS.md', ref: 'docs/PROGRESS.md' },
+      { label: 'docs/IMPLEMENTATION_CHECKLIST.md', ref: 'docs/IMPLEMENTATION_CHECKLIST.md' },
+    ],
+  },
+];
+
+const STOP = new Set(
+  ('a an the is are was were be been do does did can could should would will shall may might must ' +
+    'i you we they it this that these those to of for on in at by with from as and or not no yes ' +
+    'how what why when where who which whom whose about into over under than then there here ' +
+    'me my our your their its please show tell give').split(' ')
+);
+
+export function tokenize(text) {
+  return String(text || '')
+    .toLowerCase()
+    .split(/[^a-z0-9.+#_-]+/)
+    .map((t) => t.replace(/^[._-]+|[._-]+$/g, ''))
+    .filter((t) => t.length > 1 && !STOP.has(t));
+}
+
+const FIELD_WEIGHTS = [
+  ['title', 6],
+  ['id', 5],
+  ['tags', 4],
+  ['module', 3],
+  ['type', 2],
+  ['body', 1],
+];
+
+function score(entry, tokens) {
+  let total = 0;
+  const hay = {
+    title: entry.title.toLowerCase(),
+    id: entry.id.toLowerCase(),
+    tags: entry.tags.join(' ').toLowerCase(),
+    module: entry.module.toLowerCase(),
+    type: entry.type.toLowerCase(),
+    body: entry.body.toLowerCase(),
+  };
+  for (const token of tokens) {
+    let hit = false;
+    for (const [field, weight] of FIELD_WEIGHTS) {
+      const value = hay[field];
+      if (!value) continue;
+      if (value === token) {
+        total += weight * 2;
+        hit = true;
+      } else if (value.includes(token)) {
+        total += weight;
+        hit = true;
+      }
+    }
+    if (hit) total += 1;
+  }
+  // require the strongest token to actually match, otherwise everything scores noise
+  return total;
+}
+
+function snippet(body, tokens, max = 190) {
+  const lower = body.toLowerCase();
+  let idx = -1;
+  for (const t of tokens) {
+    const i = lower.indexOf(t);
+    if (i >= 0 && (idx < 0 || i < idx)) idx = i;
+  }
+  if (idx < 0) return body.slice(0, max) + (body.length > max ? '…' : '');
+  const start = Math.max(0, idx - 60);
+  const slice = body.slice(start, start + max);
+  return (start > 0 ? '…' : '') + slice + (start + max < body.length ? '…' : '');
+}
+
+/**
+ * Hybrid-ish retrieval: deterministic keyword scoring with field weights, module boost and
+ * metadata filters. No vector store exists in this repo, so none is claimed.
+ */
+export function searchKnowledge(query, { module: moduleFilter, limit = 5 } = {}) {
+  const tokens = tokenize(query);
+  if (!tokens.length) return [];
+  const scored = [];
+  for (const entry of KNOWLEDGE) {
+    if (moduleFilter && entry.module !== moduleFilter) continue;
+    const s = score(entry, tokens);
+    if (s <= 0) continue;
+    // coverage guard: at least one token must hit title/tags/module, not only body prose
+    const meta = `${entry.title} ${entry.tags.join(' ')} ${entry.module} ${entry.id}`.toLowerCase();
+    if (!tokens.some((t) => meta.includes(t))) continue;
+    scored.push({ entry, score: s });
+  }
+  scored.sort((a, b) => b.score - a.score || a.entry.title.localeCompare(b.entry.title));
+  return scored.slice(0, limit).map(({ entry, score: s }) => ({
+    id: entry.id,
+    title: entry.title,
+    module: entry.module,
+    type: entry.type,
+    status: entry.status,
+    updated: entry.updated,
+    version: entry.version,
+    body: entry.body,
+    excerpt: snippet(entry.body, tokens),
+    sources: entry.sources,
+    score: s,
+  }));
+}
+
+export function getEntry(id) {
+  return KNOWLEDGE.find((e) => e.id === id) || null;
+}
+
+export function knowledgeStats() {
+  const byStatus = KNOWLEDGE.reduce((acc, e) => {
+    acc[e.status] = (acc[e.status] || 0) + 1;
+    return acc;
+  }, {});
+  const sources = new Set();
+  KNOWLEDGE.forEach((e) => e.sources.forEach((s) => sources.add(s.ref)));
+  return { total: KNOWLEDGE.length, byStatus, sources: sources.size, version: PACK.version, built: PACK.built };
+}
+
+/** Live, non-knowledge context: the screen the user is on right now. */
+export function describeScreen(route) {
+  const s = getState();
+  const map = {
+    home: () =>
+      `Command Deck. ${s.agents.filter((a) => a.status === 'running').length} of ${s.agents.length} agents report running, ${s.swarms.filter((w) => w.status === 'live').length} swarm(s) live, ${s.approvals.filter((a) => a.status === 'pending').length} approval(s) pending.`,
+    agents: () => `Agent Manager: ${s.agents.length} agents (${s.agents.map((a) => a.name).join(', ')}).`,
+    teams: () => `Teams & Swarms: ${s.teams.length} teams, ${s.swarms.length} swarm instances.`,
+    tasks: () => `Kanban: ${s.tasks.length} cards across todo/doing/review/done.`,
+    chat: () => `Chat: ${s.threads.length} threads (${s.threads.map((t) => t.title).join(', ')}).`,
+    skills: () => `Skills Hub: agent skills and pending proposals.`,
+    models: () => `Model Gateway: ${s.providers.length} providers, ${s.policies.length} routing policies — demo catalogue, no live calls.`,
+    plugins: () => `Plugin Marketplace: MCP servers and tool plugins.`,
+    telegram: () => `Telegram Bridge: UI simulation only (no bot transport).`,
+    analytics: () => `Analytics: spend, usage and agent leaderboard from demo data.`,
+    artifacts: () => `Artifacts & Files: ${s.files.length} entries, ${(s.files.reduce((a, f) => a + f.size, 0) / 1024).toFixed(0)} KB of metadata.`,
+    terminal: () => `Terminal: local command shell; it can hand prompts to Copilot.`,
+    settings: () => `Settings: theme, density, autonomy level, Copilot mode and memory toggles.`,
+  };
+  return (map[route] || (() => `Module “${route}”.`))();
+}

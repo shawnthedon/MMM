@@ -25,16 +25,56 @@
 - ✅ **2.2** Migration runner + `001_init.sql` (17 tables: agents, teams, swarms, tasks, approvals, events, skills, plugins, providers, policies, threads, messages, files, settings, jobs, principals, audit_log, migrations) — `npm run migrate`
 - ✅ **2.3** Sample data as fixtures — `fixtures/*.json` generated from the canonical prototype seed (`npm run export-fixtures`); restore with `npm run seed` / `npm run seed -- --reset`
 - ⬜ 2.4 Backup/restore tooling (`npm run backup` / `restore`)
-- ⬜ 2.5 Frontend switch to API mode (`VITE_DATA_MODE=api`)
+- 🟨 2.5 Frontend API mode — client + auth + writes done (`src/api.js`, `src/auth.js`); read sync of
+  module screens still pending, so the UI can show demo data while writes land on the gateway
 
 ## Phase 3 🚪 Gateway core — 🟨 (first slice landed)
 - ✅ **3.2 (slice)** REST API — agents (list/create/get/update), tasks (list/create/update), approvals (list/allow/deny), events feed, summary, dev/seed — `node apps/gateway/server.js` → `:8787`
 - ✅ **3.3 (slice)** WebSocket `/ws` — live event broadcast on every mutation (topics: `agents`, `tasks`, `approvals`, `system`)
 - ✅ **3.5 (slice)** Job table schema ready (leasing fields)
 - ✅ Audit log v1 — hash-chained `audit_log` + `npm run audit:verify`
+- ✅ **3.4 Auth + RBAC** — scrypt passwords, HttpOnly SameSite=Strict session cookies, HMAC CSRF,
+  scoped `swk_` bearer tokens, 5-role matrix (Owner/Admin/Operator/Reviewer/Observer), lockout,
+  authenticated + topic-filtered WebSocket, deny-by-default route map, CORS allowlist, audit of every
+  mutation *and* denial. Evidence: `npm run test:gateway` (28 checks). See
+  [`copilot/copilot-governance-auth.md`](copilot/copilot-governance-auth.md).
+- ✅ **3.4 (client)** — `src/api.js` + `src/auth.js` + `#/login` (sign-in, account, password change,
+  gateway config, honest demo-mode escape). Copilot agent/task/approval actions now go through the
+  gateway with server-side enforcement. Evidence: `npm run test:auth` (16 checks).
 - ⬜ 3.1 Fastify migration / schema validation
 - ⬜ 3.2 rest: teams/swarms/skills/chat/files/analytics routes
-- ⬜ 3.4 Auth + RBAC (Owner/Admin/Operator/Reviewer/Observer)
+
+## ✦ Copilot (master spec phases) — 🟨
+> Spec: `docs/copilot/PHASE0_DISCOVERY.md` (discovery + blockers) ·
+> `docs/copilot/copilot-ui-fab-panel.md` (module spec + evidence)
+
+- ✅ **Phase 0** Repository discovery & contracts — every claim in the report is tied to a file;
+  blockers recorded (`PHASE0_DISCOVERY.md`).
+- ✅ **Phase 1** FAB + panel + holographic empty state — central bottom-nav launcher, floating
+  panel (mobile sheet / desktop card), 7 modes, context strip, action tray, details drawer,
+  draft/mode persistence, Escape + focus trap, reduced-motion path. Evidence: `npm run smoke`
+  (28 checks) + `npm run test:copilot` (6 interaction checks) + `npm run build`.
+- ✅ **Phase 1 cards** answer (with sources + verification badges), proposal (risk class, edit
+  re-arms review, 5-min expiry, two-step consequential confirm), result (per-step state,
+  blocked steps named), diagnostic (real `/healthz` probe), knowledge, capability, activity.
+- ✅ **Phase 1 grounding (subset of Phase 2)** versioned knowledge pack with per-entry
+  verification status, version, update date and source files; keyword retrieval; explicit
+  "no grounded answer" instead of guessing.
+- 🟨 **Phase 2** Knowledge & memory — browser-scoped working/episodic/preference memory with
+  secret redaction, export, clear, and Settings kill-switch ✅. Ingestion, revision/approval,
+  semantic memory, retention enforcement, server audit ⬜.
+- ✅ **Phase 3 (actions)** Runtime-backed actions — with a gateway session, Copilot's agent/task
+  writes and approval decisions are authorised by gateway RBAC, audited, and report the server's
+  refusal verbatim. Swarm deploy remains local (no gateway route yet).
+- ⬜ **Phase 4** Training Studio — **BLOCKED**: no worker, dataset decoder, checkpoint store or
+  model registry. Training mode reports the blocker and runs metadata-only dataset checks.
+- ⬜ **Phase 5** Voice Studio — **BLOCKED/UNVERIFIED**: candidate engines (Local TTS, NeuTTS,
+  OpenVoice) not verified here; singing has no supported path and is reported unsupported.
+- ⬜ **Phase 6** Communication gateway & OpenSMS — **UNCONFIGURED**: needs a server-side secret
+  store + proxy, verified topology, and on-device tests. Telegram remains a UI simulation.
+- ⬜ **Phase 7** Browser control — not started; no candidate reviewed, nothing enabled.
+- 🟨 **Phase 8** Hardening & acceptance — server-side enforcement for actions ✅; device/browser
+  screenshots, screen-reader passes, 2FA/SSO, per-object ACLs and read sync outstanding.
 
 ## Phase 4 🤖 Agents & adapters — ⬜ (FAI + 7 adapters)
 ## Phase 5 🐝 Parallel execution engine — ⬜ (scheduler, DAG)
@@ -57,7 +97,14 @@
 ## 🔌 Gateway API — quick reference (live in this slice)
 
 ```
-GET  /healthz                          → { ok, db: 'sqlite-wal', dataDir, uptime }
+POST /api/v1/auth/login                 → session cookie + CSRF token (public, throttled)
+GET  /api/v1/auth/session               → principal, permissions, CSRF
+POST /api/v1/auth/logout|password       → revoke session(s)
+GET  /api/v1/roles                      → RBAC matrix
+GET|POST /api/v1/principals             → Admin: list/create (role ceiling enforced)
+PATCH /api/v1/principals/:id            → Admin: role/status (no self-change, no equals)
+GET|POST|DELETE /api/v1/tokens          → scoped swk_ tokens (hash-at-rest)
+GET  /healthz                           → { ok, db, driver, uptime, auth: { mode, roles } }
 GET  /api/v1/summary                   → entity counts
 GET  /api/v1/agents                    → all agents
 POST /api/v1/agents                    → create agent
@@ -69,19 +116,21 @@ PATCH /api/v1/tasks/:id                → move/assign/update
 GET  /api/v1/approvals                 → all approvals
 POST /api/v1/approvals/:id/allow|deny  → resolve a gate
 GET  /api/v1/events?cursor=            → event feed (replayable)
-GET  /api/v1/audit/verify              → hash-chain check
+GET  /api/v1/audit                     → recent audit rows (audit:read)
+GET  /api/v1/audit/verify              → hash-chain check (audit:verify)
 POST /api/v1/dev/seed  {reset?:bool}   → restore sample data
-WS   /ws                               → live event stream
+WS   /ws                               → live stream, requires credentials, topic-filtered by role
 ```
 
 ## 🧪 Try it
 
 ```bash
-npm run migrate          # create SQLite schema
+npm run migrate          # create SQLite schema (+ auth tables)
+npm run dev:gateway      # first run prints a generated Owner password once
 npm run seed -- --reset  # restore ALL sample data & instances
 npm run dev:gateway      # API on :8787
 curl localhost:8787/api/v1/summary
 ```
 
 ---
-*Last updated: 2026-10-15 — Phase 0–2 foundation + gateway first slice.*
+*Last updated: 2026-10-27 — Gateway authentication + RBAC (3.4) and server-enforced Copilot actions.*

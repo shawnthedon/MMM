@@ -115,7 +115,7 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
 
 - [ ] **0.4 Take the 20-minute product tour** (click through the app)
   - Home → approve/deny the pending approval → Agents → open **Researcher-01** → Teams → open `market-intel-swarm` (watch the DAG) → Tasks (drag a card) → Skills → Models → Plugins → Chat → Telegram (tap `/status`) → Analytics → Files → Terminal (`help`) → Settings (switch to Light theme).
-  - Open the **✦ Copilot** dock and run `status`, then `create agent Nova` and confirm the action card.
+  - Open the **✦ Copilot** button in the centre of the bottom nav and run `status`, then `create agent Nova` and confirm the action card.
 
 - [ ] **0.5 Code tour** (know where things live)
 
@@ -125,7 +125,7 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   | `src/main.js` | Boot, hash router, live simulation ticker |
   | `src/core.js` | Store (state + seed data), utils, icons |
   | `src/shell.js` | Chrome (top bar, tabs, sheets, toasts), action registry |
-  | `src/copilot.js` | Copilot dock + intent engine (rule-based today) |
+  | `src/copilot.js` | Copilot facade; implementation in `src/copilot/*` (panel, orchestrator, knowledge, memory, runtime, capabilities) |
   | `src/views1.js` / `src/views2.js` | The 12 module UIs |
   | `src/terminal.js` | Fake CLI (becomes a real PTY client later) |
   | `src/styles.css` | Design system tokens + components |
@@ -264,9 +264,10 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   - Event envelope per spec §20.3: `{id, cursor, ts, topic, entity, type, payload, trust_context}`.
   - Implement **cursor replay**: on reconnect the client sends `lastCursor` and receives missed events (store recent events in the `events` table).
 
-- [ ] **3.4 Authentication & RBAC (Layer 1 of governance)**
+- [x] **3.4 Authentication & RBAC (Layer 1 of governance)** ✅ 2026-10-27 — see `docs/copilot/copilot-governance-auth.md`
   - Session login (email + password) for the app; bootstrap first Owner from env (`BOOTSTRAP_ADMIN_EMAIL/PASSWORD`).
   - Hash passwords with **argon2** or **bcrypt**. Sessions: signed, HTTP-only, SameSite=Strict cookies.
+    *(Implemented with scrypt — no native dependency; Argon2id remains the recommended upgrade.)*
   - Roles: `Owner, Admin, Operator, Reviewer, Observer` — enforce in a `requireRole('Operator')` middleware per route.
   - API tokens (for CLI/Telegram) in `capability_tokens` with scopes + expiry.
 

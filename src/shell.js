@@ -1,5 +1,7 @@
 /* ============ SwarmOS shell: chrome, sheets, toasts, actions ============ */
 import { getState, setState, commit, esc, icon, pendingApprovals, logEvent, uid, now } from './core.js';
+import { identityChipHTML } from './authview.js';
+import { getAuth } from './auth.js';
 
 export const routes = [
   { id: 'home', label: 'Home', icon: 'home', title: 'Command Deck' },
@@ -15,9 +17,11 @@ export const routes = [
   { id: 'artifacts', label: 'Files', icon: 'folder', title: 'Artifacts & Files' },
   { id: 'terminal', label: 'Terminal', icon: 'terminal', title: 'Terminal' },
   { id: 'settings', label: 'Settings', icon: 'gear', title: 'Settings' },
+  { id: 'login', label: 'Account', icon: 'shield', title: 'Account & Access' },
 ];
 
-const TABS = ['home', 'agents', 'tasks', 'chat', '__more'];
+/* Bottom navigation: four module slots with the Copilot launcher in the centre slot. */
+const TABS = ['home', 'agents', 'tasks', 'chat'];
 
 export const actions = {};
 export function on(name, fn) { actions[name] = fn; }
@@ -161,7 +165,8 @@ function moreSheet(navigate) {
   const items = routes.filter((r) => !TABS.includes(r.id));
   openSheet({
     title: 'All modules',
-    body: `<div class="grid-3" style="gap:10px">
+    body: `<button class="btn block" data-act="quick-create" style="margin-bottom:12px">${icon('plus', 16)} Quick create</button>
+    <div class="grid-3" style="gap:10px">
       ${items.map((r) => `
         <button class="card col" data-act="nav" data-to="${r.id}" style="align-items:center;gap:8px;padding:16px 8px">
           <div class="avatar" style="background:var(--elevated);color:var(--brand);width:42px;height:42px">${icon(r.icon, 20)}</div>
@@ -204,6 +209,24 @@ function notificationsSheet(navigate) {
   });
 }
 
+/* ---------- bottom navigation with the central Copilot launcher ---------- */
+function tabbarHTML() {
+  const [a, b, , d] = TABS;
+  const tab = (id) => {
+    const r = routes.find((x) => x.id === id);
+    return `<button data-act="nav" data-to="${r.id}" data-tab="${r.id}"><span class="tab-ico">${icon(r.icon, 20)}</span>${r.label}</button>`;
+  };
+  return `
+    ${tab(a)}
+    ${tab(b)}
+    <button class="cp-fab-slot" data-act="copilot-open" aria-label="Open Copilot" aria-haspopup="dialog" aria-expanded="false" aria-controls="copilot-panel">
+      <span class="cp-fab-ico" aria-hidden="true">${icon('spark', 22)}</span>
+      <span class="cp-fab-text">Copilot</span>
+    </button>
+    ${tab(d)}
+    <button data-act="more"><span class="tab-ico">${icon('grid', 20)}</span>More</button>`;
+}
+
 /* ---------- shell render ---------- */
 export function renderShell(root) {
   root.innerHTML = `
@@ -215,25 +238,15 @@ export function renderShell(root) {
           <span class="ws-dot" id="gw-dot"></span>
         </div>
         <div class="title" id="page-title"></div>
+        <button class="identity-btn" id="identity-chip" data-act="nav" data-to="login" aria-label="Account and access"></button>
         <button class="iconbtn" data-act="notifications" aria-label="Notifications">
           ${icon('bell', 21)}<span class="badge" id="notif-badge">0</span>
         </button>
         <button class="iconbtn" data-act="nav" data-to="settings" aria-label="Settings">${icon('gear', 21)}</button>
       </header>
       <main class="view" id="view"></main>
-      <button class="fab" data-act="quick-create" aria-label="Create">${icon('plus', 26)}</button>
-      <div class="dock" data-act="copilot-open" role="button" aria-label="Open Copilot">
-        <div class="spark">${icon('spark', 16)}</div>
-        <div class="dock-text" id="dock-text">✦ Ask Copilot — it can drive the whole app</div>
-        <button class="dock-go" data-act="copilot-open">Ask</button>
-      </div>
-      <nav class="tabbar" id="tabbar">
-        ${TABS.map((t) => {
-          if (t === '__more') return `
-            <button data-act="more"><span class="tab-ico">${icon('grid', 20)}</span>More</button>`;
-          const r = routes.find((x) => x.id === t);
-          return `<button data-act="nav" data-to="${r.id}" data-tab="${r.id}"><span class="tab-ico">${icon(r.icon, 20)}</span>${r.label}</button>`;
-        }).join('')}
+      <nav class="tabbar" id="tabbar" aria-label="Primary">
+        ${tabbarHTML()}
       </nav>
     </div>
     <div id="sheet-root"></div>
@@ -275,15 +288,22 @@ export function refreshChrome(routeId) {
   }
   const dot = document.getElementById('gw-dot');
   if (dot) dot.className = `ws-dot ${s.gateway.status === 'healthy' ? '' : 'warn'}`;
-  document.querySelectorAll('#tabbar button').forEach((b) => {
-    b.classList.toggle('active', b.dataset.tab === routeId || (routeId === 'teams' && b.dataset.tab === 'home' && false));
-    if (b.dataset.tab === routeId) b.classList.add('active');
-    else b.classList.remove('active');
-  });
-  // map non-tab routes to nearest tab highlight
-  const tabFor = { home: 'home', agents: 'agents', tasks: 'tasks', chat: 'chat' };
-  const active = tabFor[routeId];
-  if (active) {
-    document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.tab === active));
+  // identity comes from the gateway session, not from demo state
+  const chip = document.getElementById('identity-chip');
+  if (chip) {
+    chip.innerHTML = identityChipHTML();
+    const auth = getAuth();
+    chip.setAttribute(
+      'aria-label',
+      auth.status === 'authenticated'
+        ? `Account: ${auth.principal?.name}, role ${auth.principal?.role}`
+        : 'Account and access — not signed in to a gateway'
+    );
   }
+  // map the current route onto the nearest tab (the centre slot is the Copilot launcher)
+  const tabFor = { home: 'home', agents: 'agents', tasks: 'tasks', chat: 'chat' };
+  const active = tabFor[routeId] || null;
+  document.querySelectorAll('#tabbar [data-tab]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tab === active);
+  });
 }

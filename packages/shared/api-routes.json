@@ -1,10 +1,17 @@
 {
-  "version": "1",
+  "version": "2",
   "baseUrl": "/api/v1",
-  "transport": { "ws": "/ws", "envelope": "{ topic, type, entity?, payload?, ts, cursor? }" },
+  "transport": {
+    "ws": "/ws (authenticated, topic-filtered by role)",
+    "envelope": "{ topic, type, entity?, payload?, ts, cursor? }"
+  },
   "routes": {
-    "health": { "GET": "/healthz" },
-    "summary": { "GET": "/api/v1/summary" },
+    "health": {
+      "GET": "/healthz"
+    },
+    "summary": {
+      "GET": "/api/v1/summary"
+    },
     "agents": {
       "GET": "/api/v1/agents",
       "POST": "/api/v1/agents",
@@ -17,13 +24,38 @@
       "PATCH": "/api/v1/tasks/:id"
     },
     "approvals": {
-      "GET": "/api/v1/approvals",
+      "GET": "GET /api/v1/approvals",
+      "REQUEST": "POST /api/v1/approvals",
       "ALLOW": "POST /api/v1/approvals/:id/allow",
       "DENY": "POST /api/v1/approvals/:id/deny"
     },
-    "events": { "GET": "/api/v1/events?cursor=" },
-    "audit": { "GET": "/api/v1/audit/verify" },
-    "dev": { "POST": "/api/v1/dev/seed  body:{reset?:boolean}" }
+    "events": {
+      "GET": "/api/v1/events?cursor="
+    },
+    "audit": {
+      "READ": "GET /api/v1/audit?limit=",
+      "VERIFY": "GET /api/v1/audit/verify"
+    },
+    "dev": {
+      "POST": "/api/v1/dev/seed  body:{reset?:boolean}"
+    },
+    "auth": {
+      "LOGIN": "POST /api/v1/auth/login",
+      "SESSION": "GET /api/v1/auth/session",
+      "LOGOUT": "POST /api/v1/auth/logout",
+      "PASSWORD": "POST /api/v1/auth/password",
+      "ROLES": "GET /api/v1/roles"
+    },
+    "principals": {
+      "LIST": "GET /api/v1/principals",
+      "CREATE": "POST /api/v1/principals",
+      "UPDATE": "PATCH /api/v1/principals/:id"
+    },
+    "tokens": {
+      "LIST": "GET /api/v1/tokens",
+      "CREATE": "POST /api/v1/tokens",
+      "REVOKE": "DELETE /api/v1/tokens/:id"
+    }
   },
   "planned": [
     "POST /swarms/:id/deploy|pause|resume|cancel",
@@ -32,5 +64,27 @@
     "GET/POST /files",
     "POST /copilot/messages",
     "GET /analytics/series/:metric"
-  ]
+  ],
+  "auth": {
+    "modes": [
+      "required",
+      "dev-open (refused in production)"
+    ],
+    "credentials": [
+      "session cookie (HttpOnly, SameSite=Strict) + x-swarmos-csrf for mutations",
+      "scope-limited `swk_` bearer tokens"
+    ],
+    "roles": [
+      "Observer",
+      "Reviewer",
+      "Operator",
+      "Admin",
+      "Owner"
+    ],
+    "public": [
+      "GET /healthz",
+      "POST /api/v1/auth/login"
+    ],
+    "notes": "Every other route declares a permission; denials are audited. POST /api/v1/dev/seed is Owner-only and blocked in production unless SWARMOS_ALLOW_SEED=1."
+  }
 }

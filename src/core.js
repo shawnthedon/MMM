@@ -84,7 +84,7 @@ export function seed() {
       density: 'comfortable',
       autonomyLevel: 2,
       selfImprove: 'suggest',
-      copilotMode: 'act',
+      copilotMode: 'operate',
       copilotMemory: true,
       simulate: true,
       soundHaptics: true,
