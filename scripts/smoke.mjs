@@ -53,7 +53,7 @@ const { navigate, rerender } = await import('../src/main.js');
 
 const markers = {
   home: 'Quick actions', designer: 'Agent Designer', agents: 'LangGraph', teams: 'Live swarms', tasks: 'Drag cards',
-  chat: 'chat-input', skills: 'Skills Hub', models: 'Model Gateway', plugins: 'Add MCP server',
+  chat: 'chat-input', skills: 'Skills Hub', matrix: 'Skills Matrix', models: 'Model Gateway', plugins: 'Add MCP server',
   telegram: 'Telegram Bridge', analytics: 'Agent leaderboard', artifacts: 'Artifacts',
   terminal: 'term-screen', settings: 'Trust score weights',
 };

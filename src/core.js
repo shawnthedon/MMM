@@ -1,5 +1,7 @@
 /* ============ SwarmOS core: state, seed, utils, icons ============ */
 
+import { cloneSkills, cloneRelations, SKILLS } from './skillsData.js';
+
 export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -57,6 +59,9 @@ export const icons = {
   swarm: svg(P('M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM5 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM19 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 22a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM11 8.5 6.5 11.5M13 8.5l4.5 3M6.5 13.5 11 17.5M17.5 13.5 13 17.5')),
   model: svg(P('M12 2l9 5v10l-9 5-9-5V7zM12 22V12M3 7l9 5 9-5')),
   undo: svg(P('M9 5 4 10l5 5M4 10h10a6 6 0 0 1 0 12h-3')),
+  // Canonical Skills Matrix glyph: three linked nodes. Reused for every matrix shortcut.
+  graph: svg(P('M12 3a2.2 2.2 0 1 0 0 4.4A2.2 2.2 0 0 0 12 3zM5 16.6a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4zM19 16.6a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4zM11 7.6 6.4 15.4M13 7.6l4.6 7.8M7.2 18.8h9.6')),
+  upload: svg(P('M12 20V8M7 12l5-5 5 5M4 4h16')),
   doc: svg(P('M7 3h7l4 4v14H7zM14 3v5h4M9.5 12h5M9.5 16h5')),
 };
 
@@ -176,14 +181,13 @@ export function seed() {
       { id: 'tk-8', title: 'Refine Content-Weaver prompt (v12)', column: 'review', assignee: 'ag-content', priority: 'med', deps: [], desc: 'Agent-proposed refinement pending review.' },
       { id: 'tk-9', title: 'Archive Q3 run artifacts', column: 'done', assignee: 'ag-sre', priority: 'low', deps: [], desc: 'Cold storage export.' },
     ],
-    skills: [
-      { id: 'sk-1', name: 'firecrawl.deep-research', version: '1.2.0', origin: 'marketplace', status: 'active', perms: ['network.egress', 'artifacts.write'], tools: ['firecrawl.scrape', 'firecrawl.map'], success: 0.93, invokes: 412, desc: 'Multi-source research with citation capture.' },
-      { id: 'sk-2', name: 'dev.tdd-loop', version: '2.0.1', origin: 'marketplace', status: 'active', perms: ['fs.write', 'process.exec'], tools: ['github.pr.create'], success: 0.9, invokes: 260, desc: 'Red-green-refactor loop with PR drafts.' },
-      { id: 'sk-3', name: 'sre.triage', version: '1.5.0', origin: 'user', status: 'active', perms: ['vercel.logs'], tools: ['vercel.logs', 'webhook.alert'], success: 0.96, invokes: 801, desc: 'Incident triage with severity scoring.' },
-      { id: 'sk-4', name: 'content.repurpose', version: '0.9.0', origin: 'agent', status: 'pending', perms: ['airtable.records'], tools: ['airtable.records'], success: 0.87, invokes: 42, desc: 'Turn longform into threads + newsletter. Synthesized by Content-Weaver.' },
-      { id: 'sk-5', name: 'data.forecast-lite', version: '0.3.1', origin: 'agent', status: 'pending', perms: ['supabase.db.query'], tools: ['supabase.db.query'], success: 0.81, invokes: 17, desc: 'Cheap seasonal forecast fallback. Synthesized by Analyst-Prime.' },
-      { id: 'sk-6', name: 'core.citations', version: '1.0.2', origin: 'marketplace', status: 'active', perms: [], tools: [], success: 0.99, invokes: 1204, desc: 'Citation formatting & dedupe.' },
-    ],
+    skills: cloneSkills(),
+    // Typed skill relationships (Skills Matrix). Declarations, not execution edges.
+    relations: cloneRelations(),
+    matrixVersion: 1,
+    matrixHistory: [],
+    // Import audit trail: every accepted package, its format, findings and decision.
+    skillImports: [],
     plugins: [
       { id: 'pl-gh', name: 'GitHub', category: 'DevOps', installed: true, verified: true, callsToday: 148, scopes: ['repo.read', 'pr.write'], tools: ['repos.read', 'code.search', 'pr.create', 'issues.manage', 'actions.trigger'] },
       { id: 'pl-fc', name: 'Firecrawl', category: 'Web', installed: true, verified: true, callsToday: 326, scopes: ['network.egress'], tools: ['scrape', 'map', 'crawl', 'extract', 'search'] },
@@ -298,10 +302,37 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.agents) return parsed;
+      if (parsed && parsed.agents) return migrate(parsed);
     }
   } catch (e) { /* corrupted → reseed */ }
   return seed();
+}
+
+/**
+ * Bring a persisted state forward without losing local edits: catalogue skills that were added
+ * after the save are merged in by id, and the matrix/import fields are created if missing.
+ */
+function migrate(saved) {
+  const next = saved;
+  const list = next.skills || [];
+  const merged = new Map(list.map((k) => [k.id, k]));
+  const byName = new Map(list.map((k) => [k.name, k]));
+  const additions = [];
+  cloneSkills().forEach((catalogue) => {
+    if (merged.has(catalogue.id)) {
+      // Keep the saved record (it carries local status, install and import metadata) but fill in the
+      // catalogue fields added after the save — the `installed` flag and matrix-era metadata included.
+      merged.set(catalogue.id, { ...catalogue, ...merged.get(catalogue.id) });
+    } else if (!byName.has(catalogue.name)) {
+      additions.push(catalogue);
+    }
+  });
+  next.skills = [...list.map((k) => merged.get(k.id) || k), ...additions];
+  if (!Array.isArray(next.relations)) next.relations = cloneRelations();
+  if (!Number.isFinite(next.matrixVersion)) next.matrixVersion = 1;
+  if (!Array.isArray(next.matrixHistory)) next.matrixHistory = [];
+  if (!Array.isArray(next.skillImports)) next.skillImports = [];
+  return next;
 }
 
 let saveTimer = null;

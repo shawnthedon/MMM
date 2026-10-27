@@ -14,6 +14,7 @@ export const routes = [
   { id: 'tasks', label: 'Tasks', icon: 'board', title: 'Kanban Board' },
   { id: 'chat', label: 'Chat', icon: 'chat', title: 'Chat' },
   { id: 'skills', label: 'Skills', icon: 'skill', title: 'Skills Hub' },
+  { id: 'matrix', label: 'Skills Matrix', icon: 'graph', title: 'Skills Matrix' },
   { id: 'models', label: 'Models', icon: 'model', title: 'Model Gateway' },
   { id: 'plugins', label: 'Plugins', icon: 'plug', title: 'Plugin Marketplace' },
   { id: 'telegram', label: 'Telegram', icon: 'send', title: 'Telegram Bridge' },

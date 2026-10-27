@@ -64,7 +64,7 @@
 | | Module | | Module |
 | :---: | --- | :---: | --- |
 | 🤖 | **Agent Manager** — profiles, brain, memory, trust | 🐝 | **Teams & Swarms** — topologies, deploy, live DAG |
-| 📋 | **Kanban Board** — drag & drop, @agent dispatch | ⚡ | **Skills Hub** — marketplace + synthesized review |
+| 📋 | **Kanban Board** — drag & drop, @agent dispatch | ⚡ | **Skills Hub** — 24-skill marketplace, multi-format import, [Skills Matrix](docs/copilot/skills-hub.md) |
 | 🧠 | **Model Gateway** — routing, budgets, key vault | 🧩 | **Plugins** — MCP install & scoped grants |
 | 💬 | **Chat** — streaming, inline approvals | ✈️ | **Telegram Bridge** — command layer, signed buttons |
 | 📊 | **Analytics** — KPIs, spend, trust posture | ⚙️ | **Settings** — everything live-tunable |
@@ -110,6 +110,17 @@ apply: the designer saves an **idle definition** (it cannot start an agent, beca
 in this repository), and capabilities that cannot work — voice, images, scheduled triggers — are
 refused with the reason instead of appearing as toggles. See
 [Agent Designer](docs/copilot/agent-designer.md).
+
+### ⚡ Import a skill and see how skills connect
+**Skills → ⤒ Import** (next to **New**) → paste a `SKILL.md`, a `skill.json`/`skill.yaml` manifest, a
+registry index or a portable package, or upload a `.zip`/`.skill` bundle → **Analyse package**. The
+review shows every skill, what it asks for, and what blocks it: embedded secrets, instruction-injection
+text, unsafe archive paths and same-version duplicates are refused outright; missing dependencies,
+version conflicts and external hosts are called out. Installed skills land **quarantined** (Skills →
+Imported) and grant no tools or permissions — there is no skills runtime here, and the UI says so.
+Click the **graph icon** beside Import, or the one in any skill drawer, to open the **Skills Matrix**:
+typed edges (depends on, complements, conflicts with, …), an accessible table view, cycle-safe editing
+with undo, and export. See [Skills Hub & Matrix](docs/copilot/skills-hub.md).
 
 ### 🐝 Deploy a swarm
 **Teams & Swarms → Deploy** → write the objective → pick team + budget cap → **Deploy**. Open the swarm to watch the **live DAG** and resource bars.
@@ -180,10 +191,11 @@ Or: push to GitHub → **vercel.com/new** → import `swarmos` → Framework: **
 ## 🧪 Quality checks
 
 ```bash
-npm test            # smoke 28 · copilot 6 · auth client 16 · read sync 12 · designer 18 · gateway 28
-npm run smoke       # boots the real app — all 12 modules render
+npm test            # smoke 29 · copilot 6 · auth client 16 · read sync 12 · designer 18 · skills 23 · gateway 28
+npm run smoke       # boots the real app — all 13 routes render
 npm run test:readsync  # gateway rows replace fixtures, provenance labels, no persistence
 npm run test:designer  # designer shortcuts, validation split, definition save paths
+npm run test:skills    # import formats + refusals, quarantine, matrix validation/undo, catalogue size
 npm run test:gateway   # RBAC, CSRF, lockout, separation of duties, audit chain
 npm run lint        # code style (after Phase-1 tooling)
 ```
@@ -199,6 +211,7 @@ npm run lint        # code style (after Phase-1 tooling)
 | 🗺 [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | Non-functional track to production + 100+ resource links |
 | 🔄 [Read Sync](docs/copilot/read-sync.md) | How module screens read the gateway and how demo vs live data is labelled |
 | 🧭 [Agent Designer](docs/copilot/agent-designer.md) | Guided agent creation: steps, validation states, honest boundaries, shortcuts |
+| ⚡ [Skills Hub & Matrix](docs/copilot/skills-hub.md) | Import formats, scanning/quarantine rules, typed relationship matrix, export |
 
 ---
 
