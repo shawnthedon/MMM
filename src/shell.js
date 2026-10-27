@@ -2,6 +2,9 @@
 import { getState, setState, commit, esc, icon, pendingApprovals, logEvent, uid, now } from './core.js';
 import { identityChipHTML } from './authview.js';
 import { getAuth } from './auth.js';
+import { sourceChipHTML, sourceNoteHTML, openSourceSheet, refreshNow } from './sourceui.js';
+import { getStatus, isLive } from './datastore.js';
+import { api, ApiError, isApiMode } from './api.js';
 
 export const routes = [
   { id: 'home', label: 'Home', icon: 'home', title: 'Command Deck' },
@@ -236,6 +239,7 @@ export function renderShell(root) {
           <div class="ws-logo">⬡</div>
           <span id="ws-name">${esc(getState().settings.workspaceName)}</span>
           <span class="ws-dot" id="gw-dot"></span>
+          <button class="srcc" id="source-chip" data-act="source-info" aria-label="Data source"></button>
         </div>
         <div class="title" id="page-title"></div>
         <button class="identity-btn" id="identity-chip" data-act="nav" data-to="login" aria-label="Account and access"></button>
@@ -244,6 +248,7 @@ export function renderShell(root) {
         </button>
         <button class="iconbtn" data-act="nav" data-to="settings" aria-label="Settings">${icon('gear', 21)}</button>
       </header>
+      <div id="source-note-root"></div>
       <main class="view" id="view"></main>
       <nav class="tabbar" id="tabbar" aria-label="Primary">
         ${tabbarHTML()}
@@ -261,11 +266,37 @@ export function renderShell(root) {
   on('copilot-open', () => import('./copilot.js').then((m) => m.openCopilot()));
   on('noop', () => {});
 
-  on('approve', (el, ds) => {
+  on('source-info', () => openSourceSheet());
+  on('data-refresh', () => refreshNow());
+
+  on('approve', async (el, ds) => {
+    const decide = ds.decide === 'allow' ? 'allow' : 'deny';
+    // Gateway-backed approvals are decided by the server; the local copy is replaced by the
+    // authoritative row afterwards so there is never a decision that only exists in the browser.
+    if (isLive('approvals')) {
+      el?.setAttribute('disabled', 'disabled');
+      const perm = getAuth();
+      if (!isApiMode() || !perm.permissions.includes('approval:decide')) {
+        toast(`Your role (${perm.principal?.role || 'signed out'}) cannot decide approvals`, 'bad');
+        return;
+      }
+      try {
+        const out = await api.decideApproval(ds.id, decide);
+        closeAllSheets();
+        toast(`${out.body.action} ${out.body.status} on the gateway · audit entry written`, out.body.status === 'allowed' ? 'ok' : '');
+      } catch (err) {
+        const denied = err instanceof ApiError && err.forbidden;
+        toast(denied ? `Gateway refused: ${err.message}` : `Could not decide: ${err.message}`, 'bad');
+      }
+      const { refresh } = await import('./datastore.js');
+      await refresh({ silent: true });
+      import('./main.js').then((m) => m.rerender());
+      return;
+    }
     setState((s) => {
       const a = s.approvals.find((x) => x.id === ds.id);
       if (a) {
-        a.status = ds.decide === 'allow' ? 'allowed' : 'denied';
+        a.status = decide === 'allow' ? 'allowed' : 'denied';
         logEvent('approval', `${a.action} ${a.status} by you · ${a.target}`);
       }
     }, 'approve');
@@ -286,8 +317,21 @@ export function refreshChrome(routeId) {
     badge.textContent = n;
     badge.style.display = n ? 'grid' : 'none';
   }
+  const st = getStatus();
   const dot = document.getElementById('gw-dot');
-  if (dot) dot.className = `ws-dot ${s.gateway.status === 'healthy' ? '' : 'warn'}`;
+  if (dot) {
+    const healthy = isApiMode() ? st.status === 'live' : s.gateway.status === 'healthy';
+    dot.className = `ws-dot ${healthy ? '' : 'warn'}`;
+    dot.title = isApiMode() ? `gateway: ${st.status}${st.error ? ' — ' + st.error : ''}` : 'demo mode — no gateway configured';
+  }
+  const srcChip = document.getElementById('source-chip');
+  if (srcChip) srcChip.innerHTML = sourceChipHTML();
+  const noteRoot = document.getElementById('source-note-root');
+  if (noteRoot) {
+    const html = sourceNoteHTML();
+    const had = noteRoot.querySelector('.source-note');
+    if (had || html) noteRoot.innerHTML = html;
+  }
   // identity comes from the gateway session, not from demo state
   const chip = document.getElementById('identity-chip');
   if (chip) {

@@ -231,9 +231,17 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   - `npm run restore -- backups/<timestamp>` → replaces data dir and restarts.
   - Practice the drill now, then schedule it in Phase 16.
 
-- [ ] **2.5 Connect the frontend to real persistence**
-  - Replace every `setState(...)` write with an API call + optimistic update; keep `subscribe()` for re-render.
-  - WS `events` topic updates the store live (replaces the `setInterval` simulation ticker — delete it in Phase 5).
+- [x] **2.5 Connect the frontend to real persistence** — `src/datastore.js`, `src/sourceui.js`, `scripts/readsync-test.mjs`
+  - Reads: agents/tasks/approvals/events load from `GET /api/v1/*` on sign-in, on WS `agents|tasks|approvals|system`
+    frames (debounced refetch) and on tab focus; adopted rows replace the demo slices and are tagged `source: 'gateway'`.
+  - Writes: `createAgent/updateAgent/createTask/updateTask/decideApproval` POST/PATCH and then adopt the *server* copy,
+    so a row exists once and matches what the gateway stored; a refusal changes nothing locally.
+  - WS: `/ws` subscription drives the refetch; the simulation ticker refuses to touch a gateway-backed slice and
+    `logEvent()` is a no-op once the event feed is server-owned.
+  - Provenance: `getProvenance()`/`isLive(slice)`; the top-bar chip, per-screen tag, fallback strip and the
+    "Where this data comes from" sheet tell the user gateway vs demo. Gateway rows are stripped from `localStorage`
+    by the persist filter; sign-out restores the demo snapshot.
+  - Not yet: swarms/teams/usage have no gateway store (labelled demo), and there is no run/delete endpoint.
 
 **✅ Done when:** `npm run seed` produces the full demo (all 6 agents visible in the UI), `npm run seed -- --reset` restores it after you mess things up, and killing the gateway mid-write never corrupts the DB.
 

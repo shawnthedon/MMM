@@ -184,7 +184,7 @@ await check('agent creation goes through the gateway with CSRF and reports the g
   calls.length = 0;
   copilot.resetCopilotSession();
   copilot.openCopilot({ mode: 'operate' });
-  copilot.copilotSend('create agent ApiBot');
+  copilot.copilotSend('create agent CreationBot');
   await sleep(400);
   const btn = panel().querySelector('[data-cp="confirm"]');
   assert(btn, 'no confirm button');

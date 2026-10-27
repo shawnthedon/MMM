@@ -25,8 +25,12 @@
 - ✅ **2.2** Migration runner + `001_init.sql` (17 tables: agents, teams, swarms, tasks, approvals, events, skills, plugins, providers, policies, threads, messages, files, settings, jobs, principals, audit_log, migrations) — `npm run migrate`
 - ✅ **2.3** Sample data as fixtures — `fixtures/*.json` generated from the canonical prototype seed (`npm run export-fixtures`); restore with `npm run seed` / `npm run seed -- --reset`
 - ⬜ 2.4 Backup/restore tooling (`npm run backup` / `restore`)
-- 🟨 2.5 Frontend API mode — client + auth + writes done (`src/api.js`, `src/auth.js`); read sync of
-  module screens still pending, so the UI can show demo data while writes land on the gateway
+- ✅ **2.5** Frontend API mode — client + auth + writes **and read sync**: `src/datastore.js` adopts
+  agents/tasks/approvals/events from `GET /api/v1/*` when a session exists, follows the WS and
+  re-syncs on focus, writes through to the gateway (server copy wins, no duplicates), and never
+  lets gateway rows reach `localStorage`. Every screen states its source (`src/sourceui.js` chip +
+  banner/sheet); a failure downgrades to demo or labels the rows stale instead of mixing them.
+  Evidence: `npm run test:readsync` (12 checks). Design + limits: [`copilot/read-sync.md`](copilot/read-sync.md).
 
 ## Phase 3 🚪 Gateway core — 🟨 (first slice landed)
 - ✅ **3.2 (slice)** REST API — agents (list/create/get/update), tasks (list/create/update), approvals (list/allow/deny), events feed, summary, dev/seed — `node apps/gateway/server.js` → `:8787`

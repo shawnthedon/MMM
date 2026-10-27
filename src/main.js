@@ -7,6 +7,7 @@ import './views2.js';
 import { loginView } from './authview.js';
 import { getAuth, refreshSession, subscribeAuth } from './auth.js';
 import { isApiMode } from './api.js';
+import { initDataSync, isLive as sliceIsLive } from './datastore.js';
 
 views.login = loginView;
 import './terminal.js';
@@ -71,9 +72,14 @@ function sessionGatePaused() {
 function tick() {
   const s = getState();
   if (!s.settings.simulate) return;
+  // Anything the gateway owns is driven by the gateway's own rows and live stream. Simulating
+  // those slices here would produce changes the server never saw (ghost state).
+  const swarmsLocal = !sliceIsLive('swarms');
+  const usageLocal = !sliceIsLive('usage');
+  if (!swarmsLocal && !usageLocal) return;
   setState((st) => {
     // advance live swarms
-    st.swarms.filter((w) => w.status === 'live').forEach((w) => {
+    if (swarmsLocal) st.swarms.filter((w) => w.status === 'live').forEach((w) => {
       w.progress = Math.min(0.97, w.progress + 0.004 + Math.random() * 0.012);
       w.budget.spent = Math.round((w.budget.spent + 0.01 + Math.random() * 0.05) * 100) / 100;
       const active = w.nodes.find((n) => n.status === 'running');
@@ -88,9 +94,11 @@ function tick() {
       }
     });
     // usage drift
-    if (st.usage.length > 24) st.usage.shift();
-    st.usage.push({ ts: now(), cost: 0.4 + Math.random() * 2.4, tokens: Math.floor(8000 + Math.random() * 30000) });
-    // occasional event
+    if (usageLocal) {
+      if (st.usage.length > 24) st.usage.shift();
+      st.usage.push({ ts: now(), cost: 0.4 + Math.random() * 2.4, tokens: Math.floor(8000 + Math.random() * 30000) });
+    }
+    // occasional event (skipped when the feed is gateway-backed: logEvent is a no-op there)
     if (Math.random() < 0.12) {
       const evs = [
         ['mcp', `firecrawl.scrape called · ${(0.4 + Math.random() * 2).toFixed(1)}s · ok`],
@@ -130,6 +138,8 @@ function boot() {
   refreshSession()
     .then(() => {
       const auth = getAuth();
+      // Then data: adopt the server's rows (or keep demo rows and say so).
+      initDataSync();
       rerender();
       if (isApiMode() && auth.status === 'anonymous' && currentRoute !== 'login') navigate('login');
       else if (isApiMode() && auth.status === 'unreachable' && currentRoute !== 'login') navigate('login');

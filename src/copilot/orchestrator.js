@@ -14,6 +14,7 @@ import { searchKnowledge, knowledgeStats, describeScreen, getEntry } from './kno
 import { pushEpisode, listEpisodes, memorySummary, clearMemory, getPreferences } from './memory.js';
 import { getRuntime, probeGateway } from './runtime.js';
 import { getCapability, STATUS_LABEL } from './capabilities.js';
+import { scheduleRefresh, isLive } from '../datastore.js';
 
 /* ---------- modes ---------- */
 export const MODES = [
@@ -425,6 +426,7 @@ function createAgentProposal(inputName, mode) {
             skills: ['core.citations'],
           });
           const agent = created.body;
+          scheduleRefresh(150);
           return {
             status: 'ok',
             summary: `Agent ${agent.name} created on the gateway with status ${agent.status}. It is defined, not running.`,
@@ -582,6 +584,8 @@ function createTaskProposal(title, mode) {
         }
         try {
           const created = await api.createTask({ title: p.title.trim(), column: 'todo', priority: 'med' });
+          // Adopt the server's row (never a local guess) so the board matches the gateway.
+          scheduleRefresh(150);
           return {
             status: 'ok',
             summary: `Task “${created.body.title}” created on the gateway in ${created.body.column || 'todo'}.`,
@@ -654,6 +658,7 @@ function approvalProposal(match, mode, decision = 'allow') {
         }
         try {
           const out = await api.decideApproval(p.id, p.decision);
+          scheduleRefresh(150);
           return {
             status: 'ok',
             summary: `${out.body.action} ${out.body.status} on the gateway (decider ${out.body.decider_id}). Recorded in the audit chain.`,
@@ -709,6 +714,15 @@ function runAgentIntent(query) {
   const q = String(query || '').trim().toLowerCase();
   const agent = s.agents.find((a) => a.name.toLowerCase().includes(q) || a.id.includes(q));
   if (!agent) return una(`No agent matches “${query}”. Say “list agents” to see the current definitions.`);
+  if (isLive('agents')) {
+    // No execution runtime exists, and the gateway owns agent rows: flagging an agent "running"
+    // here would be a browser-only state change presented as a server fact.
+    return {
+      status: 'blocked',
+      summary: `${agent.name} exists on the gateway, but there is no execution runtime to start it and this build has no run endpoint. Nothing was changed.`,
+      steps: [{ label: 'Check runtime', state: 'blocked', detail: 'no scheduler/worker adapters in repo' }],
+    };
+  }
   setState((st) => {
     const a = st.agents.find((x) => x.id === agent.id);
     a.status = 'running';

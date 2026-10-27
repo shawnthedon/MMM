@@ -93,6 +93,9 @@ export function seed() {
       retention: { runs: '90d', logs: '30d', memory: '180d' },
     },
     gateway: { status: 'healthy', version: '0.1.0-proto', uptimeSince: mins(60 * 24 * 3), storageMb: 248, sqlite: 'WAL' },
+    // Where each slice came from. 'demo' = seeded fixtures in this browser; 'gateway' = fetched
+    // from the live API. Nothing may present gateway data as demo, or the reverse.
+    provenance: { agents: 'demo', tasks: 'demo', approvals: 'demo', events: 'demo', swarms: 'demo', teams: 'demo', usage: 'demo' },
     agents: [
       {
         id: 'ag-researcher', name: 'Researcher-01', role: 'Deep research & citation capture', framework: 'LangGraph',
@@ -302,11 +305,21 @@ function load() {
 }
 
 let saveTimer = null;
+let persistFilter = null;
+
+/**
+ * Gateway-backed slices must never be written to localStorage: the server owns them, and a stale
+ * copy would resurface as "demo" data after sign-out or on the next visit. The data layer installs
+ * a filter that swaps those slices back to the demo snapshot before persisting.
+ */
+export function setPersistFilter(fn) { persistFilter = fn; }
+
 function persist() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      const s = { ...state, terminalLines: state.terminalLines.slice(-200), events: state.events.slice(0, 80) };
+      const base = persistFilter ? persistFilter(state) : state;
+      const s = { ...base, terminalLines: base.terminalLines.slice(-200), events: base.events.slice(0, 80) };
       localStorage.setItem(KEY, JSON.stringify(s));
     } catch (e) { /* storage full or blocked */ }
   }, 250);
@@ -327,10 +340,38 @@ export function resetDemo() {
   commit('reset');
 }
 
+/** Replace whole slices (used by the data layer when adopting gateway data). */
+export function replaceSlices(patch, label = 'data:adopt') {
+  Object.entries(patch).forEach(([key, value]) => {
+    state[key] = value;
+  });
+  commit(label);
+}
+
+/**
+ * Append a browser-side event. When the event feed is gateway-backed this is a no-op: a local
+ * line would masquerade as an audited server event, and the gateway writes its own entry for
+ * every mutation. Returns false when the event was not recorded.
+ */
 export function logEvent(type, text) {
+  if (isLive('events')) return false;
   state.events.unshift({ id: uid('ev'), ts: now(), type, text });
   state.events = state.events.slice(0, 80);
+  return true;
 }
+
+/* ---------- provenance ---------- */
+export const SOURCES = ['agents', 'tasks', 'approvals', 'events', 'swarms', 'teams', 'usage'];
+
+export function getProvenance() {
+  return { ...(state.provenance || {}) };
+}
+
+export function setProvenance(patch) {
+  state.provenance = { ...(state.provenance || {}), ...patch };
+}
+
+export const isLive = (slice) => (state.provenance || {})[slice] === 'gateway';
 
 export function getAgent(id) { return state.agents.find((a) => a.id === id); }
 export function getTeam(id) { return state.teams.find((t) => t.id === id); }
