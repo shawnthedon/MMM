@@ -241,9 +241,8 @@ export function renderShell(root) {
   root.innerHTML = `
     <div class="app">
       <header class="topbar">
-        <div class="ws">
-          <div class="ws-logo">⬡</div>
-          <span id="ws-name">${esc(getState().settings.workspaceName)}</span>
+        <div class="ws" role="group" aria-label="${esc(getState().settings.workspaceName)} workspace">
+          <div class="ws-logo" aria-hidden="true">⬡</div>
           <span class="ws-dot" id="gw-dot"></span>
           <button class="srcc" id="source-chip" data-act="source-info" aria-label="Data source"></button>
         </div>
