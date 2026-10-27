@@ -93,6 +93,29 @@ const copilot = await import('../src/copilot.js');
 const doc = win.document;
 const panelEl = () => doc.getElementById('copilot-panel');
 
+await check('the header carries Chat next to notifications, the tab bar carries Tasks', () => {
+  const topbar = doc.querySelector('.topbar');
+  const chat = doc.getElementById('chat-btn');
+  if (!chat) throw new Error('no Chat action in the header');
+  if (chat.getAttribute('data-to') !== 'chat') throw new Error('header Chat does not route to chat');
+  if (chat.getAttribute('aria-label') !== 'Chat') throw new Error('header Chat lacks an accessible name');
+  if (!chat.querySelector('svg')) throw new Error('header Chat has no icon');
+  const bell = [...topbar.querySelectorAll('.iconbtn')].find((b) => b.dataset.act === 'notifications');
+  if (!bell) throw new Error('no notifications button');
+  if (chat.nextElementSibling !== bell) throw new Error('header Chat is not next to the bell');
+  const tabs = [...doc.querySelectorAll('#tabbar [data-tab]')].map((b) => b.dataset.tab);
+  if (tabs.includes('chat')) throw new Error('Chat is still a bottom tab');
+  if (!tabs.includes('tasks')) throw new Error('Tasks is missing from the bottom bar');
+  if (tabs.join(',') !== 'home,agents,tasks') throw new Error(`unexpected tabs: ${tabs.join(',')}`);
+  navigate('chat');
+  rerender();
+  if (!doc.getElementById('chat-btn').classList.contains('active')) throw new Error('header Chat does not highlight on #/chat');
+  if (doc.getElementById('chat-btn').getAttribute('aria-current') !== 'page') throw new Error('aria-current not set on #/chat');
+  navigate('home');
+  rerender();
+  if (doc.getElementById('chat-btn').classList.contains('active')) throw new Error('header Chat stays highlighted off #/chat');
+});
+
 await check('copilot launcher is the central bottom-nav action', () => {
   const tabbar = doc.getElementById('tabbar');
   if (!tabbar) throw new Error('no tab bar');
