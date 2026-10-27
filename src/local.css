@@ -1,0 +1,102 @@
+/* ============ Local AI preflight (mobile first) ============ */
+
+.local-caps { margin-top: 8px; }
+
+.local-verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.local-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+}
+.local-row:last-child { border-bottom: 0; }
+.local-row-k {
+  color: var(--text-2);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.local-row-v {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.local-row-v .tiny { overflow-wrap: anywhere; }
+
+.local-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.local-notes.bad {
+  border-color: color-mix(in srgb, var(--danger) 38%, var(--border-soft));
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+.local-notes.warn {
+  border-color: color-mix(in srgb, var(--warning) 38%, var(--border-soft));
+  background: color-mix(in srgb, var(--warning) 9%, transparent);
+  color: var(--warning);
+}
+.local-notes.ok {
+  border-color: color-mix(in srgb, var(--success) 34%, var(--border-soft));
+  background: color-mix(in srgb, var(--success) 8%, transparent);
+  color: var(--success);
+}
+
+/* phase list */
+.local-phase {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.local-phase:first-child { border-top: 0; }
+.local-phase-n {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--elevated);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 800;
+}
+.local-phase.current .local-phase-n {
+  background: color-mix(in srgb, var(--brand) 22%, var(--elevated));
+  color: var(--brand);
+}
+.local-phase .small { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+@media (min-width: 480px) {
+  .local-row {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .local-row-k { flex: 0 1 46%; }
+  .local-row-v { flex: 1 1 auto; justify-content: flex-end; text-align: right; }
+  .local-verdict { flex-direction: row; align-items: center; gap: 10px; }
+}

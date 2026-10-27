@@ -382,6 +382,25 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
     fluid `.input.compact` / `.seg-fit`, `overflow-wrap: anywhere` on long text, pinch zoom enabled.
   - Evidence: `npm run test:responsive` (17 checks).
 
+- [x] **4.11 More panel: four-per-row module grid** — `src/shell.js`, `src/styles.css`
+  - Modules render in `.mod-grid` (4 equal columns at every width, max 520 px wide) with uniform
+    `.mod-tile` geometry: fixed height, 38 px icon badge, two-line clamped label with reserved
+    height and an optional `new` badge. No per-tile inline sizing remains.
+  - Evidence: `npm run test:local` (grid + geometry checks).
+
+- [x] **4.12 Local (on-device AI) — phase 1 audit** — `src/local.js`, `src/local.css`, `#/local`
+  - New **Local** tile (badged *new*) opens a preflight screen that measures the device: secure
+    context, WebAssembly, WASM SIMD, threads/COI, WebGPU adapter, OPFS, persistent storage, real
+    quota/free bytes, memory hints — with verdicts `blocked` / `constrained` / `spike-ready`.
+  - Nothing is installed or executed: no model bundled, no downloads, no inference, no cloud
+    fallback. The only control is *Re-measure*. Candidate presets are labelled unverified.
+  - Phase-1 audit (platform findings, smallest viable integration, blockers, service boundary,
+    phase gates) in [`local/on-device-audit.md`](local/on-device-audit.md), with the spec itself kept
+    at [`local/MMM_On_Device_AI_Design_Specification.md`](local/MMM_On_Device_AI_Design_Specification.md).
+  - Evidence: `npm run test:local` (13 checks).
+  - Deliberately not implemented: phases 2–6 (runtime spike, model manager, offline text, image
+    feasibility/feature).
+
 - [ ] **4.6 Wire Agent Manager UI to reality**
   - “Run” starts a real run; the **Logs** tab streams real trace lines; tool calls show real args/results (redacted per policy); memory tab shows real counts + search.
 
