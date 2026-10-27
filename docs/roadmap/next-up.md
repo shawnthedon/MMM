@@ -86,7 +86,35 @@ chain, and no secret is ever returned by `GET /api/v1/comms/status`.
 
 ---
 
-## 3. Housekeeping queued from the same conversation
+## 3. Local (on-device AI) — phases 2–6
+
+**Spec:** [`../local/MMM_On_Device_AI_Design_Specification.md`](../local/MMM_On_Device_AI_Design_Specification.md)
+**Phase-1 audit:** [`../local/on-device-audit.md`](../local/on-device-audit.md)
+**Screen today:** `#/local` measures the platform and claims nothing else (`npm run test:local`).
+
+Order of work, each gated on real evidence:
+
+1. **Cross-origin isolation** — add `Cross-Origin-Opener-Policy: same-origin` and
+   `Cross-Origin-Embedder-Policy: require-corp` to the Vite dev server and `vercel.json`; confirm
+   `crossOriginIsolated === true` in the preflight (this alone moves threads from "off" to
+   "available"). Watch for third-party assets that break under COEP.
+2. **Runtime spike (phase 2)** — pick and licence-check a WASM GGUF runtime (llama.cpp/ggml build or
+   prebuilt `.wasm`), ship it behind `src/localRuntime.js`, load one small Q4 model from OPFS, and
+   record: bundle size, load time, tokens/sec, peak memory, thermal notes — on a real device, in
+   airplane mode. No UI beyond a spike route until this passes.
+3. **Model manager (phase 3)** — `listModels/importModel/downloadModel` with persisted lifecycle
+   states (spec §6), real progress/cancel/resume where the host supports it, SHA-256 verification and
+   atomic promote of partial files. Metadata in IndexedDB, never `localStorage`.
+4. **Offline text (phase 4)** — streaming `generateText` + `stopGeneration`, local history, and a
+   network-log test proving no prompt/response leaves the device.
+5. **Image feasibility (phase 5)** then feature (phase 6) — only with recorded real-device
+   measurements; otherwise the UI keeps an explicit *unavailable* state.
+
+**Rules that must survive implementation:** no silent cloud fallback, no fabricated progress or
+images, no controls that do nothing, and every "PASS" backed by a captured measurement rather than
+code inspection.
+
+## 4. Housekeeping queued from the same conversation
 - Header: workspace-name text removed (done); Chat moved into the header (done) — revisit if a
   fourth header action is ever added, the 34 px floor at <380 px must hold.
 - Skills Matrix is no longer in the More panel; it stays reachable from the Skills Hub header, every

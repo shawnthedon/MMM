@@ -68,6 +68,7 @@
 | 🧠 | **Model Gateway** — routing, budgets, key vault | 🧩 | **Plugins** — MCP install & scoped grants |
 | 💬 | **Chat** — streaming, inline approvals | 📡 | **Comms** — Telegram · WhatsApp · Discord · Slack · SMS · Browser gateways |
 | 📊 | **Analytics** — KPIs, spend, trust posture | ⚙️ | **Settings** — everything live-tunable |
+| 🧠 | **Local** — on-device AI preflight (nothing installed yet) | 🧭 | **Agent Designer** — guided creation, idle definitions |
 | 📁 | **Artifacts & Files** — previews, upload, share | 💻 | **Terminal** — working `swarm` CLI |
 
 ---
@@ -198,13 +199,14 @@ Or: push to GitHub → **vercel.com/new** → import `swarmos` → Framework: **
 ## 🧪 Quality checks
 
 ```bash
-npm test            # smoke 32 · copilot 6 · auth 16 · read sync 12 · designer 18 · skills 23 · comms 18 · responsive 17 · gateway 28
+npm test            # smoke 33 · copilot 6 · auth 16 · read sync 12 · designer 18 · skills 23 · comms 18 · responsive 17 · local 13 · gateway 28
 npm run smoke       # boots the real app — every route renders
 npm run test:readsync  # gateway rows replace fixtures, provenance labels, no persistence
 npm run test:designer  # designer shortcuts, validation split, definition save paths
 npm run test:skills    # import formats + refusals, quarantine, matrix validation/undo, catalogue size
 npm run test:comms     # channel status honesty, live-test outcomes, webhook signatures, routing, Copilot comms
 npm run test:responsive # mobile-first CSS rules, tap targets, viewport meta, fluid controls
+npm run test:local     # module-grid geometry + on-device AI preflight (capability probes, honest verdicts)
 npm run test:gateway   # RBAC, CSRF, lockout, separation of duties, audit chain
 npm run lint        # code style (after Phase-1 tooling)
 ```
@@ -225,6 +227,7 @@ npm run lint        # code style (after Phase-1 tooling)
 | 🔑 [Comms credentials](docs/comms/credentials.md) | Exactly what to supply per channel and where it is stored |
 | 🗺 [Next up](docs/roadmap/next-up.md) | Open work with acceptance criteria (Kanban zoom/wires/confirm, live comms) |
 | 📱 [Mobile-first UI](docs/ui/responsive.md) | The responsive rules, breakpoints, touch targets — enforced by `test:responsive` |
+| 🧠 [On-device AI audit](docs/local/on-device-audit.md) | Phase-1 audit for local GGUF models: platform findings, blockers, service boundary, phase gates |
 
 ---
 

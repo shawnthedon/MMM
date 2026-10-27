@@ -16,6 +16,7 @@ import './designer.js';
 import './skillsMatrix.js';
 import './skillsImportView.js';
 import './comms.js';
+import './local.js';
 
 let currentRoute = 'home';
 let currentParams = {};

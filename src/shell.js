@@ -17,6 +17,7 @@ export const routes = [
   { id: 'models', label: 'Models', icon: 'model', title: 'Model Gateway' },
   { id: 'plugins', label: 'Plugins', icon: 'plug', title: 'Plugin Marketplace' },
   { id: 'comms', label: 'Comms', icon: 'broadcast', title: 'Comms' },
+  { id: 'local', label: 'Local', icon: 'cpu', title: 'Local AI' },
   // Kept as routes for titles/highlighting, but not shown in the All-modules grid (see HIDDEN).
   { id: 'matrix', label: 'Skills Matrix', icon: 'graph', title: 'Skills Matrix' },
   { id: 'analytics', label: 'Analytics', icon: 'chart', title: 'Analytics' },
@@ -174,17 +175,22 @@ function moreSheet(navigate) {
   // belongs in the module list; Comms replaces the old standalone Telegram entry.
   const HIDDEN = [...TABS, 'chat', 'matrix'];
   const items = routes.filter((r) => !HIDDEN.includes(r.id));
+  // 'Local' is the entry point for the on-device AI work (spec §12 phase 1: audit/preflight only).
+  // It is flagged so nobody mistakes it for a finished runtime.
+  const isNew = (id) => id === 'local';
   openSheet({
     title: 'All modules',
     body: `<div class="row" style="gap:8px;margin-bottom:12px">
       <button class="btn grow" data-act="quick-create">${icon('plus', 16)} Quick create</button>
       <button class="btn grow primary" data-act="open-designer">${icon('spark', 16)} Agent Designer</button>
     </div>
-    <div class="grid-3" style="gap:10px">
+    <div class="mod-grid" role="list">
       ${items.map((r) => `
-        <button class="card col" data-act="nav" data-to="${r.id}" style="align-items:center;gap:8px;padding:16px 8px">
-          <div class="avatar" style="background:var(--elevated);color:var(--brand);width:42px;height:42px">${icon(r.icon, 20)}</div>
-          <div class="tiny strong">${r.label}</div>
+        <button class="mod-tile" role="listitem" data-act="nav" data-to="${r.id}"
+                aria-label="${esc(r.label)}${isNew(r.id) ? ' — new, preflight only' : ''}">
+          <span class="mod-ico" aria-hidden="true">${icon(r.icon, 20)}</span>
+          <span class="mod-label">${esc(r.label)}</span>
+          ${isNew(r.id) ? '<span class="mod-badge">new</span>' : ''}
         </button>`).join('')}
     </div>`,
   });

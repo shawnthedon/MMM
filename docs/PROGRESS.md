@@ -32,6 +32,25 @@
   banner/sheet); a failure downgrades to demo or labels the rows stale instead of mixing them.
   Evidence: `npm run test:readsync` (12 checks). Design + limits: [`copilot/read-sync.md`](copilot/read-sync.md).
 
+### More panel — module grid — ✅
+- ✅ Four tiles per row at every width with fixed geometry (92/98 px height, 38 px icon badge,
+  two-line label with reserved height), so icons line up and every tile is exactly the same size.
+- ✅ Replaced per-tile inline sizing/avatars with `.mod-tile`; 12 modules = 3 tidy rows.
+
+### Local (on-device AI) — 🟨 phase 1 only
+- ✅ **Entry point** — new **Local** tile in the More panel (badged *new*), route `#/local`.
+- ✅ **Phase-1 audit** — [`local/on-device-audit.md`](local/on-device-audit.md) records MMM's real
+  platform (Vite PWA, no native shell, localStorage + gateway SQLite, no IndexedDB/OPFS yet), the
+  smallest viable integration, and the blockers before a runtime spike: COOP/COEP headers, runtime
+  choice/licence, OPFS storage, no native background downloads, image feasibility unproven.
+- ✅ **Preflight screen** — measures the device live: secure context, WebAssembly, WASM SIMD,
+  threads/COI, WebGPU + adapter, OPFS, persistent storage, quota/free bytes, memory hints; verdict
+  `blocked` / `constrained` / `spike-ready` with actionable reasons.
+- ✅ **Honesty** — no model bundled, no download, no inference, no cloud fallback; the only control is
+  *Re-measure*. Candidate presets are listed as unverified with licence/size caveats.
+- ✅ Evidence: `npm run test:local` (13 checks).
+- ⬜ Phases 2–6 (runtime spike, model manager, offline text, image feasibility/feature) — not started.
+
 ### Mobile-first responsive audit — ✅
 - ✅ Removed the last desktop-first breakpoints: every stylesheet is now authored phone-first
   (`min-width` only; `test:responsive` fails on any `max-width` query).
