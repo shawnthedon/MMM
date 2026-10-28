@@ -1,22 +1,5 @@
-/* ============ Local — on-device AI preflight ============
- * Entry point for the *MMM — On-Device AI Design & Implementation Specification* (v1.0).
- *
- * The spec's phase 1 gate is "audit before coding", and phase 2 is a runtime spike on real
- * hardware. Nothing beyond that is implemented, so this screen does exactly what those gates ask
- * for and nothing more:
- *
- *   • measures the real capabilities of the platform it is running on (WASM, SIMD, threads,
- *     WebGPU, OPFS, storage quota, memory hints) — measurements, not promises;
- *   • states plainly that no model is bundled, no GGUF file is downloaded, no inference runs and
- *     there is no cloud fallback;
- *   • lists the candidate presets from the spec as *unverified candidates*, with the licence and
- *     size caveats the spec demands;
- *   • carries the phase plan with honest statuses so the next implementation starts from evidence.
- *
- * Do not add a "Load model" button here until a real runtime exists: a dead control would violate
- * both the spec ("do not fake progress, inference… or platform support") and this repo's rule that
- * no button may be inert.
- */
+/* Local AI preflight. The experimental runtime lives on a separate spike page; this
+ * screen reports device capabilities and never claims the production feature is complete. */
 import { esc, icon, now } from './core.js';
 import { views } from './views1.js';
 import { toast, on } from './shell.js';
@@ -144,7 +127,7 @@ export function assess(caps = {}) {
 export const STATUS_COPY = {
   blocked: { label: 'Blocked on this platform', chip: 'bad', detail: 'Local inference cannot run here without changing platform (see the blockers).' },
   constrained: { label: 'Possible, with limits', chip: 'warn', detail: 'The platform can host a small GGUF runtime, but expect slow generation and tight memory.' },
-  'spike-ready': { label: 'Ready for a runtime spike', chip: 'ok', detail: 'Nothing is implemented yet — this only says the platform could host phase 2.' },
+  'spike-ready': { label: 'Ready for a runtime spike', chip: 'ok', detail: 'This only describes platform capabilities; the runtime spike has not passed its real-device gate.' },
 };
 
 const formatBytes = (bytes) => {
@@ -158,7 +141,7 @@ const formatBytes = (bytes) => {
 /* ---------- spec content (kept as data so it is easy to audit against the document) ---------- */
 export const PHASES = [
   { id: 1, title: 'Audit', detail: 'Inspect MMM docs, code, platform, build/test and persistence; report before coding.', status: 'this screen' },
-  { id: 2, title: 'Runtime spike', detail: 'Import, load and query a minimal GGUF model offline on intended hardware; record licence, build, memory, speed.', status: 'not started' },
+  { id: 2, title: 'Runtime spike', detail: 'Import, load and query a minimal GGUF model offline on intended hardware; record licence, build, memory, speed.', status: 'in progress' },
   { id: 3, title: 'Model manager', detail: 'Import, catalogue, downloads with real progress, validation, recovery, lifecycle states.', status: 'not started' },
   { id: 4, title: 'Offline text', detail: 'Streaming, cancellation, local history, airplane-mode and privacy tests.', status: 'not started' },
   { id: 5, title: 'Image feasibility', detail: 'Compare mobile-capable image pipelines on real hardware; record speed, memory, heat, quality.', status: 'not started' },
@@ -195,9 +178,9 @@ views.local = {
 
       <div class="banner warn" style="margin-bottom:12px">
         ${icon('shield', 16)}
-        <div><strong>Nothing here is implemented yet.</strong> No model is bundled, nothing is downloaded,
-        no inference runs and there is no cloud fallback. This screen performs the audit gate of the
-        on-device AI specification and measures what this device can actually do.</div>
+        <div><strong>Production local AI is not implemented.</strong> No model is bundled or downloaded.
+        This screen only measures device capabilities; an experimental runtime spike is separate and
+        has not passed its real-device gate. There is no cloud fallback.</div>
       </div>
 
       <div class="card" id="local-preflight">
@@ -215,7 +198,7 @@ views.local = {
       <div class="card">
         ${row('Model files', 'none bundled', 'warn', 'The build ships no weights and no tokenizer.')}
         ${row('Downloads', 'not implemented', 'warn', 'No catalogue fetch, no partial-file recovery, no background notifications.')}
-        ${row('Inference', 'not implemented', 'warn', 'No GGUF runtime, no streaming, no stop/cancel.')}
+        ${row('Production inference', 'not implemented', 'warn', 'Only a separate experimental GGUF spike exists; device validation is pending.')}
         ${row('Image generation', 'not implemented', 'warn', 'Feasibility (phase 5) has not been run on this hardware.')}
         ${row('Cloud fallback', 'never', 'ok', 'The spec forbids a silent fallback; there is nothing to fall back to.')}
       </div>
@@ -258,8 +241,8 @@ views.local = {
 
       <div class="banner info" style="margin-top:14px">
         ${icon('doc', 16)}
-        <div>Next step per the spec is phase 2: a runtime spike on real hardware. It needs a decision on
-        the packaged runtime (licence + ABI), one small quantized model, and a real-device measurement run.</div>
+        <div>Phase 2 is an experimental offline runtime spike, not a finished feature. It needs your own
+        compatible GGUF and a real-device measurement run. <a class="btn" href="./local-spike.html">Open experimental spike</a></div>
       </div>`;
   },
   async mount() {

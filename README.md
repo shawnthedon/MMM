@@ -68,7 +68,7 @@
 | 🧠 | **Model Gateway** — routing, budgets, key vault | 🧩 | **Plugins** — MCP install & scoped grants |
 | 💬 | **Chat** — streaming, inline approvals | 📡 | **Comms** — Telegram · WhatsApp · Discord · Slack · SMS · Browser gateways |
 | 📊 | **Analytics** — KPIs, spend, trust posture | ⚙️ | **Settings** — everything live-tunable |
-| 🧠 | **Local** — on-device AI preflight (nothing installed yet) | 🧭 | **Agent Designer** — guided creation, idle definitions |
+| 🧠 | **Local** — on-device AI preflight + experimental runtime spike (no model bundled) | 🧭 | **Agent Designer** — guided creation, idle definitions |
 | 📁 | **Artifacts & Files** — previews, upload, share | 💻 | **Terminal** — working `swarm` CLI |
 
 ---
@@ -207,6 +207,7 @@ npm run test:skills    # import formats + refusals, quarantine, matrix validatio
 npm run test:comms     # channel status honesty, live-test outcomes, webhook signatures, routing, Copilot comms
 npm run test:responsive # mobile-first CSS rules, tap targets, viewport meta, fluid controls
 npm run test:local     # module-grid geometry + on-device AI preflight (capability probes, honest verdicts)
+npm run test:local-runtime # spike lifecycle and failure checks
 npm run test:isolation # dev/preview HTTP headers + Vercel configuration
 npm run test:kanban    # board zoom, wire geometry, confirm-then-move, Copilot board intents
 npm run test:comms-gateway # server-side credentials, delivery outcomes, retry queue, webhook signatures
@@ -226,6 +227,7 @@ npm run lint        # code style (after Phase-1 tooling)
 | 🔄 [Read Sync](docs/copilot/read-sync.md) | How module screens read the gateway and how demo vs live data is labelled |
 | 🧭 [Agent Designer](docs/copilot/agent-designer.md) | Guided agent creation: steps, validation states, honest boundaries, shortcuts |
 | ⚡ [Skills Hub & Matrix](docs/copilot/skills-hub.md) | Import formats, scanning/quarantine rules, typed relationship matrix, export |
+| 🧪 [Local runtime spike](docs/local/runtime-spike-research.md) | Experimental GGUF/OPFS path, desktop offline evidence, remaining gates |
 | 📱 [Local AI isolation](docs/local/cross-origin-isolation.md) | COOP/COEP, offline-shell checks, browser evidence and limitations |
 | 📡 [Comms gateways](docs/comms/channels.md) | Six channels, adapter contract, signature checks, status model |
 | 🔐 [Comms server-side](docs/comms/server-side.md) | Encrypted credentials, comms routes, delivery outcomes, retry queue, webhooks, fan-out |

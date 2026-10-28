@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f17">
+  <title>Local AI runtime spike · MMM</title>
+  <link rel="stylesheet" href="./src/localSpike.css">
+</head>
+<body>
+  <main>
+    <a href="./#/local">← Back to Local AI</a>
+    <h1>Local AI runtime spike</h1>
+    <p class="notice"><strong>Experimental, not a finished feature.</strong> No model is supplied. You must provide a small compatible GGUF with a licence you can use. This runs a raw text completion, not a chat assistant. Model compatibility, memory safety and mobile performance are unproven.</p>
+    <p>Open this page online first to load the app, import a model and prepare the runtime. Then turn off the network before loading and testing. The model stays in this browser’s private storage; the runtime is same-origin. Nothing is sent to a cloud model.</p>
+    <section aria-labelledby="model-title">
+      <h2 id="model-title">1. Import a model</h2>
+      <p>One file, up to 512 MiB. Replacing it overwrites the previous spike file. Only the GGUF header is checked; a matching header does not prove integrity, safety, licence or compatibility.</p>
+      <label for="model-file">Local GGUF file</label>
+      <input type="file" id="model-file" accept=".gguf,application/octet-stream">
+      <div class="buttons"><button id="import">Import to private storage</button><button id="delete" class="secondary">Delete stored model</button></div>
+      <p id="model-info" aria-live="polite">Checking storage…</p>
+    </section>
+    <section aria-labelledby="run-title">
+      <h2 id="run-title">2. Prepare and test</h2>
+      <div class="buttons"><button id="prepare">Prepare runtime</button><button id="load">Load model</button><button id="unload" class="secondary">Unload runtime</button></div>
+      <label for="prompt">Raw completion prompt</label>
+      <textarea id="prompt" rows="4" maxlength="4000" placeholder="Enter a short prompt"></textarea>
+      <div class="buttons"><button id="generate">Generate locally</button><button id="stop" class="secondary">Stop</button></div>
+      <label for="output">Output</label><pre id="output" aria-live="polite"></pre>
+      <p id="metrics">No measurements yet.</p>
+    </section>
+    <p id="status" role="status" aria-live="polite">Ready.</p>
+    <p class="muted">This page must remain open for the offline test. Runtime assets and the page itself may need a network connection after a reload. Browsers do not reliably expose peak memory, battery or thermal data; record those separately on the target device.</p>
+  </main>
+  <script type="module" src="./src/localSpike.js"></script>
+</body>
+</html>

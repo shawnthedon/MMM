@@ -796,7 +796,7 @@ export function describeScreen(route) {
     models: () => `Model Gateway: ${s.providers.length} providers, ${s.policies.length} routing policies — demo catalogue, no live calls.`,
     plugins: () => `Plugin Marketplace: MCP servers and tool plugins.`,
     telegram: () => `Telegram Bridge: now part of Comms (#/comms) as the Telegram channel — the bridge opens the channel settings; no bot transport is running.`,
-    local: () => 'Local AI: on-device GGUF preflight (spec v1.0, phase 1). No model is bundled, nothing is downloaded and no inference runs — the screen measures WASM, SIMD, threads, WebGPU, OPFS and storage, then states what is blocked and what remains unimplemented.',
+    local: () => 'Local AI: on-device GGUF preflight. No model is bundled or downloaded and no inference runs on this screen. A separate experimental local-runtime spike accepts a user-provided model; mobile-device validation and the production feature remain unfinished, with no cloud fallback.',
     comms: () => {
       const comms = s.comms || {};
       const chans = Object.entries(comms.channels || {});

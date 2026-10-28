@@ -40,7 +40,7 @@
     "audit:verify": "node -e \"import('./apps/gateway/src/db.js').then(m=>console.log(m.verifyAuditChain()))\"",
     "icons": "node scripts/gen-icons.mjs",
     "smoke": "node --import ./scripts/register-css-stub.mjs scripts/smoke.mjs",
-    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:responsive && npm run test:local && npm run test:isolation && npm run test:kanban && npm run test:comms-gateway && npm run test:gateway",
+    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:responsive && npm run test:local && npm run test:local-runtime && npm run test:isolation && npm run test:kanban && npm run test:comms-gateway && npm run test:gateway",
     "test:copilot": "node --import ./scripts/register-css-stub.mjs scripts/copilot-tour.mjs",
     "test:auth": "node --import ./scripts/register-css-stub.mjs scripts/auth-ui-test.mjs",
     "test:gateway": "node --no-warnings scripts/gateway-auth-test.mjs",
@@ -52,6 +52,8 @@
     "test:local": "node --import ./scripts/register-css-stub.mjs scripts/local-test.mjs",
     "test:kanban": "node --import ./scripts/register-css-stub.mjs scripts/kanban-test.mjs",
     "test:comms-gateway": "node --no-warnings scripts/comms-gateway-test.mjs",
+    "test:local-runtime": "node scripts/local-runtime-test.mjs",
+    "test:local-spike:browser": "node scripts/local-spike-browser-test.mjs",
     "test:isolation": "node scripts/isolation-test.mjs",
     "test:isolation:browser": "node scripts/isolation-browser-test.mjs"
   },
@@ -61,6 +63,7 @@
     "vite": "^6.2.0"
   },
   "dependencies": {
+    "@wllama/wllama": "3.8.1",
     "better-sqlite3": "^12.11.1",
     "ws": "^8.22.0"
   }

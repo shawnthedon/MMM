@@ -1,0 +1,20 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b0f17; color: #e8edf6; line-height: 1.5; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
+a { color: #93c5fd; display: inline-flex; min-height: 44px; align-items: center; }
+h1 { font-size: 1.65rem; line-height: 1.2; }
+h2 { font-size: 1.15rem; }
+section, .notice { background: #172132; border: 1px solid #39465a; border-radius: 12px; padding: 16px; margin: 16px 0; }
+.notice { border-color: #b88935; }
+label { display: block; font-weight: 600; margin: 14px 0 6px; }
+input, textarea, button { font: inherit; }
+input, textarea { width: 100%; color: inherit; background: #0b111d; border: 1px solid #61718b; border-radius: 8px; padding: 10px; min-height: 44px; }
+textarea { resize: vertical; }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+button { min-height: 44px; border: 1px solid #7d9bc1; border-radius: 8px; padding: 10px 14px; background: #315c96; color: white; cursor: pointer; }
+button.secondary { background: #263346; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 90px; background: #0b111d; border-radius: 8px; padding: 12px; }
+#status { padding: 12px; border-left: 3px solid #93c5fd; overflow-wrap: anywhere; }
+.muted { color: #b5c2d6; }

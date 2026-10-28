@@ -413,6 +413,12 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
     than guesses. Gateway moves use `PATCH /api/v1/tasks/:id` (`task:write`).
   - Evidence: `npm run test:kanban` (26 checks). Doc: [`kanban/board.md`](kanban/board.md).
 
+- [ ] **Local AI phase 2 runtime spike** — separate `local-spike.html` loads a user-provided GGUF
+  from OPFS through pinned wllama, streams raw completion and unloads. Desktop Chromium offline
+  test passed on a tiny mixed-Q4 fixture; mobile airplane-mode evidence, memory/thermal measurements,
+  broader validation and binary attribution review are still required. No model is bundled; phase 2
+  is **not PASS**. See [`local/runtime-spike-research.md`](local/runtime-spike-research.md).
+
 - [ ] **Local AI isolation prerequisite** — COOP/COEP configured for Vite dev/preview and Vercel;
   old PWA shell cache invalidated. `npm run test:isolation` checks HTTP/config; desktop Chromium
   confirms online/offline isolation and shared WASM memory. Deployed host and mobile verification
