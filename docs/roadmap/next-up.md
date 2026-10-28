@@ -3,6 +3,10 @@
 Written to be picked up cold, without the chat that produced it. Each item lists the files, the data
 model, the edge cases that matter, and "done when" checks that a test can assert.
 
+> **Execution order lives elsewhere.** The ordered plan out of demo mode is
+> [`../PRODUCTION_ROADMAP.md`](../PRODUCTION_ROADMAP.md) (tracks L0–L8 + NFR checklist). This file keeps
+> the per-item acceptance criteria for work that is already specified.
+
 Last updated: 2026-10-28 · Experimental Local AI runtime ran a tiny model in an externally disconnected Linux network namespace; deployed host and mobile devices remain unverified. Runtime phase 2 has not passed.
 
 ---

@@ -11,6 +11,12 @@
 
 ---
 
+> **Sequencing note (added 2026-10-28):** this document owns the **NFR deep dives and milestones
+> M1–M9**. The *execution order* — starting with leaving demo mode and going live — is in
+> [`PRODUCTION_ROADMAP.md`](PRODUCTION_ROADMAP.md), which opens with a per-surface demo inventory and
+> the L0–L8 live-operation track. Work the L-phases first; treat the M-milestones here as the
+> requirements they must satisfy.
+
 ## 🧭 How to use this roadmap
 
 1. Run this track **alongside** the functional checklist (weeks 3+ of development). Non-functional work is not a final polish phase — it's a parallel discipline. Each milestone below says which functional phase it pairs with.
