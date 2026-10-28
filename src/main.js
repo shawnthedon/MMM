@@ -2,11 +2,11 @@
 import './styles.css';
 import './kanban.css';
 import { getState, setState, subscribe, logEvent, now, uid, fmtMoney, commit, esc, pendingApprovals } from './core.js';
-import { renderShell, refreshChrome, applyTheme, toast, closeAllSheets } from './shell.js';
+import { renderShell, refreshChrome, applyTheme, enhanceSwitches, toast, closeAllSheets } from './shell.js';
 import { views } from './views1.js';
 import './views2.js';
 import { loginView } from './authview.js';
-import { getAuth, refreshSession, subscribeAuth } from './auth.js';
+import { getAuth, getAuthVersion, refreshSession, subscribeAuth } from './auth.js';
 import { isApiMode } from './api.js';
 import { initDataSync, isLive as sliceIsLive } from './datastore.js';
 
@@ -38,6 +38,7 @@ export function rerender() {
   if (!viewEl) return;
   const v = views[currentRoute] || views.home;
   viewEl.innerHTML = v.render(currentParams);
+  enhanceSwitches(viewEl);
   v.mount && v.mount(currentParams);
   refreshChrome(currentRoute);
   if (!v.persistent) viewEl.scrollTop = 0;
@@ -157,11 +158,19 @@ function boot() {
     })
     .catch(() => {});
 
+  let commsOwnerVersion = null;
   subscribeAuth((auth) => {
     // Follow the session: adopt server-side channels on sign-in, drop them on sign-out so a stale
     // "verified" badge can never survive.
-    if (auth?.status === 'authenticated' && canReadGatewayComms()) refreshComms({ silent: true }).catch(() => {});
-    else if (auth?.status === 'anonymous' || auth?.status === 'unreachable') releaseComms();
+    if (auth?.status === 'authenticated' && canReadGatewayComms()) {
+      const version = getAuthVersion();
+      if (commsOwnerVersion !== null && commsOwnerVersion !== version) releaseComms();
+      commsOwnerVersion = version;
+      refreshComms({ silent: true }).catch(() => {});
+    } else {
+      commsOwnerVersion = null;
+      releaseComms();
+    }
     refreshChrome(currentRoute);
     // The sign-in view owns its own form state and repaints itself, so a session poll must not
     // clobber what the user is typing.
@@ -183,7 +192,7 @@ function boot() {
         b.id = 'offline-banner';
         b.className = 'banner warn';
         b.style.cssText = 'margin:10px 14px 0;position:sticky;top:calc(env(safe-area-inset-top,0px) + 52px);z-index:30';
-        b.innerHTML = `${esc('⚠')} <div>Offline — cached data shown. Queued actions will sync on reconnect.</div>`;
+        b.innerHTML = `${esc('⚠')} <div>Offline — gateway data may be unavailable or stale. Retry actions after reconnecting.</div>`;
         document.querySelector('.app').insertBefore(b, document.getElementById('view'));
       }
     } else {

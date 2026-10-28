@@ -14,7 +14,8 @@ import { searchKnowledge, knowledgeStats, describeScreen, getEntry } from './kno
 import { pushEpisode, listEpisodes, memorySummary, clearMemory, getPreferences } from './memory.js';
 import { getRuntime, probeGateway } from './runtime.js';
 import { getCapability, STATUS_LABEL } from './capabilities.js';
-import { scheduleRefresh, isLive } from '../datastore.js';
+import { inspectJsonl } from './jsonlInspection.js';
+import { scheduleRefresh, isLive, getStatus } from '../datastore.js';
 
 /* ---------- modes ---------- */
 export const MODES = [
@@ -226,7 +227,7 @@ export async function runDiagnostics() {
   checks.push({
     label: 'Browser connectivity',
     status: rt.online ? 'ok' : 'warn',
-    detail: rt.online ? 'navigator.onLine is true' : 'offline — cached demo data only',
+    detail: rt.online ? 'navigator.onLine is true' : 'offline — cached or in-memory data may be stale',
   });
   let raw = null;
   try {
@@ -248,7 +249,8 @@ export async function runDiagnostics() {
   });
   let sw = 'unknown';
   try {
-    sw = 'serviceWorker' in (globalThis.navigator || {}) ? 'registered' : 'unsupported in this browser';
+    const worker = globalThis.navigator?.serviceWorker;
+    sw = worker?.getRegistration ? ((await worker.getRegistration()) ? 'registered' : 'not registered') : 'registration not verified';
   } catch {
     sw = 'unknown';
   }
@@ -266,9 +268,8 @@ export async function runDiagnostics() {
     type: 'diagnostic',
     checks,
     verdict:
-      failed === 0
-        ? 'All checks passed. Note that a healthy gateway still does not mean the front end is using it — it is not.'
-        : `${failed} check(s) need attention. The app runs on browser demo data regardless — the front end does not call the gateway yet.`,
+      `${failed === 0 ? 'No warnings in these limited checks.' : `${failed} check(s) need attention.`} ` +
+      `Data sync: ${getStatus().status}. Health alone does not prove authorisation, execution or fresh data.`,
     refs: [{ label: 'src/copilot/runtime.js', ref: 'src/copilot/runtime.js', status: 'verified' }],
   };
 }
@@ -302,6 +303,13 @@ export function inspectDataset({ pathPrefix = '' } = {}) {
     { label: 'Empty files', status: empty.length ? 'warn' : 'ok', detail: empty.length ? empty.map((f) => f.path).join(', ') : 'none detected' },
     { label: 'Duplicate paths', status: dupes.length ? 'warn' : 'ok', detail: dupes.length ? `${dupes.length} repeated path(s)` : 'none detected' },
   ];
+  const jsonl = scoped.filter((f) => /\.jsonl$/i.test(f.path));
+  if (jsonl.length) {
+    const results = jsonl.slice(0, 10).map((f) => inspectJsonl(f.content));
+    const failed = results.filter((r) => !r.ok).length;
+    checks.push({ label: 'Inline JSONL syntax', status: failed || jsonl.length > results.length ? 'warn' : 'ok',
+      detail: `${results.length} of ${jsonl.length} file(s) inspected; ${failed} invalid, unavailable or over limit. Object syntax only; schema, content and training safety are not verified.` });
+  }
   if (audio.length) {
     checks.push({
       label: 'Audio validity',
@@ -314,7 +322,7 @@ export function inspectDataset({ pathPrefix = '' } = {}) {
     checks.push({
       label: 'Image dimensions / labels',
       status: 'info',
-      detail: `${images.length} image(s) — no decoder; labels are inferred from filenames only`,
+      detail: `${images.length} image(s) — dimensions and labels were not checked`,
     });
   }
   checks.push({
@@ -328,7 +336,7 @@ export function inspectDataset({ pathPrefix = '' } = {}) {
     title: 'Local dataset check',
     checks,
     verdict:
-      'Metadata checks only. This is not a dataset audit and cannot start a training job — the backend is missing. Items marked “info” were not checked.',
+      'Metadata and bounded inline JSONL syntax checks only. This is not a dataset audit and cannot start a training job — the backend is missing. Items marked “info” were not checked.',
     refs: [{ label: 'src/copilot/orchestrator.js — inspectDataset()', ref: 'src/copilot/orchestrator.js', status: 'verified' }],
   };
 }
@@ -989,7 +997,7 @@ async function operateIntent(lc, raw, ctx) {
             ? `${out.reply}\nResult: ${result.detail}`
             : `${out.reply}\nResult: failed — ${result.error}`,
           {
-            title: result.ok ? 'Channel test delivered' : 'Channel test failed',
+            title: result.ok ? 'Channel test accepted' : 'Channel test failed',
             confidence: 'verified',
             refs: [{ label: 'src/commsAdapters.js — adapter + live delivery', ref: 'src/commsAdapters.js', status: 'verified' }],
           }

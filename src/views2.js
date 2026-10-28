@@ -484,7 +484,7 @@ on('plugin-custom', () => {
     toast('Custom MCP server added (health check running)', 'ok');
   });
 });
-on('toggle-perm', (el) => { el.classList.toggle('on'); });
+on('toggle-perm', (el) => { el.classList.toggle('on'); if (el.getAttribute('role') === 'switch') el.setAttribute('aria-checked', String(el.classList.contains('on'))); });
 
 /* ================= CHAT ================= */
 views.chat = {
@@ -646,7 +646,7 @@ views.telegram = {
       <div class="card">
         <div class="row between">
           <div class="row">
-            <div class="avatar" style="background:var(--brand);color:#fff">${icon('send', 18)}</div>
+            <div class="avatar" style="background:var(--accent-hover);color:var(--text-on-accent)">${icon('send', 18)}</div>
             <div>
               <div class="strong small">${esc(tg.botName)}</div>
               <div class="tiny muted">${tg.linked ? 'linked · polling' : 'not linked'}</div>
@@ -896,9 +896,8 @@ views.settings = {
       <div class="section-title">Appearance</div>
       <div class="card">
         <div class="kv"><span class="k">Theme</span>
-          <div class="seg seg-fit">
-            <button class="${st.theme === 'dark' ? 'active' : ''}" data-act="set-theme" data-v="dark">Dark</button>
-            <button class="${st.theme === 'light' ? 'active' : ''}" data-act="set-theme" data-v="light">Light</button>
+          <div class="seg theme-modes" role="group" aria-label="Appearance mode">
+            ${[['dark', 'Dark'], ['light', 'Light'], ['oled', 'OLED black'], ['high-contrast', 'High contrast']].map(([value, label]) => `<button class="${st.theme === value ? 'active' : ''}" data-act="set-theme" data-v="${value}" aria-pressed="${st.theme === value}">${label}</button>`).join('')}
           </div>
         </div>
         <div class="kv"><span class="k">Density</span>
@@ -986,6 +985,7 @@ views.settings = {
 };
 
 on('set-theme', (el, ds) => {
+  if (!['dark', 'light', 'oled', 'high-contrast'].includes(ds.v)) return;
   setState((s) => { s.settings.theme = ds.v; }, 'theme');
   applyTheme(); import('./main.js').then((m) => m.rerender());
 });

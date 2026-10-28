@@ -10,11 +10,12 @@ let state = {
 
 const listeners = new Set();
 
-import { gatewayUrl } from '../api.js';
+import { gatewayUrl, api } from '../api.js';
+import { getStatus } from '../datastore.js';
 
 /** The gateway the app is actually configured to use (falls back to the dev default). */
 function defaultUrl() {
-  return gatewayUrl() || 'http://localhost:8787';
+  return gatewayUrl() || '';
 }
 
 export function getRuntime() {
@@ -42,56 +43,26 @@ export function setOnline(online) {
 }
 
 /** Real fetch with a hard timeout. No canned success: failures are reported as failures. */
+let probeVersion = 0;
 export async function probeGateway({ timeoutMs = 1500 } = {}) {
-  const url = state.gateway.url;
-  state = { ...state, gateway: { ...state.gateway, status: 'checking', detail: 'probing /healthz' } };
-  emit();
-
-  if (typeof fetch !== 'function') {
-    state = { ...state, gateway: { status: 'unknown', url, checkedAt: Date.now(), detail: 'fetch unavailable in this environment' } };
+  const version = ++probeVersion;
+  const url = defaultUrl();
+  if (!url) {
+    state = { ...state, gateway: { status: 'unknown', url: '', checkedAt: Date.now(), detail: 'no gateway configured' } };
     emit();
     return getRuntime().gateway;
   }
-
-  const controller = typeof AbortController === 'function' ? new AbortController() : null;
-  const timer = setTimeout(() => controller?.abort(), timeoutMs);
+  state = { ...state, gateway: { status: 'checking', url, checkedAt: null, detail: 'probing /healthz' } };
+  emit();
   try {
-    const res = await fetch(`${url}/healthz`, {
-      method: 'GET',
-      signal: controller?.signal,
-      headers: { Accept: 'application/json' },
-      credentials: 'include',
-      cache: 'no-store',
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      state = { ...state, gateway: { status: 'unreachable', url, checkedAt: Date.now(), detail: `HTTP ${res.status}` } };
-    } else {
-      const body = await res.json().catch(() => ({}));
-      state = {
-        ...state,
-        gateway: {
-          status: 'reachable',
-          url,
-          checkedAt: Date.now(),
-          detail: body?.ok
-            ? `ok · sqlite ${body.db || 'unknown'} · ${body.auth?.mode === 'dev-open' ? 'auth OPEN (dev)' : 'auth ' + (body.auth?.mode || 'unknown')}`
-            : 'responded without ok flag',
-        },
-      };
-    }
+    const response = await api.health({ timeoutMs });
+    if (version !== probeVersion || url !== defaultUrl()) return getRuntime().gateway;
+    const body = response.body || {};
+    state = { ...state, gateway: { status: body.ok ? 'reachable' : 'unreachable', url, checkedAt: Date.now(),
+      detail: body.ok ? `ok · sqlite ${body.db || 'unknown'} · auth ${body.auth?.mode || 'unknown'}` : 'responded without ok flag' } };
   } catch (err) {
-    clearTimeout(timer);
-    const aborted = err?.name === 'AbortError';
-    state = {
-      ...state,
-      gateway: {
-        status: 'unreachable',
-        url,
-        checkedAt: Date.now(),
-        detail: aborted ? `no response in ${timeoutMs} ms` : 'network/CORS error',
-      },
-    };
+    if (version !== probeVersion || url !== defaultUrl()) return getRuntime().gateway;
+    state = { ...state, gateway: { status: 'unreachable', url, checkedAt: Date.now(), detail: err.code === 'timeout' ? `no response in ${timeoutMs} ms` : 'network or gateway error' } };
   }
   emit();
   return getRuntime().gateway;
@@ -106,5 +77,7 @@ export const runtimeLabel = (rt = getRuntime()) => {
         : rt.gateway.status === 'unreachable'
           ? 'gateway unreachable'
           : 'gateway unprobed';
-  return `Demo data · ${gw}${rt.online ? '' : ' · offline'}`;
+  const sync = getStatus();
+  const data = sync.status === 'live' ? 'Gateway data' : sync.liveSlices.length ? 'Stale gateway data' : 'Demo data';
+  return `${data} · ${gw}${rt.online ? '' : ' · offline'}`;
 };

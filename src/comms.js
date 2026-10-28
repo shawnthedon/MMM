@@ -10,6 +10,8 @@
  * With no credentials and no outbound network the panel still works: it counts as unconfigured and
  * says so instead of pretending a bot is polling.
  */
+import { isApiMode } from './api.js';
+import { getAuthVersion } from './auth.js';
 import { getState, setState, esc, icon, logEvent, now, uid, pendingApprovals, fmtMoney, getAgent } from './core.js';
 import { openSheet, toast, on, confirmModal, closeAllSheets } from './shell.js';
 import { views } from './views1.js';
@@ -20,7 +22,7 @@ import {
 import { deliver, capabilities, adapterFor } from './commsAdapters.js';
 import {
   canReadGatewayComms, canWriteGatewayComms, commsIsGateway, refreshComms, releaseComms,
-  saveChannelOnGateway, sendOnGateway, gatewayCommsState, commsSourceLabel, runQueueOnGateway,
+  saveChannelOnGateway, saveSettingsOnGateway, sendOnGateway, gatewayCommsState, commsSourceLabel, runQueueOnGateway,
 } from './commsGateway.js';
 import './comms.css';
 
@@ -47,7 +49,7 @@ const rerender = () => import('./main.js').then((m) => m.rerender()).catch(() =>
 export async function saveChannelConfig(id, configPatch) {
   const channel = getChannel(id);
   if (!channel) return { ok: false, error: `Unknown channel “${id}”.` };
-  if (canReadGatewayComms()) {
+  if (isApiMode()) {
     const out = await saveChannelOnGateway(id, configPatch);
     if (!out.ok) return out;
     return { ok: true, mode: 'gateway', status: record(id).status };
@@ -70,6 +72,7 @@ export async function saveChannelConfig(id, configPatch) {
 }
 
 export function toggleChannel(id, enabled) {
+  if (isApiMode()) return { ok: false, error: 'Gateway channels must be changed on the server.' };
   const rec = record(id);
   const willEnable = enabled === undefined ? !rec.enabled : Boolean(enabled);
   if (willEnable) {
@@ -89,10 +92,12 @@ export function toggleChannel(id, enabled) {
 export async function sendTest(id, { text = 'SwarmOS test message — gateway reachable.', fetchImpl } = {}) {
   const channel = getChannel(id);
   if (!channel) return { ok: false, error: `Unknown channel “${id}”.` };
-  if (canReadGatewayComms()) {
+  if (isApiMode()) {
+    const version = getAuthVersion();
     // Server-side delivery: the gateway holds the credentials and reports the provider's answer.
     const out = await sendOnGateway(id, text);
     if (!out.ok) return out;
+    if (version !== getAuthVersion()) return { ok: false, error: 'Session changed during delivery; check the gateway for the result.' };
     const delivered = out.delivered;
     setState((s) => {
       s.comms.log = [{
@@ -135,6 +140,10 @@ export async function sendTest(id, { text = 'SwarmOS test message — gateway re
 
 /** Send an operational message to a channel (used by routing). Never fabricates success. */
 export async function sendMessage(id, text, opts = {}) {
+  if (isApiMode()) {
+    const out = await sendOnGateway(id, text);
+    return out.ok ? { ...out, ok: out.delivered, error: out.delivered ? undefined : out.error } : out;
+  }
   const rec = record(id);
   if (!rec.enabled) return { ok: false, reason: 'disabled', error: `${getChannel(id)?.label} is disabled.` };
   const result = await deliver(id, rec.config, { text, title: opts.title || 'SwarmOS' }, opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : undefined);
@@ -146,6 +155,7 @@ export async function sendMessage(id, text, opts = {}) {
 
 /** Route an agent's reports to a channel (or detach). Stored as configuration, not a promise. */
 export function routeAgent(id, agentId, attach = true) {
+  if (isApiMode()) return { ok: false, error: 'Gateway routing must be changed on the server.' };
   const agent = getAgent(agentId) || getState().agents.find((a) => a.name === agentId);
   if (!agent) return { ok: false, error: `Unknown agent “${agentId}”.` };
   setState((s) => {
@@ -160,7 +170,38 @@ export function routeAgent(id, agentId, attach = true) {
 }
 
 export function setCommandAllowed(cmd, allowed) {
+  if (isApiMode()) return { ok: false, error: 'Gateway commands must be changed on the server.' };
   setState((s) => { s.comms.commands[cmd] = Boolean(allowed); }, 'comms-command');
+  return { ok: true };
+}
+
+
+// UI write-through helpers. The synchronous functions above are demo-only; no optimistic
+// local state is presented as a server change.
+export async function toggleChannelStored(id, enabled) {
+  if (!isApiMode()) return toggleChannel(id, enabled);
+  const willEnable = enabled === undefined ? !record(id).enabled : Boolean(enabled);
+  const out = await saveChannelOnGateway(id, {}, { enabled: willEnable });
+  return out.ok ? { ...out, enabled: willEnable } : out;
+}
+
+export async function routeAgentStored(id, agentId, attach = true) {
+  if (!isApiMode()) return routeAgent(id, agentId, attach);
+  if (!getAgent(agentId)) return { ok: false, error: `Unknown agent “${agentId}”.` };
+  const agents = new Set(record(id).routing?.agents || []);
+  if (attach) agents.add(agentId); else agents.delete(agentId);
+  return saveChannelOnGateway(id, {}, { routing: { agents: [...agents] } });
+}
+
+export async function setCommandAllowedStored(cmd, allowed) {
+  if (!isApiMode()) return setCommandAllowed(cmd, allowed);
+  return saveSettingsOnGateway({ commands: { [cmd]: Boolean(allowed) } });
+}
+
+export async function routeCopilotStored(id) {
+  const copilot = !record(id).routing?.copilot;
+  if (isApiMode()) return saveChannelOnGateway(id, {}, { routing: { copilot } });
+  setState((s) => { s.comms.channels[id].routing.copilot = copilot; }, 'comms-route-copilot');
   return { ok: true };
 }
 
@@ -276,6 +317,9 @@ export function commsCommand(raw) {
   }
   if (/^(connect|configure|set up|setup|enable)\b/.test(lower) && channelMatch) {
     return { ok: false, reason: 'needs_credentials', channel: channelMatch.id, reply: `Open Comms → ${channelMatch.label} to enter credentials. I never accept secrets in chat, and saving them does not verify the channel.` };
+  }
+  if (isApiMode() && channelMatch && /\b(test|route|mute|quiet|wake|unmute|resume)\b/.test(lower)) {
+    return { ok: false, reason: 'governance_unavailable', reply: 'Gateway Copilot channel actions are unavailable until server-bound approvals and governance are implemented. Use the Comms panel if authorised.' };
   }
   if (/(^|\b)test( (message|msg))?( (to|on))?\b/.test(lower) && channelMatch && !/latest|status/.test(lower)) {
     return { ok: 'async', run: () => sendTest(channelMatch.id), channel: channelMatch.id, reply: `Sending a real test to ${channelMatch.label}…` };
@@ -446,7 +490,7 @@ function channelSheet(id) {
           </div>`;
         }).join('')}
         <div class="tiny muted">Saved values are never echoed back: secrets render as ••••last4. Changing any field clears the verification badge.
-        ${canReadGatewayComms() ? 'These values are stored encrypted on the gateway and never returned to this browser.' : 'No gateway session — these values are kept in this browser only.'}</div>
+        ${canReadGatewayComms() ? 'These values are stored encrypted on the gateway and never returned to this browser.' : isApiMode() ? 'Gateway session or permission required; saving is blocked.' : 'Demo mode — these values are kept in this browser only.'}</div>
         ${missing.length ? `<div class="tiny" style="color:var(--warning);margin-top:6px">Still required to send: ${esc(missing.join(', '))}</div>` : ''}
         ${missingIn.length ? `<div class="tiny" style="color:var(--warning);margin-top:4px">Inbound webhooks cannot verify yet: ${esc(missingIn.join(', '))}</div>` : ''}
       </div>
@@ -538,8 +582,8 @@ on('comms-queue', async () => {
     : out.error, out.ok ? 'ok' : 'bad');
   rerender();
 });
-on('comms-toggle', (el, ds) => {
-  const out = toggleChannel(ds.id);
+on('comms-toggle', async (el, ds) => {
+  const out = await toggleChannelStored(ds.id);
   if (!out.ok) toast(out.error, 'bad');
   else toast(`${getChannel(ds.id)?.label} ${out.enabled ? 'enabled' : 'disabled'}`, out.enabled ? 'ok' : '');
   rerender();
@@ -556,22 +600,21 @@ on('comms-test', async (el, ds) => {
   );
   rerender();
 });
-on('comms-route-copilot', (el, ds) => {
-  setState((s) => {
-    const rec = s.comms.channels[ds.id];
-    rec.routing = rec.routing || { copilot: true, agents: [] };
-    rec.routing.copilot = !rec.routing.copilot;
-  }, 'comms-route-copilot');
+on('comms-route-copilot', async (el, ds) => {
+  const out = await routeCopilotStored(ds.id);
+  if (!out.ok) toast(out.error, 'bad');
   rerender();
 });
-on('comms-route-agent', (el, ds) => {
+on('comms-route-agent', async (el, ds) => {
   const current = (record(ds.id).routing?.agents || []).includes(ds.agent);
-  routeAgent(ds.id, ds.agent, !current);
+  const out = await routeAgentStored(ds.id, ds.agent, !current);
+  if (!out.ok) toast(out.error, 'bad');
   rerender();
 });
-on('comms-set-command', (el, ds) => {
+on('comms-set-command', async (el, ds) => {
   const current = Boolean(commsState().commands?.[ds.cmd]);
-  setCommandAllowed(ds.cmd, !current);
+  const out = await setCommandAllowedStored(ds.cmd, !current);
+  if (!out.ok) toast(out.error, 'bad');
   rerender();
 });
 on('comms-commands', () => commandSheet());

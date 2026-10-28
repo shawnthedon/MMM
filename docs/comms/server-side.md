@@ -53,7 +53,7 @@ Public routes still record everything: an unsigned inbound call is answered `401
 * Verified only by a provider-accepted send. A `4xx` is a failure; it is **not** retried.
 * `network` / `timeout` / `rate_limited` / `server_error` are queued and retried with backoff
   `30s, 2m, 5m, 15m…` capped at 1 h, until `retryLimit` (default 3), then `failed`.
-* Per-channel rate limit (`rateLimitPerMin`, default 20 sent/minute) defers excess to the next minute.
+* Queue processing checks `rateLimitPerMin` (default 20/minute); immediate sends and concurrent workers do not have a complete enforced rate limit.
 * Quiet hours (`22:00-06:00`, wraps midnight) hold outbound mail instead of sending it; the send route
   answers `202` with `reason: quiet_hours`.
 * The background ticker (`processQueue` every 60 s) is `unref()`'d and disabled with
@@ -64,7 +64,7 @@ Public routes still record everything: an unsigned inbound call is answered `401
 Signature first, then parse — never the other way round. Supported today:
 
 * Telegram `X-Telegram-Bot-Api-Secret-Token` (shared secret, constant-time compare)
-* Meta/WhatsApp `X-Hub-Signature-256` = HMAC-SHA256 of the **raw** body keyed with the access token
+* Meta/WhatsApp `X-Hub-Signature-256` = HMAC-SHA256 of the **raw** body keyed with the Meta app secret (not the access token)
 * Slack `X-Slack-Signature` `v0=` HMAC over `v0:timestamp:body` with a 5-minute replay window
 * Discord interactions: Ed25519 (adapter rejects honestly — no key material is bundled)
 * Twilio SMS: signature over the sorted form params (form-encoded bodies are accepted)
@@ -89,14 +89,13 @@ than losing or faking it. Dedupe keys (`task-done:<id>`, `approval:<id>`) stop r
   are surfaced as `Gateway refused: …`.
 * Signing out (`releaseComms`) drops the adopted rows so a stale "verified" badge cannot survive, and
   the persist filter refuses to write gateway-owned comms to `localStorage`.
-* With no session the panel keeps its old browser-only behaviour and says so in the banner — the two
-  modes are never mixed.
+* Browser-only credential storage is available only in demo mode. With a configured but unauthenticated or unauthorized gateway, mutations and sends are blocked.
 
 ## 7. What is still not done
 
 * **Outbound queue is in-process.** A restart keeps queued rows (they are in SQLite) but the retry
   ticker only runs while the gateway is up; there is no separate worker or scheduled job.
-* **No provider-side rate-limit headers** are parsed (we only enforce our own counter).
+* **Rate limits are incomplete:** direct sends bypass the queue counter; provider-side rate-limit headers are not parsed.
 * **Discord interactions** need Ed25519 verification with the app public key: the adapter refuses
   instead of pretending, so Discord inbound is not usable yet.
 * **Web Push (VAPID)** for the browser channel is not implemented; the "browser" channel delivers
@@ -104,18 +103,20 @@ than losing or faking it. Dedupe keys (`task-done:<id>`, `approval:<id>`) stop r
 * **Secrets rotation** requires re-saving the field (no multi-key ring yet).
 * Delivery of a **template** message (WhatsApp 24-hour window) is available in the adapter
   (`msg.template`) but the panel does not expose template selection.
-* Everything above is blocked on *your* side only by credentials; the sandbox cannot reach
-  `api.telegram.org` / `graph.facebook.com`, so local verification of a real send requires a machine
-  with outbound network and a real token.
+* Live provider verification requires authorised credentials, reachable provider networks and completed production security review; mock tests are not delivery evidence. OpenSMS and browser control are not implemented.
 
 ## 8. Evidence
 
 ```bash
-npm run test:comms-gateway   # 27 checks: RBAC, encryption at rest, masking, save≠verify, delivery
+npm run test:comms-gateway   # 28 checks: RBAC, encryption at rest, masking, save≠verify, delivery
                              # outcomes, retry/backoff/limits, quiet hours, dedupe, redaction,
                              # signature gating, replay, handshakes, fan-out, audit, settings
-npm run test:comms           # 22 checks: panel + adapters + the browser gateway path
+npm run test:comms           # 23 checks: panel + adapters + the browser gateway path
 ```
 
 Credentials you would need for a live end-to-end check are listed in
 [`credentials.md`](credentials.md).
+
+## 9. 2026-10-28 hardening
+
+SMS outbound is restricted to the official HTTPS Twilio endpoint; redirects are refused to avoid exposing credentials or reaching arbitrary hosts. OpenSMS uses a different Bearer/JSON API and is **not** implemented. Existing non-Twilio `baseUrl` values remain stored but sending them fails closed. Twilio inbound now requires the exact configured public webhook URL and base64 signature; WhatsApp requires the separate Meta app secret. Existing WhatsApp configurations need this new field before inbound can be accepted.

@@ -13,8 +13,8 @@
 export const REL_TYPES = {
   depends_on: { label: 'Depends on', hint: 'A requires B before it can run.', cycle: true, dash: '0', weight: 2, marker: true, color: 'var(--brand)' },
   complements: { label: 'Complements', hint: 'A and B improve each other; neither requires the other.', cycle: false, dash: '5 4', weight: 1.6, marker: false, color: 'var(--success)' },
-  inherits_from: { label: 'Inherits from', hint: 'A references approved behaviour from B.', cycle: true, dash: '2 3', weight: 1.8, marker: true, color: 'var(--accent-2, #A78BFA)' },
-  composes_with: { label: 'Composes with', hint: 'A and B combine into a larger procedure.', cycle: true, dash: '8 3', weight: 1.8, marker: false, color: '#38BDF8' },
+  inherits_from: { label: 'Inherits from', hint: 'A references approved behaviour from B.', cycle: true, dash: '2 3', weight: 1.8, marker: true, color: 'var(--accent-2)' },
+  composes_with: { label: 'Composes with', hint: 'A and B combine into a larger procedure.', cycle: true, dash: '8 3', weight: 1.8, marker: false, color: 'var(--accent-secondary)' },
   triggers: { label: 'Triggers', hint: 'A may suggest/start B under a stated condition.', cycle: true, dash: '1 4', weight: 1.5, marker: true, color: 'var(--warning)' },
   conflicts_with: { label: 'Conflicts with', hint: 'The combination is invalid and must be resolved.', cycle: false, dash: '4 4', weight: 2, marker: false, color: 'var(--danger)' },
   supersedes: { label: 'Supersedes', hint: 'The newer skill replaces the older for a defined purpose.', cycle: true, dash: '10 4', weight: 1.8, marker: true, color: 'var(--text-2)' },

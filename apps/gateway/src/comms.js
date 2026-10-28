@@ -542,7 +542,10 @@ export async function handleInbound(channelId, { headers = {}, rawBody = '', jso
     return { ok: true, code: 200, duplicate: true, reply: 'Already processed.' };
   }
   let payload = json;
-  if (!payload) { try { payload = JSON.parse(rawBody); } catch { payload = null; } }
+  if (!payload) {
+    if (channelId === 'sms') payload = Object.fromEntries(new URLSearchParams(rawBody));
+    else { try { payload = JSON.parse(rawBody); } catch { payload = null; } }
+  }
   const parsed = adapter.parseInbound(payload);
   if (!parsed) {
     recordMessage({ channel: channelId, direction: 'in', body: '', status: 'rejected', reason: 'unparsed', detail: 'No message in payload.', createdBy: 'webhook', dedupeKey });

@@ -2,7 +2,7 @@
 
 Nothing here is needed to use the panel: an unconfigured channel simply reports
 `Not configured`. Fill a channel's outbound fields to move it to **Configured · unverified**, then run
-**Send test** to reach **Delivery verified**.
+**Send test** to reach **Send accepted**. Provider acceptance is not a delivery receipt.
 
 ## Where the values go
 
@@ -45,6 +45,7 @@ Env names: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_CHAT_ID`.
 | `phoneNumberId` | WhatsApp → API setup | yes |
 | `recipient` | destination number, E.164 | yes |
 | `verifyToken` | your own string, echoed in Meta's GET handshake | for inbound |
+| `appSecret` | Meta app secret, distinct from the access token; verifies body signatures | for inbound |
 | `wabaId` | WhatsApp Business Account id | for templates |
 
 Env: `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN`.
@@ -73,14 +74,16 @@ Note: interactions must be ACKed within 3 seconds (`{type: 5}` deferred response
 Env: `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_CHANNEL`.
 Note: Slack returns HTTP 200 with `{"ok":false}` on failure — the adapter treats that as failure.
 
-## SMS (Twilio or OpenSMS-compatible)
+> The environment-variable names below describe intended mappings; the gateway does not automatically import provider credentials from those variables. Configure channels through the authenticated gateway panel/API.
+
+## SMS (Twilio; OpenSMS not implemented)
 | Field | Where to get it | Required |
 | --- | --- | --- |
 | `accountSid` | console dashboard | yes |
 | `authToken` | console dashboard (also verifies webhooks) | yes |
 | `from` | a provisioned sender number | yes |
 | `to` | on-call number | yes |
-| `baseUrl` | provider base (defaults to `https://api.twilio.com`) | optional |
+| `baseUrl` | only `https://api.twilio.com` is allowed (default) | optional |
 | `webhookUrl` | the exact public URL Twilio posts to — part of the signature | for inbound |
 
 Env: `SMS_BASE_URL`, `SMS_ACCOUNT_SID`, `SMS_AUTH_TOKEN`, `SMS_FROM`.

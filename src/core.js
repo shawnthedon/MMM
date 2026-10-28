@@ -74,7 +74,7 @@ export const icons = {
 export const icon = (n, s) => (icons[n] ? icons[n].replace(/width="\d+" height="\d+"/, `width="${s || 22}" height="${s || 22}"`) : '');
 
 /* ---------- avatars ---------- */
-const AV_COLORS = ['#6C8CFF', '#22D3EE', '#F472B6', '#FBBF24', '#34D399', '#A78BFA', '#F87171', '#38BDF8'];
+const AV_COLORS = ['var(--avatar-1)', 'var(--avatar-2)', 'var(--avatar-3)', 'var(--avatar-4)', 'var(--avatar-5)', 'var(--avatar-6)', 'var(--avatar-7)', 'var(--avatar-8)'];
 export const avatarColor = (name) => AV_COLORS[[...String(name)].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];
 export const initials = (name) => String(name).split(/[\s-_]+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 export const avatar = (name, cls = '') =>

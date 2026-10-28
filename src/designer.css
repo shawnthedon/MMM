@@ -14,7 +14,7 @@
   background: var(--elevated); color: var(--text-2); font-size: 10px; font-weight: 700;
 }
 .dsn-step.on { color: var(--text); border-color: color-mix(in srgb, var(--brand) 55%, var(--border)); background: color-mix(in srgb, var(--brand) 14%, var(--surface)); }
-.dsn-step.on .n { background: var(--brand); color: #0b0f17; }
+.dsn-step.on .n { background: var(--accent-hover); color: var(--text-on-accent); }
 .dsn-step:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 .dsn-map { display: flex; flex-direction: column; gap: 0; }

@@ -46,7 +46,7 @@ const html = () => view()?.innerHTML || '';
 check('boot renders shell', () => {
   if (!win.document.querySelector('.topbar')) throw new Error('no topbar');
   if (!win.document.querySelector('.tabbar')) throw new Error('no tabbar');
-  if (!html().includes('Good')) throw new Error('home not rendered');
+  if (!html().includes('Command deck')) throw new Error('home not rendered');
 });
 
 check('the header keeps the workspace mark but not the workspace name text', () => {

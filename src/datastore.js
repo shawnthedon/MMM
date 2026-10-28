@@ -11,7 +11,8 @@
  */
 import { getState, replaceSlices, setProvenance, getProvenance, isLive, setPersistFilter, resetDemo } from './core.js';
 import { api, ApiError, isApiMode, gatewayUrl } from './api.js';
-import { getAuth, subscribeAuth, isAuthenticated } from './auth.js';
+import { getAuth, getAuthVersion, subscribeAuth, isAuthenticated, refreshSession } from './auth.js';
+import { demoCommsForPersistence } from './commsGateway.js';
 
 export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events'];
 export const LOCAL_SLICES = ['swarms', 'teams', 'usage'];
@@ -30,6 +31,8 @@ const sync = {
 let demoSnapshot = null; // pre-gateway slices, restored on sign-out
 let refreshTimer = null;
 let refreshInFlight = null;
+let syncGeneration = 0;
+let ownerVersion = null;
 
 /* ---------- formatting adapters (server columns → app shape) ---------- */
 const arr = (value) => (Array.isArray(value) ? value : []);
@@ -121,16 +124,14 @@ function captureDemo() {
 
 /** Keep gateway rows out of localStorage; the server is their only owner. */
 setPersistFilter((state) => {
-  if (!demoSnapshot) return state;
   const out = { ...state };
   for (const slice of GATEWAY_SLICES) {
-    if (state.provenance?.[slice] === 'gateway') out[slice] = demoSnapshot[slice];
+    if (state.provenance?.[slice] === 'gateway' && demoSnapshot) out[slice] = demoSnapshot[slice];
   }
   // Comms channels are gateway-owned when a session holds comms:read: the statuses and masked
   // configuration must not survive in localStorage, where they would later look live.
   if (state.provenance?.comms === 'gateway') {
-    out.comms = { ...(state.comms || {}), log: [], channels: undefined };
-    delete out.comms.channels;
+    out.comms = demoCommsForPersistence();
     out.commsGateway = { status: 'demo', note: 'gateway rows are not persisted', error: null, at: null };
   }
   return out;
@@ -167,7 +168,10 @@ export function subscribeData(fn) {
 /** Why a slice is not live, in plain language (used by the UI). */
 export function sourceExplanation(slice) {
   const st = getStatus();
-  if (st.provenance[slice] === 'gateway') return { source: 'gateway', label: 'live gateway', detail: `${st.url} · refreshed ${st.at ? new Date(st.at).toLocaleTimeString() : '—'}` };
+  if (st.provenance[slice] === 'gateway') {
+    if (st.status === 'error' || st.status === 'degraded') return { source: 'gateway', label: 'stale gateway data', detail: st.error || 'The last gateway refresh failed.' };
+    return { source: 'gateway', label: 'live gateway', detail: `${st.url} · refreshed ${st.at ? new Date(st.at).toLocaleTimeString() : '—'}` };
+  }
   if (!isApiMode()) return { source: 'demo', label: 'demo data', detail: 'No gateway configured — seeded fixtures in this browser. Nothing is enforced.' };
   if (st.status === 'degraded' || st.status === 'error') {
     return { source: 'demo', label: 'demo data (gateway unavailable)', detail: st.error || 'The last refresh failed, so no gateway rows are shown.' };
@@ -188,7 +192,7 @@ function adopt(data, { requestId = null } = {}) {
   const approvals = data.approvals.map(adaptApproval);
   const events = data.events.map(adaptEvent).sort((a, b) => b.ts - a.ts).slice(0, 80);
 
-  replaceSlices({ agents, tasks, approvals, events }, 'data:gateway');
+  // Set ownership before publishing rows to subscribers or persistence.
   // Slices without a server store stay local and keep their demo provenance.
   setProvenance({
     agents: 'gateway',
@@ -199,6 +203,7 @@ function adopt(data, { requestId = null } = {}) {
     teams: 'demo',
     usage: 'demo',
   });
+  replaceSlices({ agents, tasks, approvals, events }, 'data:gateway');
   // Reflect the real gateway in the demo `gateway` object so header dots are not lies.
   replaceSlices(
     {
@@ -221,6 +226,8 @@ function adopt(data, { requestId = null } = {}) {
 
 /** Restore the pre-gateway fixtures and forget gateway rows. */
 export function releaseGatewayData({ reason = 'signed-out' } = {}) {
+  syncGeneration += 1;
+  refreshInFlight = null;
   disconnectLive();
   clearTimeout(refreshTimer);
   refreshTimer = null;
@@ -275,10 +282,15 @@ export function refresh(options = {}) {
     Object.assign(sync, { status: 'loading' });
     emit();
   }
-  refreshInFlight = fetchAll()
-    .then((data) => ({ ok: true, counts: adopt(data, { requestId: data.requestId }) }))
+  const version = getAuthVersion();
+  const generation = syncGeneration;
+  const current = () => generation === syncGeneration && version === getAuthVersion() && isAuthenticated();
+  const promise = fetchAll()
+    .then((data) => current() ? ({ ok: true, counts: adopt(data, { requestId: data.requestId }) }) : ({ ok: false, reason: 'session-changed' }))
     .catch((err) => {
+      if (!current()) return { ok: false, reason: 'session-changed' };
       const unauthenticated = err instanceof ApiError && err.unauthenticated;
+      if (err instanceof ApiError && (err.forbidden || err.unauthenticated)) releaseGatewayData({ reason: 'refresh-denied' });
       Object.assign(sync, {
         status: unauthenticated ? 'degraded' : 'error',
         error: unauthenticated
@@ -291,9 +303,10 @@ export function refresh(options = {}) {
       return { ok: false, error: sync.error, status: err?.status || 0 };
     })
     .finally(() => {
-      refreshInFlight = null;
+      if (refreshInFlight === promise) refreshInFlight = null;
     });
-  return refreshInFlight;
+  refreshInFlight = promise;
+  return promise;
 }
 
 /** Debounced refresh used by the live stream. */
@@ -352,8 +365,11 @@ export function connectLive() {
     return;
   }
   socket = ws;
+  const version = getAuthVersion();
+  const current = () => socket === ws && version === getAuthVersion() && isAuthenticated();
 
   ws.onopen = () => {
+    if (!current()) return;
     reconnectAttempt = 0;
     setWs('open');
     try {
@@ -364,6 +380,7 @@ export function connectLive() {
     refresh({ silent: true });
   };
   ws.onmessage = (event) => {
+    if (!current()) return;
     let msg = null;
     try {
       msg = JSON.parse(typeof event.data === 'string' ? event.data : String(event.data));
@@ -373,8 +390,9 @@ export function connectLive() {
     Object.assign(sync, { lastEventAt: Date.now() });
     if (msg?.type === 'hello') {
       if (msg.principal && getAuth().principal && msg.principal.id !== getAuth().principal.id) {
-        // Credentials changed underneath us; refetch through the HTTP paths instead.
+        // Credentials changed underneath us: drop the old view immediately and reauthenticate.
         disconnectLive();
+        refreshSession().catch(() => {});
       }
       return;
     }
@@ -391,6 +409,7 @@ export function connectLive() {
     /* onclose handles the state machine */
   };
   ws.onclose = (event) => {
+    if (socket !== ws) return;
     socket = null;
     if (!isApiMode() || !isAuthenticated()) {
       setWs('off');
@@ -445,10 +464,14 @@ export function initDataSync({ force = false } = {}) {
 
   subscribeAuth((auth) => {
     if (auth.status === 'authenticated') {
+      const version = getAuthVersion();
+      if (ownerVersion !== null && ownerVersion !== version) releaseGatewayData({ reason: 'identity-changed' });
+      ownerVersion = version;
       refresh({ silent: sync.status === 'live' }).then((out) => {
         if (out.ok) connectLive();
       });
     } else {
+      ownerVersion = null;
       releaseGatewayData({ reason: auth.status === 'unreachable' ? 'gateway-unreachable' : 'signed-out' });
       if (auth.status === 'unreachable') {
         Object.assign(sync, { status: 'error', error: auth.error || 'gateway unreachable' });
@@ -458,6 +481,7 @@ export function initDataSync({ force = false } = {}) {
   });
 
   if (isAuthenticated()) {
+    ownerVersion = getAuthVersion();
     refresh().then((out) => {
       if (out.ok) connectLive();
     });
@@ -494,6 +518,8 @@ export function __resetDataSync() {
   clearTimeout(reconnectTimer);
   refreshTimer = null;
   refreshInFlight = null;
+  syncGeneration += 1;
+  ownerVersion = null;
   demoSnapshot = null;
   started = false;
   Object.assign(sync, { status: 'idle', error: null, at: null, ws: 'off', lastEventAt: null, requestId: null });

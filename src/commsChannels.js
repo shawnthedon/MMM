@@ -12,7 +12,7 @@
 export const CHANNEL_STATUS = {
   not_configured: { label: 'Not configured', chip: '', detail: 'No credentials stored yet.' },
   configured_unverified: { label: 'Configured · unverified', chip: 'warn', detail: 'Credentials saved, never tested against the provider.' },
-  verified: { label: 'Delivery verified', chip: 'ok', detail: 'A live test reached the provider.' },
+  verified: { label: 'Send accepted', chip: 'ok', detail: 'A test was accepted; final external delivery is not confirmed.' },
   failed: { label: 'Last test failed', chip: 'bad', detail: 'The provider rejected the test — see the result below.' },
 };
 
@@ -57,6 +57,7 @@ export const CHANNELS = [
     fields: [
       TOKEN('accessToken', 'Permanent access token', 'EAAG…', 'Meta Business → System user token.'),
       PLAIN('phoneNumberId', 'Phone number id', '1029384756…', 'Cloud API → phone numbers.'),
+      TOKEN('appSecret', 'Meta app secret', '…', 'Signs webhook bodies; distinct from the access token.', 'inbound'),
       TOKEN('verifyToken', 'Webhook verify token', 'generated', 'Echoed during Meta\'s GET verification handshake.', 'inbound'),
       PLAIN('recipient', 'Default recipient (E.164)', '+234…', 'Where test messages and reports go.'),
       PLAIN('wabaId', 'WABA id', '112233…', 'Required for template management.', false),
@@ -100,11 +101,12 @@ export const CHANNELS = [
     label: 'SMS',
     icon: 'phone',
     kind: 'cloud',
-    transport: 'OpenSMS / Twilio-compatible HTTP',
+    transport: 'Twilio Messages API (OpenSMS not implemented)',
     signature: 'X-Twilio-Signature (HMAC-SHA1 over URL+sorted params)',
     summary: 'Short messages for on-call alerts and approval notifications.',
     fields: [
-      PLAIN('baseUrl', 'Provider base URL', 'https://api.twilio.com', 'Or your OpenSMS-compatible endpoint. Defaults to Twilio.', false),
+      PLAIN('baseUrl', 'Twilio base URL', 'https://api.twilio.com', 'Only the official HTTPS Twilio endpoint is permitted.', false),
+      { key: 'webhookUrl', label: 'Exact public webhook URL', placeholder: 'https://example.com/api/v1/comms/sms/inbound', help: 'Twilio signs this exact URL, including any query string.', required: true, scope: 'inbound' },
       TOKEN('accountSid', 'Account SID / API key', 'AC…', 'Authenticates outbound sends.'),
       TOKEN('authToken', 'Auth token', '…', 'Also verifies inbound webhook signatures.'),
       PLAIN('from', 'From number', '+15551234567', 'Sender id registered with the provider.'),
