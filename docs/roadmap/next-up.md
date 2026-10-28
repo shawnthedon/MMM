@@ -3,7 +3,7 @@
 Written to be picked up cold, without the chat that produced it. Each item lists the files, the data
 model, the edge cases that matter, and "done when" checks that a test can assert.
 
-Last updated: 2026-10-27 · Baseline: Kanban board (26/26) and server-side Comms (27/27 + 22/22) shipped; next up is Local AI phase 2 (COOP/COEP headers, then a runtime spike).
+Last updated: 2026-10-28 · Local AI isolation headers configured; desktop browser verified, deployed host and mobile devices pending. Runtime phase 2 has not passed.
 
 ---
 
@@ -60,14 +60,15 @@ Still open (smaller, ordered):
 
 Order of work, each gated on real evidence:
 
-1. **Cross-origin isolation** — add `Cross-Origin-Opener-Policy: same-origin` and
-   `Cross-Origin-Embedder-Policy: require-corp` to the Vite dev server and `vercel.json`; confirm
-   `crossOriginIsolated === true` in the preflight (this alone moves threads from "off" to
-   "available"). Watch for third-party assets that break under COEP.
+1. **Cross-origin isolation (in progress)** — COOP/COEP configured for Vite dev/preview and Vercel;
+   service-worker cache bumped. Built preview passed a desktop Chromium online/offline browser check.
+   Confirm on the deployed top-level app and intended mobile devices; check embedded previews and
+   third-party integrations under COEP/COOP. Evidence: [`../local/cross-origin-isolation.md`](../local/cross-origin-isolation.md).
 2. **Runtime spike (phase 2)** — pick and licence-check a WASM GGUF runtime (llama.cpp/ggml build or
    prebuilt `.wasm`), ship it behind `src/localRuntime.js`, load one small Q4 model from OPFS, and
    record: bundle size, load time, tokens/sec, peak memory, thermal notes — on a real device, in
-   airplane mode. No UI beyond a spike route until this passes.
+   airplane mode. No UI beyond a spike route until this passes. Candidate/licence research:
+   [`../local/runtime-spike-research.md`](../local/runtime-spike-research.md).
 3. **Model manager (phase 3)** — `listModels/importModel/downloadModel` with persisted lifecycle
    states (spec §6), real progress/cancel/resume where the host supports it, SHA-256 verification and
    atomic promote of partial files. Metadata in IndexedDB, never `localStorage`.
