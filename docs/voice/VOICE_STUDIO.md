@@ -21,7 +21,7 @@ every screen: **a capability appears as working only after this build has exerci
 | `src/voice/studio.js` | 340 | controller: buffer + queue + profiles + persistence, strategies, idle flush, generation invalidation |
 | `src/voice.js` | 599 | Voice Studio UI: Overview · Models · Type-to-speech · Voices · Diagnostics, plus Copilot hooks |
 | `src/voice.css` | 76 | mobile-first styling, RELAY tokens only |
-| `scripts/voice-test.mjs` | 565 | 43 deterministic tests (chunker, queue, studio, profiles, adapters, registry, store, UI) |
+| `scripts/voice-test.mjs` | 582 | 44 deterministic tests (chunker, queue, studio, profiles, adapters, registry, store, UI) |
 | `scripts/voice-browser-test.mjs` | 161 | 12 real-browser checks (Chromium, layouts, real `speechSynthesis`, Copilot 🔊) |
 
 Wiring changes: `src/main.js` (route + per-view `skipRender` hook), `src/shell.js` (route + module
@@ -97,9 +97,18 @@ POST   /v1/voice-profiles/validate        validate reference audio
 POST   /v1/voice-profiles/:id/speech      synthesise with a profile
 ```
 
+## 4b. Screenshots (real Chromium, 320/390 px)
+
+| Screen | File |
+| --- | --- |
+| Voice editor at 390 px (device engine, fallback + blocked banners) | `docs/voice/editor-390.png` |
+| Voice editor at 320 px (no clipped controls) | `docs/voice/editor-320.png` |
+| Model catalogue at 390 px (Qwen2.5-Omni advertised-only) | `docs/voice/models-390.png` |
+| Voice profiles at 390 px (consent, revocation, blocked cloning) | `docs/voice/voices-390.png` |
+
 ## 5. Test evidence
 
-`npm run test:voice` → **43/43 PASSED** (deterministic, fake engine).
+`npm run test:voice` → **44/44 PASSED** (deterministic, fake engine).
 
 | Acceptance test | Coverage |
 | --- | --- |
@@ -117,6 +126,7 @@ POST   /v1/voice-profiles/:id/speech      synthesise with a profile
 | TTS-12 idle flush speaks the unfinished tail exactly once | TTS-12 |
 | TTS-13 no cloud adapter, routing never remote | TTS-13, F1–F3 |
 | TTS-14 repeated playback releases resources | TTS-14, B4 |
+| Blocked (not crash) when the engine has no voices | TTS-14b |
 | TTS-15 manual strategy speaks only on Play | TTS-15 |
 | TTS-16 only preferences persist (no text, no audio) | TTS-16, D4 |
 | Race: late response after cancel | B3 |
@@ -136,7 +146,7 @@ no cloud fallback claimed, Copilot 🔊 reached the engine, zero page errors.
 
 Full suite: `npm test` green (smoke, copilot tour, auth 16/16, readsync 12/12, designer 18/18,
 skills 23/23, comms 23/23, design 13/13, responsive 17/17, local 13/13, kanban 26/26, scroll 10/10,
-comms-gateway 28/28, gateway 30/30, session-safety 8/8, plus voice 43/43). `npm run build` clean.
+comms-gateway 28/28, gateway 30/30, session-safety 8/8, plus voice 44/44). `npm run build` clean.
 
 ## 6. Copilot surface
 

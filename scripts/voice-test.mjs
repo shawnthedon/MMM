@@ -331,6 +331,23 @@ await check('TTS-13 no cloud speech adapter exists and routing never returns rem
   assert.equal(browser.location, 'on-device');
 });
 
+await check('TTS-14b a missing engine capability is a blocked state, not a crash', async () => {
+  const engine = createFakeEngine();
+  engine.speak = () => {
+    const error = new Error('The speech engine could not start: this browser reports no installed voices and no audio device, so nothing can be spoken here.');
+    error.code = 'no-voices';
+    return Promise.reject(error);
+  };
+  const { studio } = makeStudio({ engine });
+  studio.setText('Say something.');
+  await tick();
+  await tick();
+  const snap = studio.snapshot();
+  assert.equal(snap.status, 'blocked', `expected blocked, got ${snap.status}`);
+  assert.equal(snap.error.code, 'no-voices');
+  assert.equal(snap.queued, 0);
+});
+
 await check('TTS-14 repeated playback releases the queue (no accumulation)', async () => {
   const { studio, engine } = makeStudio();
   for (let i = 0; i < 4; i += 1) {

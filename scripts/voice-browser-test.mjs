@@ -34,6 +34,10 @@ try {
       width: document.documentElement.clientWidth,
       scroll: document.documentElement.scrollWidth,
       editor: document.querySelector('#vs-editor').getBoundingClientRect().width,
+      tabs: [...document.querySelectorAll('.vs-tabs button')].map((el) => {
+        const box = el.getBoundingClientRect();
+        return { left: box.left, right: box.right, text: el.textContent.trim() };
+      }),
       buttons: [...document.querySelectorAll('.vs-playback .btn, .vs-tabs button')].map((el) => {
         const box = el.getBoundingClientRect();
         return { w: box.width, h: box.height };
@@ -42,6 +46,11 @@ try {
     assert(layout.scroll <= layout.width, `horizontal overflow at ${width}px`);
     assert(layout.editor > 200, `editor collapsed at ${width}px`);
     assert(layout.buttons.every((b) => b.h >= 44), `touch target below 44px at ${width}px`);
+    // Every section must be fully visible: no tab may be clipped or scrolled out of reach.
+    assert(layout.tabs.length === 5, `expected 5 sections, got ${layout.tabs.length}`);
+    layout.tabs.forEach((tab) => {
+      assert(tab.left >= -0.5 && tab.right <= layout.width + 0.5, `tab “${tab.text}” is clipped at ${width}px`);
+    });
     results.push(`PASS ${width}px: Voice Studio layout, no overflow, 44px targets`);
   }
 
