@@ -3,7 +3,7 @@
 **Spec:** [`MMM_On_Device_AI_Design_Specification.md`](MMM_On_Device_AI_Design_Specification.md) (v1.0, 27 Oct 2026)
 **Entry point:** More → **Local** (badged *new*) → `#/local` · **Code:** `src/local.js`, `src/local.css`
 **Tests:** `npm run test:local` (13 checks)
-**Status: phase 1 only.** No model, download, inference or image generation exists. The screen says so.
+**Status:** the preflight remains phase 1. A separate experimental runtime spike exists; no model is bundled, no model download or image generation is implemented, and phase 2 has not passed. See [runtime evidence](runtime-spike-research.md).
 
 ---
 
@@ -39,7 +39,7 @@ what the Notification/Push APIs allow while a service worker is registered.
 | `deviceMemory`, `hardwareConcurrency` | Memory hints for the conservative thread default; Chromium-only, so unknown elsewhere. |
 
 Verdicts are deliberately about the **platform**: `blocked` · `constrained` · `spike-ready`. Even
-`spike-ready` says *"nothing is implemented yet — this only says the platform could host phase 2"*.
+`spike-ready` describes the platform only, and explicitly says the runtime spike has not passed its real-device gate.
 
 ## 3. Known blockers before phase 2 can even start
 
@@ -48,7 +48,7 @@ Verdicts are deliberately about the **platform**: `blocked` · `constrained` · 
    threads are unavailable. See [evidence and limitations](cross-origin-isolation.md).
 2. **Runtime choice + licence** — llama.cpp (`ggml`) is the realistic WASM target; check its licence,
    the build/ABI story for a WASM artifact, and whether we ship a prebuilt `.wasm` (size!) or build it.
-   No runtime has been adopted; see [candidate research](runtime-spike-research.md).
+   An experimental runtime is pinned for the spike only; see [runtime evidence and remaining licence review](runtime-spike-research.md).
 3. **Storage strategy** — OPFS for weights, IndexedDB for job/metadata state (the spec forbids
    `localStorage` or in-memory blobs for this).
 4. **No native background downloads** — a browser tab cannot guarantee resumable large downloads or
@@ -93,11 +93,11 @@ optimism. Every failure path must release allocations and surface an actionable 
 | Phase | Status | Exit evidence required before PASS |
 | --- | --- | --- |
 | 1 Audit | **done** (this document + preflight screen) | capabilities measured on the target device; architecture and risks recorded |
-| 2 Runtime spike | not started | one small GGUF loaded and queried offline in airplane mode on a real device; licence, bundle size, load time, tokens/sec, memory recorded |
+| 2 Runtime spike | **in progress**, desktop-only offline evidence | one small GGUF loaded and queried offline in airplane mode on a real device; licence, bundle size, load time, tokens/sec, memory recorded |
 | 3 Model manager | not started | import/reject tests, real download progress + cancel + recovery, checksum verification, lifecycle persistence |
 | 4 Offline text | not started | streaming + stop, airplane-mode test, network log showing no upload |
 | 5 Image feasibility | not started | side-by-side runtime/model comparison on real hardware with timings and quality notes |
 | 6 Image feature | not started | only if 5 passes; otherwise the feature stays marked unavailable |
 
-**Do not** add load/generate/gallery controls before phases 2–4 pass: the current screen exposes a
-single control (Re-measure) precisely so that no button can be inert or misleading.
+**Do not** expose production load/generate/gallery controls before the relevant phase gates pass. The
+separate experimental spike exposes only its implemented controls and prominently states its limits.

@@ -3,7 +3,7 @@
 Written to be picked up cold, without the chat that produced it. Each item lists the files, the data
 model, the edge cases that matter, and "done when" checks that a test can assert.
 
-Last updated: 2026-10-28 · Local AI isolation headers configured; desktop browser verified, deployed host and mobile devices pending. Runtime phase 2 has not passed.
+Last updated: 2026-10-28 · Experimental Local AI runtime runs a tiny model offline in desktop Chromium; deployed host and mobile devices remain unverified. Runtime phase 2 has not passed.
 
 ---
 
@@ -64,10 +64,11 @@ Order of work, each gated on real evidence:
    service-worker cache bumped. Built preview passed a desktop Chromium online/offline browser check.
    Confirm on the deployed top-level app and intended mobile devices; check embedded previews and
    third-party integrations under COEP/COOP. Evidence: [`../local/cross-origin-isolation.md`](../local/cross-origin-isolation.md).
-2. **Runtime spike (phase 2)** — pick and licence-check a WASM GGUF runtime (llama.cpp/ggml build or
-   prebuilt `.wasm`), ship it behind `src/localRuntime.js`, load one small Q4 model from OPFS, and
-   record: bundle size, load time, tokens/sec, peak memory, thermal notes — on a real device, in
-   airplane mode. No UI beyond a spike route until this passes. Candidate/licence research:
+2. **Runtime spike (phase 2, in progress)** — separate `local-spike.html` and `src/localRuntime.js`
+   load an imported GGUF from OPFS using pinned wllama and stream raw completions. Desktop Chromium
+   offline test passed with a tiny mixed-Q4 fixture. Finish binary licensing review, deployment and
+   intended-device airplane-mode testing, network audit, real performance/memory/thermal evidence
+   and lifecycle failures before marking PASS. Evidence and limits:
    [`../local/runtime-spike-research.md`](../local/runtime-spike-research.md).
 3. **Model manager (phase 3)** — `listModels/importModel/downloadModel` with persisted lifecycle
    states (spec §6), real progress/cancel/resume where the host supports it, SHA-256 verification and

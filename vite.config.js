@@ -31,5 +31,8 @@ export default defineConfig({
   build: {
     target: 'es2020',
     assetsInlineLimit: 0,
+    rollupOptions: {
+      input: { app: 'index.html', localSpike: 'local-spike.html' },
+    },
   },
 });

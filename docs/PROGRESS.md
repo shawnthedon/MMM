@@ -61,20 +61,24 @@
 - ✅ **Entry point** — new **Local** tile in the More panel (badged *new*), route `#/local`.
 - ✅ **Phase-1 audit** — [`local/on-device-audit.md`](local/on-device-audit.md) records MMM's real
   platform (Vite PWA, no native shell, localStorage + gateway SQLite, no IndexedDB/OPFS yet), the
-  smallest viable integration, and the blockers before a runtime spike: COOP/COEP headers, runtime
-  choice/licence, OPFS storage, no native background downloads, image feasibility unproven.
+  smallest viable integration and remaining risks: deployed isolation, runtime licence, OPFS storage,
+  no native background downloads, image feasibility unproven.
 - ✅ **Preflight screen** — measures the device live: secure context, WebAssembly, WASM SIMD,
   threads/COI, WebGPU + adapter, OPFS, persistent storage, quota/free bytes, memory hints; verdict
   `blocked` / `constrained` / `spike-ready` with actionable reasons.
-- ✅ **Honesty** — no model bundled, no download, no inference, no cloud fallback; the only control is
-  *Re-measure*. Candidate presets are listed as unverified with licence/size caveats.
+- ✅ **Honesty** — no model bundled or downloaded; the preflight has no inference control and links to
+  the separate experimental spike. No cloud fallback; presets remain unverified.
 - ✅ Evidence: `npm run test:local` (13 checks).
 - 🟨 **Isolation prerequisite** — COOP/COEP on Vite dev/preview + Vercel and service-worker cache
   upgrade. HTTP/config checks pass; headless desktop Chromium verified online/offline isolation and
   shared WASM memory on the built preview. Deployed Vercel and intended mobile devices remain
   unverified. Evidence: [`local/cross-origin-isolation.md`](local/cross-origin-isolation.md).
-- ⬜ Phases 2–6 (runtime spike, model manager, offline text, image feasibility/feature) — not started;
-  an unadopted runtime candidate is researched in [`local/runtime-spike-research.md`](local/runtime-spike-research.md).
+- 🟨 **Phase 2 experimental runtime** — a separate spike imports a user-provided GGUF to OPFS,
+  prepares same-origin wllama WASM, then loads, streams raw completion, stops and unloads locally.
+  Desktop Chromium ran a tiny mixed-Q4 model with network disabled; mobile/device airplane-mode,
+  complete binary-licence review, memory/thermal measurements and broader lifecycle tests remain
+  open. No weights bundled. Details: [`local/runtime-spike-research.md`](local/runtime-spike-research.md).
+- ⬜ Phases 3–6 (model manager, offline text product, image feasibility/feature) — not started.
 
 ### Comms — server-side credentials + routes — ✅
 - ✅ **Migration 003** — `comms_channels` (encrypted config, routing, verification), `comms_messages`

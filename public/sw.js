@@ -24,6 +24,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  // The experimental standalone page is not the PWA shell. Never overwrite the offline
+  // index cache with it, or return the app shell as the spike when it is offline.
+  if (req.mode === 'navigate' && url.pathname.endsWith('/local-spike.html')) return;
+
   // Navigations: network-first with cache fallback (app shell)
   if (req.mode === 'navigate') {
     e.respondWith(

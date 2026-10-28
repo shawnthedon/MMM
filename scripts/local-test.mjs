@@ -150,11 +150,13 @@ await check('the Local tile is flagged as new and routes to the Local screen', a
   eq(shell.routes.find((r) => r.id === 'local')?.icon, 'cpu', 'route icon');
 });
 
-await check('the Local screen states that nothing is implemented', async () => {
+await check('the Local screen distinguishes the experimental spike from production', async () => {
   nav.navigate('local');
   await sleep(60);
   const html = text(view());
-  assert(/Nothing here is implemented yet/i.test(html), 'missing the honest banner');
+  assert(/Production local AI is not implemented/i.test(html), 'missing the honest banner');
+  assert(/experimental runtime spike/i.test(html), 'the spike must be identified as experimental');
+  assert(q('a[href="./local-spike.html"]', view()), 'the spike must have a real link');
   assert(/No model is bundled/i.test(html), 'must state no model is bundled');
   assert(/not implemented/i.test(html), 'must state features are not implemented');
   assert(/never/i.test(html) && /Cloud fallback/i.test(html), 'must state there is no cloud fallback');
@@ -163,7 +165,8 @@ await check('the Local screen states that nothing is implemented', async () => {
   const phases = qa('.local-phase', view());
   eq(phases.length, local.PHASES.length, 'all spec phases listed');
   assert(/this screen/.test(text(phases[0])), 'phase 1 marked as this screen');
-  assert(phases.slice(1).every((p) => /not started/.test(text(p))), 'later phases must be not started');
+  assert(/in progress/.test(text(phases[1])), 'runtime spike is in progress');
+  assert(phases.slice(2).every((p) => /not started/.test(text(p))), 'later phases must be not started');
 });
 
 await check('candidate presets are labelled unverified with size caveats', async () => {
@@ -207,7 +210,7 @@ await check('a capable platform measures clean and is only “ready for a spike�
   eq(v.status, 'spike-ready', `verdict (blockers: ${v.blockers.join(' | ')}, cautions: ${v.cautions.join(' | ')})`);
   assert(v.positives.length >= 2, 'positives should be reported too');
   eq(local.STATUS_COPY['spike-ready'].chip, 'ok', 'chip for the good state');
-  assert(/nothing is implemented/i.test(local.STATUS_COPY['spike-ready'].detail), 'the good state must not imply a feature exists');
+  assert(/not passed/i.test(local.STATUS_COPY['spike-ready'].detail), 'the good state must not imply the gate passed');
 });
 
 await check('a browser without WebAssembly is blocked, not “experimental”', async () => {
