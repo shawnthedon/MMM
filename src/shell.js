@@ -5,6 +5,8 @@ import { getAuth } from './auth.js';
 import { sourceChipHTML, sourceNoteHTML, openSourceSheet, refreshNow } from './sourceui.js';
 import { getStatus, isLive } from './datastore.js';
 import { api, ApiError, isApiMode } from './api.js';
+import { sheetIn, modalIn, toastIn, toastOut, ghostExit, press, titleSwap } from './motion.js';
+import { sfx, initSound } from './sound.js';
 
 export const routes = [
   { id: 'home', label: 'Home', icon: 'home', title: 'Command Deck' },
@@ -42,6 +44,7 @@ document.addEventListener('click', (e) => {
   const act = t.dataset.act;
   if (actions[act]) {
     e.preventDefault();
+    if (t.classList.contains('btn') || t.classList.contains('iconbtn') || t.classList.contains('mod-tile') || t.classList.contains('chip')) press(t);
     actions[act](t, t.dataset, e);
   }
 });
@@ -97,11 +100,19 @@ export function applyTheme() {
 /* ---------- toasts ---------- */
 export function toast(msg, kind = '') {
   const root = document.getElementById('toast-root');
+  if (!root) return null;
   const el = document.createElement('div');
   el.className = `toast ${kind}`;
   el.innerHTML = `<span class="grow">${msg}</span>`;
   root.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, 3200);
+  toastIn(el);
+  if (kind === 'bad') sfx.bad();
+  else if (kind === 'ok') sfx.ok();
+  else sfx.toast();
+  const dismiss = () => toastOut(el, () => el.remove());
+  const timer = setTimeout(dismiss, 3400);
+  el.addEventListener('click', () => { clearTimeout(timer); dismiss(); });
+  return el;
 }
 
 /* ---------- sheets ---------- */
@@ -123,12 +134,23 @@ export function openSheet({ title, body, foot = '', wide = false, onClose = null
   root.appendChild(scrim);
   root.appendChild(sheet);
   enhanceSwitches(sheet);
-  requestAnimationFrame(() => { scrim.classList.add('open'); sheet.classList.add('open'); });
+  // The open class is applied synchronously (state, not decoration); the movement is anime's job.
+  scrim.classList.add('open');
+  sheet.classList.add('open');
+  sheetIn(sheet, scrim);
+  sfx.open();
+  let closed = false;
   const close = () => {
-    scrim.classList.remove('open');
-    sheet.classList.remove('open');
-    setTimeout(() => { scrim.remove(); sheet.remove(); }, 260);
+    if (closed) return;
+    closed = true;
+    // Remove the live nodes at once so nothing stale is clickable, and let a decorative copy
+    // play the exit. Then tidy the copy up after the animation.
+    ghostExit(sheet, { y: 320, duration: 240 });
+    ghostExit(scrim, { fadeOnly: true, duration: 200 });
+    scrim.remove();
+    sheet.remove();
     sheetStack = sheetStack.filter((s) => s.sheet !== sheet);
+    sfx.close();
     onClose && onClose();
   };
   sheetStack.push({ sheet, scrim, close });
@@ -161,9 +183,13 @@ export function confirmModal({ title, body, confirmText = 'Confirm', danger = fa
     </div>`;
   root.appendChild(scrim);
   root.appendChild(wrap);
+  modalIn(wrap.querySelector('.box'), scrim);
+  sfx.open();
   let settle;
   const answer = new Promise((resolve) => { settle = resolve; });
   const finish = (result) => {
+    ghostExit(wrap.querySelector('.box'), { y: 14, scale: 0.96, duration: 180 });
+    ghostExit(scrim, { fadeOnly: true, duration: 160 });
     scrim.remove();
     wrap.remove();
     if (result === 'cancel') onCancel && onCancel();
@@ -279,7 +305,7 @@ function tabbarHTML() {
   return `
     ${tab(a)}
     ${tab(b)}
-    <button class="cp-fab-slot" data-act="copilot-open" aria-label="Open Copilot" aria-haspopup="dialog" aria-expanded="false" aria-controls="copilot-panel">
+    <button class="cp-fab-slot" data-act="copilot-open" aria-label="Open Advanced Copilot" aria-haspopup="dialog" aria-expanded="false" aria-controls="copilot-panel">
       <span class="cp-fab-ico" aria-hidden="true">${icon('spark', 22)}</span>
       <span class="cp-fab-text">Copilot</span>
     </button>
@@ -305,7 +331,7 @@ function sidebarHTML() {
       <button class="side-link" data-act="more">${icon('grid', 19)}<span>All modules</span></button>
     </nav>
     <div class="side-spacer"></div>
-    <button class="side-copilot" data-act="copilot-open">${icon('spark', 18)} <span>Open Copilot</span></button>
+    <button class="side-copilot" data-act="copilot-open">${icon('spark', 18)} <span>Advanced Copilot</span></button>
     ${item('settings')}
     <div class="side-footer"><span class="side-pulse"></span><span>WORKSPACE CONSOLE</span></div>
   </aside>`;
@@ -313,6 +339,7 @@ function sidebarHTML() {
 
 /* ---------- shell render ---------- */
 export function renderShell(root) {
+  initSound(document);
   root.innerHTML = `
     <div class="app">
       ${sidebarHTML()}
@@ -392,7 +419,10 @@ export function refreshChrome(routeId) {
   const s = getState();
   const r = routes.find((x) => x.id === routeId) || routes[0];
   const titleEl = document.getElementById('page-title');
-  if (titleEl) titleEl.textContent = r.title;
+  if (titleEl && titleEl.textContent !== r.title) {
+    titleEl.textContent = r.title;
+    titleSwap(titleEl);
+  }
   const badge = document.getElementById('notif-badge');
   const n = pendingApprovals().length;
   if (badge) {

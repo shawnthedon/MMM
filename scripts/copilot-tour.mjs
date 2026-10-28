@@ -52,16 +52,22 @@ const click = (sel) => {
   return el;
 };
 
-await check('details drawer, minimise and restore', async () => {
+await check('details drawer opens, and the title swaps stage ⇄ advanced', async () => {
   copilot.resetCopilotSession();
   copilot.openCopilot();
+  // The overlay opens on the immersive stage, so the conversation surface starts hidden.
+  if (panel().dataset.view !== 'stage') throw new Error(`expected the stage first, got ${panel().dataset.view}`);
   click('[data-cp="details"]');
   if (panel().querySelector('#cp-details').hidden) throw new Error('details did not open');
   if (!panel().querySelector('#cp-details').textContent.includes('Knowledge')) throw new Error('details content missing');
-  click('[data-cp="minimize"]');
-  if (panel().dataset.min !== 'true') throw new Error('minimise did not apply');
-  click('[data-cp="minimize"]');
-  if (panel().dataset.min !== 'false') throw new Error('restore did not apply');
+  // The title is the affordance: it reveals every control, then hides them again.
+  const title = panel().querySelector('#copilot-title');
+  if (!/Advanced Copilot/.test(title.textContent)) throw new Error('title must read “Advanced Copilot”');
+  click('#copilot-title');
+  if (panel().dataset.view !== 'advanced') throw new Error('title did not reveal the controls');
+  if (title.getAttribute('aria-expanded') !== 'true') throw new Error('title must report its expanded state');
+  click('#copilot-title');
+  if (panel().dataset.view !== 'stage') throw new Error('title did not return to the stage');
 });
 
 await check('every mode answers every suggested prompt without errors', async () => {

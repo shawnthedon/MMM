@@ -46,12 +46,13 @@ try {
   }
   await page.reload({ waitUntil: 'networkidle0' });
   assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
-  await page.click('.side-copilot');
+  await page.$eval('.side-copilot', (el) => el.click());
   await page.waitForSelector('.cp-panel');
-  await page.waitForFunction(() => document.querySelector('.cp-panel').getBoundingClientRect().width >= 300);
-  await new Promise((resolve) => setTimeout(resolve, 400)); // let the panel entrance animation settle
+  await new Promise((resolve) => setTimeout(resolve, 500)); // let the entrance animation settle
+  // The Copilot is an immersive full-screen overlay at every width now, not a floating card.
   const panel = await page.evaluate(() => document.querySelector('.cp-panel').getBoundingClientRect().toJSON());
-  assert(panel.right <= 1440 && Math.abs(panel.width - 400) < 3 && panel.left > 800, `desktop Copilot panel: ${JSON.stringify(panel)}`);
+  assert(Math.abs(panel.width - 1440) < 2 && Math.abs(panel.height - 900) < 2 && panel.left === 0 && panel.top === 0,
+    `desktop Copilot overlay should fill the viewport: ${JSON.stringify(panel)}`);
   assert.deepEqual(errors, []);
   console.log('PASS four theme modes, persistence, desktop Copilot and no uncaught page errors');
 } finally {

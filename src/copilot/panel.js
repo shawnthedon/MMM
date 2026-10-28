@@ -3,7 +3,7 @@
  * destroys a draft. All rendering is escaped string HTML; no stored text is trusted as markup.
  */
 import '../copilot.css';
-import { getState, esc, icon, now, uid } from '../core.js';
+import { getState, setState, esc, icon, now, uid } from '../core.js';
 import { toast, actions as shellActions } from '../shell.js';
 import { MODES, SUGGESTIONS, handle, runProposal, cancelProposal, proposalExpired, resolveMode, modeMeta } from './orchestrator.js';
 import { getRuntime, probeGateway, subscribeRuntime, runtimeLabel } from './runtime.js';
@@ -12,6 +12,8 @@ import { isApiMode } from '../api.js';
 import { saveWorking, getWorking, memorySummary, exportMemory, redact } from './memory.js';
 import { knowledgeStats } from './knowledge.js';
 import { STATUS_LABEL } from './capabilities.js';
+import { holoStageIn, copilotModeIn, copilotOut, fabPulse, motionEnabled, toastIn } from '../motion.js';
+import { sfx } from '../sound.js';
 
 const session = {
   open: false,
@@ -22,6 +24,9 @@ const session = {
   pending: false,
   details: false,
   minimized: false,
+  advanced: false,
+  listening: false,
+  voiceStatus: '',
   lastSent: '',
 };
 
@@ -97,36 +102,204 @@ function findMessage(id) {
 
 /* ---------- panel skeleton ---------- */
 function panelHTML() {
+  const voiceSupported = Boolean(recognitionCtor());
   return `
     <div class="cp-scrim" data-cp="dismiss" aria-hidden="true"></div>
-    <section class="cp-panel" role="dialog" aria-modal="false" aria-label="Copilot" tabindex="-1"
-             data-blank="true" data-mode="${esc(session.mode)}" data-min="false" id="copilot-panel">
+    <section class="cp-panel" role="dialog" aria-modal="true" aria-label="Advanced Copilot" tabindex="-1"
+             data-blank="true" data-mode="${esc(session.mode)}" data-min="false" data-view="stage" id="copilot-panel">
       <div class="cp-holo" aria-hidden="true">
+        <img class="cp-holo-image" data-holo="image" src="./media/hologram.jpg" alt="" decoding="async" draggable="false">
+        <span class="cp-holo-veil"></span>
+        <span class="cp-holo-ring r1" data-holo="ring"></span>
+        <span class="cp-holo-ring r2" data-holo="ring"></span>
+        <span class="cp-holo-ring r3" data-holo="ring"></span>
         <span class="cp-holo-grid"></span>
-        <span class="cp-blob b1"></span><span class="cp-blob b2"></span><span class="cp-blob b3"></span>
+        <span class="cp-holo-scan" data-holo="scan"></span>
+        <span class="cp-blob b1"></span><span class="cp-blob b2"></span>
       </div>
+
       <header class="cp-head">
         <div class="cp-mark" aria-hidden="true">${icon('spark', 18)}</div>
         <div class="grow">
-          <div class="cp-title" id="copilot-title">Copilot</div>
+          <button class="cp-title" id="copilot-title" data-cp="toggle-advanced" aria-expanded="false"
+                  aria-controls="cp-body" aria-label="Advanced Copilot — show or hide the controls">
+            <span class="cp-title-text">Advanced Copilot</span>
+            <span class="cp-title-hint" id="cp-title-hint">Tap to show controls</span>
+          </button>
           <div class="cp-runtime" id="cp-runtime"></div>
         </div>
         <button class="cp-icon" data-cp="details" aria-label="Details, references and memory" aria-expanded="false">${icon('doc', 18)}</button>
-        <button class="cp-icon" data-cp="minimize" aria-label="Minimise Copilot" aria-expanded="false">${icon('left', 18)}</button>
-        <button class="cp-icon" data-cp="close" aria-label="Close Copilot">${icon('x', 18)}</button>
+        <button class="cp-icon" data-cp="close" aria-label="Close Advanced Copilot">${icon('x', 18)}</button>
       </header>
-      <div class="cp-modes" id="cp-modes" role="tablist" aria-label="Copilot mode"></div>
-      <div class="cp-context" id="cp-context"></div>
-      <div class="cp-work" id="copilot-work" aria-live="polite" aria-busy="false"></div>
-      <div class="cp-details" id="cp-details" hidden></div>
-      <div class="cp-tray" id="cp-tray" aria-label="Quick actions"></div>
-      <form class="cp-composer" id="cp-form" novalidate>
-        <textarea class="cp-input" id="copilot-input" rows="1" maxlength="2000"
-                  aria-label="Message Copilot" placeholder="Ask about this screen…"></textarea>
-        <button class="cp-voice" type="button" data-cp="voice-input" aria-label="Voice input (not available in this build)">${icon('mic', 18)}</button>
-        <button class="cp-send" type="submit" aria-label="Send message">${icon('send', 18)}</button>
-      </form>
+
+      <div class="cp-voice-dock" id="cp-voice-dock">
+        <button class="cp-mic" data-cp="voice" data-holo="mic" aria-pressed="false"
+                aria-label="${voiceSupported ? 'Speak to Copilot' : 'Voice capture is unavailable in this browser'}">
+          <span class="cp-mic-halo" aria-hidden="true"></span>
+          <span class="cp-mic-ico" aria-hidden="true">${icon('mic', 30)}</span>
+          <span class="cp-mic-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        </button>
+        <div class="cp-stage-caption" data-holo="caption">
+          <strong>${session.voiceStatus ? 'Voice input' : 'Tap and speak'}</strong>
+          <span id="cp-voice-status" role="status" aria-live="polite">${esc(session.voiceStatus || voiceStatusText())}</span>
+        </div>
+        <button class="cp-stage-link" data-cp="toggle-advanced">Or type instead ${icon('right', 14)}</button>
+      </div>
+
+      <div class="cp-body" id="cp-body">
+        <div class="cp-modes" id="cp-modes" role="tablist" aria-label="Copilot mode"></div>
+        <div class="cp-context" id="cp-context"></div>
+        <div class="cp-work" id="copilot-work" aria-live="polite" aria-busy="false"></div>
+        <div class="cp-details" id="cp-details" hidden></div>
+        <div class="cp-tray" id="cp-tray" aria-label="Quick actions"></div>
+        <form class="cp-composer" id="cp-form" novalidate>
+          <textarea class="cp-input" id="copilot-input" rows="1" maxlength="2000"
+                    aria-label="Message Copilot" placeholder="Ask about this screen…"></textarea>
+          <button class="cp-voice" type="button" data-cp="voice" aria-label="${voiceSupported ? 'Speak to Copilot' : 'Voice capture is unavailable in this browser'}">${icon('mic', 18)}</button>
+          <button class="cp-send" type="submit" aria-label="Send message">${icon('send', 18)}</button>
+        </form>
+      </div>
     </section>`;
+}
+
+/* ---------- voice capture ----------
+ * Speech *input* has one honest caveat: every browser recogniser sends audio to a network service.
+ * So it is opt-in per browser, stated before it is used, refused offline, and never pretended when
+ * the API is missing. Text-to-speech (Voice Studio) is separate and always on-device.
+ */
+function recognitionCtor() {
+  try {
+    return globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition || null;
+  } catch {
+    return null;
+  }
+}
+
+const voiceConsent = () => {
+  try {
+    return getState()?.settings?.voice?.networkRecognitionConsent === true;
+  } catch {
+    return false;
+  }
+};
+
+function voiceStatusText() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return 'Offline: voice capture needs a connection, so type instead.';
+  }
+  if (!recognitionCtor()) {
+    return 'Voice capture is unavailable here — this browser has no speech recogniser. Type, or open Voice Studio to hear replies.';
+  }
+  if (!voiceConsent()) {
+    return 'Voice input uses your browser’s speech service, which sends audio to the network. Tap the mic to review and allow it.';
+  }
+  return 'Ready — tap the mic and speak. Audio goes to your browser’s speech service.';
+}
+
+function paintVoiceStatus() {
+  const el = panel?.querySelector('#cp-voice-status');
+  if (el) el.textContent = session.voiceStatus || voiceStatusText();
+  const mic = panel?.querySelector('.cp-mic');
+  if (mic) {
+    mic.dataset.state = session.listening ? 'listening' : 'idle';
+    mic.setAttribute('aria-pressed', String(session.listening));
+  }
+}
+
+function showVoiceConsent() {
+  const dock = panel?.querySelector('#cp-voice-dock');
+  if (!dock || dock.querySelector('.cp-consent')) return;
+  const card = document.createElement('div');
+  card.className = 'cp-consent';
+  card.innerHTML = `
+    <div class="cp-consent-title">${icon('shield', 15)} Allow voice input?</div>
+    <p>Your browser's speech service receives the audio. Nothing else is sent, and nothing is stored
+       here beyond this choice. Turn it off again from Settings → Voice &amp; speech.</p>
+    <div class="row" style="gap:8px">
+      <button class="btn sm grow" data-cp="voice-consent-deny">Not now</button>
+      <button class="btn sm grow primary" data-cp="voice-consent-allow">Allow voice input</button>
+    </div>`;
+  dock.appendChild(card);
+  toastIn(card);
+}
+
+function clearVoiceConsent() {
+  panel?.querySelector('.cp-consent')?.remove();
+}
+
+function stopListening(reason = '') {
+  session.listening = false;
+  try { session.recognition?.stop?.(); } catch { /* already stopped */ }
+  session.recognition = null;
+  if (reason) session.voiceStatus = reason;
+  paintVoiceStatus();
+  sfx.listen(false);
+}
+
+function startListening() {
+  const Ctor = recognitionCtor();
+  if (!Ctor) { session.voiceStatus = voiceStatusText(); paintVoiceStatus(); sfx.warn(); return; }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    session.voiceStatus = 'Offline: voice capture needs a connection. Type instead.';
+    paintVoiceStatus();
+    sfx.warn();
+    return;
+  }
+  if (!voiceConsent()) { showVoiceConsent(); return; }
+  let recognition;
+  try {
+    recognition = new Ctor();
+  } catch {
+    session.voiceStatus = 'This browser refused to start voice capture.';
+    paintVoiceStatus();
+    sfx.bad();
+    return;
+  }
+  recognition.lang = (getState()?.settings?.voice?.lang || (typeof navigator !== 'undefined' && navigator.language) || 'en-US');
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+  session.recognition = recognition;
+  session.listening = true;
+  session.voiceStatus = 'Listening… speak now.';
+  paintVoiceStatus();
+  sfx.listen(true);
+
+  recognition.onresult = (event) => {
+    const transcript = [...(event.results || [])].map((r) => r[0]?.transcript || '').join(' ').trim();
+    session.voiceStatus = transcript ? `“${transcript}”` : 'Listening…';
+    paintVoiceStatus();
+    const final = [...(event.results || [])].some((r) => r.isFinal);
+    if (final && transcript) {
+      stopListening(`Heard “${transcript}”.`);
+      showAdvanced(true);
+      const input = panel?.querySelector('#copilot-input');
+      if (input) input.value = transcript;
+      send(transcript);
+    }
+  };
+  recognition.onerror = (event) => {
+    const code = event?.error || 'unknown';
+    const message = {
+      'not-allowed': 'Microphone permission was refused by the browser.',
+      'service-not-allowed': 'The browser blocked its speech service.',
+      network: 'The speech service could not be reached (audio is processed online).',
+      'no-speech': 'No speech was detected. Tap the mic and try again.',
+      aborted: 'Voice capture stopped.',
+      'audio-capture': 'No microphone was found on this device.',
+    }[code] || `Voice capture failed (${code}).`;
+    stopListening(message);
+    sfx.bad();
+  };
+  recognition.onend = () => {
+    if (session.listening) stopListening('Voice capture ended.');
+  };
+  try {
+    recognition.start();
+  } catch {
+    stopListening('This browser refused to start voice capture.');
+    sfx.bad();
+  }
 }
 
 /* ---------- static-ish regions ---------- */
@@ -480,14 +653,16 @@ function paint() {
   if (!panel) return;
   panel.dataset.mode = session.mode;
   panel.dataset.min = String(session.minimized);
-  // Narrow screens behave modally (scrim + focus trap); desktop stays non-modal so the page
-  // remains reachable by keyboard while the panel floats.
-  panel.setAttribute('aria-modal', String(matchesNarrow()));
-  const minBtn = panel.querySelector('[data-cp="minimize"]');
-  if (minBtn) {
-    minBtn.setAttribute('aria-expanded', String(!session.minimized));
-    minBtn.setAttribute('aria-label', session.minimized ? 'Expand Copilot' : 'Minimise Copilot');
+  panel.dataset.view = session.advanced ? 'advanced' : 'stage';
+  // The overlay now covers the whole screen at every width, so it is always modal.
+  panel.setAttribute('aria-modal', 'true');
+  const title = panel.querySelector('#copilot-title');
+  if (title) {
+    title.setAttribute('aria-expanded', String(session.advanced));
+    const hint = panel.querySelector('#cp-title-hint');
+    if (hint) hint.textContent = session.advanced ? 'Tap to hide controls' : 'Tap to show controls';
   }
+  paintVoiceStatus();
   const textarea = panel.querySelector('#copilot-input');
   if (textarea && textarea.value !== session.draft) textarea.value = session.draft;
   paintRuntime();
@@ -496,6 +671,37 @@ function paint() {
   paintDetails();
   paintWork();
 }
+
+/**
+ * Stage ⇄ advanced. The stage is the immersive default (hologram + mic); advanced reveals every
+ * control surface. Both directions animate, and the state is announced for screen readers.
+ */
+export function showAdvanced(next) {
+  const value = Boolean(next);
+  if (!panel) { session.advanced = value; return value; }
+  if (value === session.advanced) return value;
+  session.advanced = value;
+  panel.dataset.view = value ? 'advanced' : 'stage';
+  const title = panel.querySelector('#copilot-title');
+  title?.setAttribute('aria-expanded', String(value));
+  const hint = panel.querySelector('#cp-title-hint');
+  if (hint) hint.textContent = value ? 'Tap to hide controls' : 'Tap to show controls';
+  copilotModeIn(panel, value);
+  if (value) {
+    const input = panel.querySelector('#copilot-input');
+    // Focus the composer only for explicit pointer/keyboard intent, never on automatic reveal.
+    if (session.focusOnAdvanced && input) {
+      input.focus({ preventScroll: true });
+      session.focusOnAdvanced = false;
+    }
+  } else {
+    panel.querySelector('#copilot-input')?.blur?.();
+  }
+  return value;
+}
+
+/** Public hook so other screens can open the Copilot directly in the conversation view. */
+export const isAdvanced = () => session.advanced;
 
 /* ---------- draft persistence ---------- */
 function queueDraftSave() {
@@ -526,6 +732,7 @@ export function send(text) {
   pushMessage({ role: 'user', text: raw, mode: session.mode });
   setDraft('');
   session.pending = true;
+  if (!session.advanced) showAdvanced(true);
   paint();
   clearTimeout(pendingTimer);
   pendingTimer = setTimeout(() => {
@@ -685,9 +892,18 @@ export function openCopilot({ mode, message } = {}) {
   });
   paint();
   probeGateway().catch(() => {});
+  // The stage always starts closed over a blank screen, then resolves into the hologram.
+  session.advanced = false;
+  panel.dataset.view = 'stage';
+  holoStageIn(panel);
+  fabPulse(fab);
+  sfx.summon();
   // Move focus into the panel without summoning the mobile keyboard.
   panel.focus({ preventScroll: true });
-  if (message) send(message);
+  if (message) {
+    showAdvanced(true);
+    send(message);
+  }
   return panel;
 }
 
@@ -695,14 +911,35 @@ export function closeCopilot() {
   if (!session.open || !layer) return;
   clearTimeout(pendingTimer);
   session.pending = false;
+  stopListening('');
   saveWorking({ mode: session.mode, draft: session.draft });
   runtimeUnsub?.();
   runtimeUnsub = null;
+  // The live overlay leaves the DOM immediately (nothing stale stays clickable); a decorative copy
+  // plays the collapse-toward-the-launcher exit.
+  if (motionEnabled()) {
+    const ghost = layer.cloneNode(true);
+    ghost.classList.add('cp-ghost');
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.removeAttribute('id');
+    [ghost, ...ghost.querySelectorAll('[id]')].forEach((node) => node.removeAttribute('id'));
+    [...ghost.querySelectorAll('button, input, textarea, a')].forEach((node) => {
+      node.setAttribute('tabindex', '-1');
+      node.disabled = true;
+    });
+    ghost.style.pointerEvents = 'none';
+    document.body.appendChild(ghost);
+    copilotOut(ghost);
+  }
   layer.remove();
   layer = null;
   panel = null;
   workEl = null;
   session.open = false;
+  session.advanced = false;
+  session.voiceStatus = '';
+  session.listening = false;
+  sfx.close();
   const fab = document.querySelector('[data-act="copilot-open"]');
   fab?.setAttribute('aria-expanded', 'false');
   fab?.focus?.({ preventScroll: true });
@@ -725,6 +962,8 @@ export function copilotState() {
     draft: session.draft,
     pending: session.pending,
     blank: session.history.length === 0,
+    view: session.advanced ? 'advanced' : 'stage',
+    listening: session.listening,
     cards: session.history.filter((m) => m.card).map((m) => m.card.type),
   };
 }
@@ -737,6 +976,10 @@ export function resetCopilotSession() {
   session.pending = false;
   session.details = false;
   session.minimized = false;
+  session.advanced = false;
+  session.listening = false;
+  session.voiceStatus = '';
+  session.recognition = null;
 }
 
 /* ---------- events ---------- */
@@ -750,10 +993,29 @@ function onClick(e) {
     case 'dismiss':
       closeCopilot();
       break;
-    case 'minimize':
-      session.minimized = !session.minimized;
-      paint();
-      if (!session.minimized) panel?.querySelector('#copilot-input')?.focus({ preventScroll: true });
+    case 'toggle-advanced':
+      // The title is the affordance: it swaps the immersive stage for the full control surface.
+      session.focusOnAdvanced = session.advanced === false;
+      showAdvanced(!session.advanced);
+      sfx.open();
+      break;
+    case 'voice':
+      if (session.listening) stopListening('Voice capture stopped.');
+      else startListening();
+      break;
+    case 'voice-consent-allow': {
+      setState((state) => {
+        state.settings.voice = { ...(state.settings.voice || {}), networkRecognitionConsent: true };
+      }, 'voice-consent');
+      clearVoiceConsent();
+      toast('Voice input allowed for this browser', 'ok');
+      startListening();
+      break;
+    }
+    case 'voice-consent-deny':
+      clearVoiceConsent();
+      session.voiceStatus = 'Voice input declined. Tap Advanced Copilot to type instead.';
+      paintVoiceStatus();
       break;
     case 'details':
       session.details = !session.details;

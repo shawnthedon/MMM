@@ -139,6 +139,9 @@ try {
   await page.goto(`${base}/#/home`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('[data-act="copilot-open"]');
   await page.$eval('[data-act="copilot-open"]', (el) => el.click());
+  await page.waitForSelector('#copilot-panel', { timeout: 5000 });
+  // The overlay opens on the immersive stage; the conversation surface is one click away.
+  await page.$eval('#copilot-title', (el) => el.click());
   await page.waitForSelector('#copilot-input', { visible: true, timeout: 5000 });
   const panelOpen = await page.$('#copilot-input');
   if (panelOpen) {

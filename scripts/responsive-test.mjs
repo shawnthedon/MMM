@@ -114,11 +114,17 @@ await check('switches expose a touch target larger than their visual pill', () =
   assert(/min-height:\s*44px/.test(hit[0]) && /min-width:\s*44px/.test(hit[0]), `switch hit area must be ≥44px, got ${hit[0]}`);
 });
 
-await check('the Copilot panel is a phone sheet by default', () => {
+await check('the Copilot overlay is full screen by default', () => {
   const s = css['copilot.css'];
-  const base = s.match(/\.cp-panel \{[^}]*left: 8px;[\s\S]*?\}/);
-  assert(base, 'the mobile sheet rules must be the base, not a max-width exception');
-  assert(/@media \(min-width: 900px\) \{\s*\.cp-panel \{/.test(s), 'the desktop card should be a min-width override');
+  // Full-bleed immersive overlay at every width: inset covers the viewport and the panel is the
+  // screen, not a floating card that only becomes large on desktop.
+  const base = s.match(/\.cp-panel \{[\s\S]*?\}/);
+  assert(base, '.cp-panel base rule missing');
+  assert(/inset:\s*0/.test(base[0]), 'the base panel must cover the viewport');
+  assert(/height:\s*100dvh/.test(base[0]), 'the base panel must be viewport height');
+  assert(/border-radius:\s*0/.test(base[0]), 'an immersive overlay has square corners');
+  // Only min-width enhancements are allowed (mobile-first, no max-width layout queries).
+  assert(!/@media[^{]*max-width[^{]*\{[^@]*\.cp-panel/.test(s), 'no max-width override may reshape the panel');
 });
 
 /* =========================================================================================

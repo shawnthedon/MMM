@@ -99,6 +99,8 @@ export function seed() {
       copilotMemory: true,
       simulate: true,
       soundHaptics: true,
+      // 'system' follows prefers-reduced-motion; 'full' and 'reduced' override it.
+      motion: 'system',
       notify: { approvals: true, failures: true, deploys: true, budget: true, digest: true },
       trustWeights: { success: 12, compliance: 10, approvals: 8, evals: 8, uptime: 6, incidents: 15, cost: 8 },
       retention: { runs: '90d', logs: '30d', memory: '180d' },
@@ -114,6 +116,9 @@ export function seed() {
         maxChars: 280,
         localEndpoint: '',
         cloningEndpoint: '',
+        // Speech *recognition* runs in a network service in every shipping browser; it stays off
+        // until the user allows it explicitly in Advanced Copilot or here.
+        networkRecognitionConsent: false,
         profiles: [
           { id: 'device-default', name: 'Device voice', kind: 'device', engine: 'browser-speech', voiceRef: '', consent: null, status: 'active', createdAt: null, note: 'Uses whichever voice the operating system selects.' },
           { id: 'my-cloned-voice', name: 'My cloned voice', kind: 'cloned', engine: '', voiceRef: '', consent: null, status: 'needs-engine', createdAt: null, note: 'Requires a configured local cloning engine and a recorded consent decision.' },

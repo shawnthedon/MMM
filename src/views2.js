@@ -893,11 +893,24 @@ views.settings = {
     return `
       <div class="page-head"><h1>Settings</h1><div class="sub">Everything is live — toggles persist instantly</div></div>
 
+      <div class="section-title">Motion &amp; sound</div>
+      <div class="card">
+        <div class="kv"><span class="k">Animations</span>
+          <div class="seg theme-modes" role="group" aria-label="Animation preference">
+            ${[['system', 'Follow device'], ['full', 'Always'], ['reduced', 'Reduced']].map(([value, label]) => `<button class="${(st.motion || 'system') === value ? 'active' : ''}" data-act="set-motion" data-v="${value}" aria-pressed="${(st.motion || 'system') === value}">${label}</button>`).join('')}
+          </div>
+        </div>
+        <div class="kv"><span class="k">Interface sounds</span><span class="switch ${st.soundHaptics ? 'on' : ''}" data-act="toggle-sound" role="switch" aria-checked="${st.soundHaptics ? 'true' : 'false'}"></span></div>
+        <div class="tiny muted" style="margin-top:6px">Sounds are synthesised in the browser — no audio files, no network. They stay silent until your first tap.</div>
+      </div>
+
       <div class="section-title">Voice &amp; speech</div>
       <div class="card">
         <div class="kv"><span class="k">Auto-speak</span><span class="tiny muted">${st.voice?.autoSpeak ? 'on — finished sentences are spoken' : 'off — press Play in Voice Studio'}</span></div>
         <div class="kv"><span class="k">Chunking</span><span class="tiny muted">${esc(st.voice?.strategy || 'sentence')}</span></div>
         <div class="kv"><span class="k">Voice</span><span class="tiny muted">${esc((st.voice?.profiles || []).find((p) => p.id === st.voice?.selectedProfileId)?.name || 'device default')}</span></div>
+        <div class="kv"><span class="k">Voice input (network speech service)</span><span class="switch ${st.voice?.networkRecognitionConsent ? 'on' : ''}" data-act="toggle-voice-consent" role="switch" aria-checked="${st.voice?.networkRecognitionConsent ? 'true' : 'false'}"></span></div>
+        <div class="tiny muted" style="margin-top:6px">Speech input sends audio to your browser's speech service. It is off until you allow it; speaking replies uses the on-device engine instead.</div>
         <button class="btn sm" style="margin-top:10px" data-act="nav" data-to="voice">${icon('mic', 15)} Open Voice Studio</button>
       </div>
 
@@ -1000,6 +1013,22 @@ on('set-theme', (el, ds) => {
 on('set-density', (el, ds) => {
   setState((s) => { s.settings.density = ds.v; }, 'density');
   applyTheme(); import('./main.js').then((m) => m.rerender());
+});
+on('toggle-voice-consent', () => {
+  setState((s) => {
+    s.settings.voice = { ...(s.settings.voice || {}), networkRecognitionConsent: !s.settings.voice?.networkRecognitionConsent };
+  }, 'voice-consent');
+  toast(getState().settings.voice?.networkRecognitionConsent ? 'Voice input allowed' : 'Voice input disabled', 'ok');
+  import('./main.js').then((m) => m.rerender());
+});
+on('set-motion', (el, ds) => {
+  if (!['system', 'full', 'reduced'].includes(ds.v)) return;
+  setState((s) => { s.settings.motion = ds.v; }, 'motion');
+  import('./main.js').then((m) => m.rerender());
+});
+on('toggle-sound', () => {
+  setState((s) => { s.settings.soundHaptics = !s.settings.soundHaptics; }, 'sound');
+  import('./main.js').then((m) => m.rerender());
 });
 on('toggle-sim', () => { setState((s) => { s.settings.simulate = !s.settings.simulate; }, 'sim'); import('./main.js').then((m) => m.rerender()); });
 on('toggle-memory', () => { setState((s) => { s.settings.copilotMemory = !s.settings.copilotMemory; }, 'mem'); import('./main.js').then((m) => m.rerender()); });

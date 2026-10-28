@@ -40,7 +40,7 @@
     "audit:verify": "node -e \"import('./apps/gateway/src/db.js').then(m=>console.log(m.verifyAuditChain()))\"",
     "icons": "node scripts/gen-icons.mjs",
     "smoke": "node --import ./scripts/register-css-stub.mjs scripts/smoke.mjs",
-    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:design && npm run test:responsive && npm run test:local && npm run test:local-runtime && npm run test:isolation && npm run test:kanban && npm run test:scroll && npm run test:comms-gateway && npm run test:gateway && npm run test:session-safety && npm run test:sw-safety && npm run test:provider-safety && npm run test:comms-persistence && npm run test:training-jsonl && npm run test:voice",
+    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:design && npm run test:responsive && npm run test:local && npm run test:local-runtime && npm run test:isolation && npm run test:kanban && npm run test:scroll && npm run test:comms-gateway && npm run test:gateway && npm run test:session-safety && npm run test:sw-safety && npm run test:provider-safety && npm run test:comms-persistence && npm run test:training-jsonl && npm run test:voice && npm run test:motion",
     "test:copilot": "node --import ./scripts/register-css-stub.mjs scripts/copilot-tour.mjs",
     "test:auth": "node --import ./scripts/register-css-stub.mjs scripts/auth-ui-test.mjs",
     "test:gateway": "node --no-warnings scripts/gateway-auth-test.mjs",
@@ -67,7 +67,9 @@
     "test:scroll": "node --import ./scripts/register-css-stub.mjs scripts/scroll-test.mjs",
     "test:scroll:browser": "node scripts/scroll-browser-test.mjs",
     "test:voice": "node --import ./scripts/register-css-stub.mjs scripts/voice-test.mjs",
-    "test:voice:browser": "node scripts/voice-browser-test.mjs"
+    "test:voice:browser": "node scripts/voice-browser-test.mjs",
+    "test:motion": "node --import ./scripts/register-css-stub.mjs scripts/motion-test.mjs",
+    "test:motion:browser": "node scripts/motion-browser-test.mjs"
   },
   "devDependencies": {
     "autoprefixer": "^10.6.2",
@@ -79,6 +81,7 @@
   },
   "dependencies": {
     "@wllama/wllama": "3.8.1",
+    "animejs": "^4.5.0",
     "better-sqlite3": "^12.11.1",
     "ws": "^8.22.0"
   }
