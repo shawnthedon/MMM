@@ -75,9 +75,16 @@
   unverified. Evidence: [`local/cross-origin-isolation.md`](local/cross-origin-isolation.md).
 - 🟨 **Phase 2 experimental runtime** — a separate spike imports a user-provided GGUF to OPFS,
   prepares same-origin wllama WASM, then loads, streams raw completion, stops and unloads locally.
-  Desktop Chromium ran a tiny mixed-Q4 model with network disabled; mobile/device airplane-mode,
+  Desktop Chromium ran a tiny mixed-Q4 model with page-offline emulation; mobile/device airplane-mode,
   complete binary-licence review, memory/thermal measurements and broader lifecycle tests remain
   open. No weights bundled. Details: [`local/runtime-spike-research.md`](local/runtime-spike-research.md).
+- 🟨 **Spike hardening** — reject native load failures that wllama can otherwise report as loaded;
+  accurate abort status, retryable worker cleanup and no redirected runtime asset. Browser evidence
+  covers interrupted OPFS writes, truncated GGUF rejection, real streaming stop and worker shutdown.
+  **Correction:** Puppeteer page-offline emulation did not disconnect the dedicated worker, so the
+  previous test was not proof of full offline operation. A follow-up Linux network-namespace test
+  disconnected the whole browser from external networks and passed; worker generation/stop made no
+  observed HTTP(S) requests. Mobile airplane mode remains unverified.
 - ⬜ Phases 3–6 (model manager, offline text product, image feasibility/feature) — not started.
 
 ### Comms — server-side credentials + routes — ✅

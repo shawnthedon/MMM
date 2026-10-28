@@ -23,14 +23,15 @@ export function createLocalRuntime({ createEngine, wasmUrl, storage = globalThis
     return (await storage.getDirectory()).getDirectoryHandle(DIRECTORY, { create });
   };
   const cleanup = async () => {
+    // Do not claim the worker was released if exit fails. Retain it so the user can retry
+    // unload, and prevent generation/import until cleanup succeeds.
     loaded = false;
-    const old = engine;
-    engine = null;
-    try { if (old) await old.exit(); }
-    finally {
-      if (wasmObjectUrl) URL.revokeObjectURL(wasmObjectUrl);
-      wasmObjectUrl = null;
+    if (engine) {
+      await engine.exit();
+      engine = null;
     }
+    if (wasmObjectUrl) URL.revokeObjectURL(wasmObjectUrl);
+    wasmObjectUrl = null;
   };
   const modelFile = async () => {
     try { return await (await (await dir()).getFileHandle(FILE)).getFile(); }
@@ -41,7 +42,7 @@ export function createLocalRuntime({ createEngine, wasmUrl, storage = globalThis
   };
 
   return {
-    status: () => ({ busy, loaded, hasPreparedRuntime: Boolean(wasmObjectUrl) }),
+    status: () => ({ busy, loaded, cleanupPending: Boolean(engine && !loaded), hasPreparedRuntime: Boolean(wasmObjectUrl) }),
     async importModel(file) {
       return run(async () => {
         if (engine || loaded) throw new Error('Unload the model before replacing it.');
@@ -85,8 +86,11 @@ export function createLocalRuntime({ createEngine, wasmUrl, storage = globalThis
         if (!env.crossOriginIsolated || typeof env.SharedArrayBuffer !== 'function') throw new Error('Cross-origin isolation and SharedArrayBuffer are required for this runtime build. Open the app in a top-level HTTPS tab.');
         const target = new URL(wasmUrl, env.location.href);
         if (target.origin !== env.location.origin) throw new Error('The runtime asset must be same-origin.');
-        const response = await fetchImpl(target.href, { credentials: 'same-origin' });
+        // A same-origin URL can redirect elsewhere; refuse redirects rather than fetching
+        // executable runtime bytes from another origin.
+        const response = await fetchImpl(target.href, { credentials: 'same-origin', redirect: 'error' });
         if (!response.ok) throw new Error(`Runtime asset could not be loaded (HTTP ${response.status}).`);
+        if (response.url && new URL(response.url).origin !== env.location.origin) throw new Error('The runtime response must be same-origin.');
         wasmObjectUrl = URL.createObjectURL(await response.blob());
       });
     },
@@ -101,10 +105,19 @@ export function createLocalRuntime({ createEngine, wasmUrl, storage = globalThis
           // Never allow wllama's optional CDN compatibility fallback.
           engine.setCompat(null);
           await engine.loadModel([file], { n_ctx: 256, n_batch: 64, n_threads: 1, n_gpu_layers: 0 });
+          // wllama 3.8.1 may resolve loadModel even when the native load result says
+          // success=false. Validate the actual returned context before claiming success.
+          const context = engine.getLoadedContextInfo();
+          if (context?.success !== true || !['n_vocab', 'n_ctx', 'n_embd', 'n_layer'].every(key => Number.isInteger(context[key]) && context[key] > 0)) {
+            throw new Error('The runtime rejected the model or returned an invalid context.');
+          }
           loaded = true;
           return { loadMs: clock() - start, size: file.size };
         } catch (error) {
-          await cleanup().catch(() => {});
+          try { await cleanup(); }
+          catch (cleanupError) {
+            throw new Error(`Model load failed: ${error.message}. Worker cleanup also failed: ${cleanupError.message}. Retry unload before continuing.`);
+          }
           throw error;
         }
       });
@@ -113,23 +126,30 @@ export function createLocalRuntime({ createEngine, wasmUrl, storage = globalThis
       return run(async () => {
         if (!loaded || !engine) throw new Error('Load a model first.');
         if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 4000) throw new Error('Enter a prompt of 1–4000 characters.');
-        abort = new AbortController();
+        const controller = new AbortController();
+        abort = controller;
         const start = clock();
-        let text = '', usage = null;
+        let text = '', usage = null, active = true;
         try {
-          const stream = await engine.createCompletion({ prompt, max_tokens: 64, temperature: 0.7, stream: true, abortSignal: abort.signal });
-          for await (const chunk of stream) {
-            const part = chunk.choices?.[0]?.text || '';
-            if (part) { text += part; onText(part); }
-            if (chunk.usage) usage = chunk.usage;
-          }
+          // wllama's callback API avoids an unhandled-rejection race in its async-iterator
+          // adapter when a stream is aborted between chunks.
+          await engine.createCompletion({ prompt, max_tokens: 64, temperature: 0.7, stream: true, abortSignal: controller.signal,
+            onData(chunk) {
+              if (!active || controller.signal.aborted) return;
+              const part = chunk.choices?.[0]?.text || '';
+              if (part) { text += part; onText(part); }
+              if (chunk.usage) usage = chunk.usage;
+            },
+          });
+          // Some providers end normally after abort; never report that as completion.
+          if (controller.signal.aborted) throw new DOMException('Generation stopped.', 'AbortError');
           const elapsedMs = clock() - start;
           const tokens = usage?.completion_tokens ?? null;
           return { text, elapsedMs, tokens, tokensPerSecond: tokens != null && elapsedMs > 0 ? tokens / (elapsedMs / 1000) : null };
-        } finally { abort = null; }
+        } finally { active = false; abort = null; }
       });
     },
-    stop() { if (!abort) return false; abort.abort(); return true; },
+    stop() { if (!abort || abort.signal.aborted) return false; abort.abort(); return true; },
     async unload() { return run(cleanup); },
   };
 }
