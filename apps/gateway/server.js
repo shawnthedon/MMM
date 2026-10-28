@@ -15,6 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { db, migrate, logEvent, audit, verifyAuditChain, DATA_DIR, DB_DRIVER } from './src/db.js';
 import { seed } from './src/seed.js';
+import * as comms from './src/comms.js';
 import * as auth from './src/auth.js';
 import {
   can,
@@ -79,7 +80,12 @@ function fail(res, code, error, extra = {}) {
   json(res, code, { error }, extra);
 }
 
-function readBody(req) {
+/**
+ * Read the request body. `raw` is always returned so a signature can be checked over the exact
+ * bytes the provider signed. Routes that accept provider payloads (form-encoded webhooks) opt into
+ * `allowRaw`, otherwise a non-JSON body is still a 400.
+ */
+function readBody(req, { allowRaw = false } = {}) {
   return new Promise((resolve) => {
     let raw = '';
     let tooLarge = false;
@@ -93,20 +99,25 @@ function readBody(req) {
     });
     req.on('end', () => {
       if (tooLarge) return;
-      if (!raw) return resolve({ ok: true, body: {} });
+      if (!raw) return resolve({ ok: true, body: {}, raw: '' });
       try {
         const parsed = JSON.parse(raw);
         if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          if (allowRaw) return resolve({ ok: true, body: {}, raw });
           return resolve({ ok: false, status: 400, error: 'body must be a JSON object' });
         }
-        resolve({ ok: true, body: parsed });
+        resolve({ ok: true, body: parsed, raw });
       } catch {
+        if (allowRaw) return resolve({ ok: true, body: {}, raw });
         resolve({ ok: false, status: 400, error: 'invalid JSON body' });
       }
     });
     req.on('error', () => resolve({ ok: false, status: 400, error: 'request stream error' }));
   });
 }
+
+/* ---------- outbound fetch (replaceable in tests; never faked in production) ---------- */
+let gatewayFetch = (...args) => globalThis.fetch(...args);
 
 /* ---------- route table ---------- */
 const routes = [];
@@ -465,6 +476,15 @@ route('PATCH', /^\/api\/v1\/tasks\/([\w-]+)$/, { permission: 'task:write', mutat
   const ev = logEvent('task', `Task ${t.title} updated by ${ctx.principal.name}`, ctx.match[1]);
   audit(ctx.principal.id, ctx.principal.via, 'task.update', { id: ctx.match[1], fields }, 'allow', 'ok');
   broadcast('tasks', { type: 'task.updated', entity: ctx.match[1], event: ev });
+  // Fan-out is enqueue-only: routed channels get a queued row that the retry worker delivers, so a
+  // provider outage delays the notice instead of losing it (and never reports a delivery that
+  // did not happen).
+  try {
+    const updated = db.prepare('SELECT * FROM tasks WHERE id=?').get(ctx.match[1]);
+    if (updated.column_name === 'done' && ctx.body.column_name === 'done') {
+      comms.fanOut({ agentId: updated.assignee || null, text: `Task done: ${updated.title}`, reason: 'task-done', dedupeKey: `task-done:${updated.id}` });
+    }
+  } catch { /* fan-out is best-effort and must not fail the write */ }
   return { code: 200, body: hydrateTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(ctx.match[1])) };
 });
 
@@ -485,6 +505,9 @@ route('POST', /^\/api\/v1\/approvals$/, { permission: 'approval:request', mutati
   const ev = logEvent('approval', `Approval requested: ${b.action} · ${b.target || '—'} (${ctx.principal.name})`, id);
   audit(ctx.principal.id, ctx.principal.via, 'approval.request', { id, action: b.action }, 'allow', 'ok');
   broadcast('approvals', { type: 'approval.created', entity: id, event: ev });
+  try {
+    comms.fanOut({ agentId: b.agentId || null, text: `Approval needed: ${b.action} · ${b.risk} risk`, reason: 'approval-needed', dedupeKey: `approval:${id}` });
+  } catch { /* best-effort */ }
   return { code: 201, body: db.prepare('SELECT * FROM approvals WHERE id=?').get(id) };
 });
 
@@ -505,6 +528,98 @@ route('POST', /^\/api\/v1\/approvals\/([\w-]+)\/(allow|deny)$/, { permission: 'a
   audit(ctx.principal.id, ctx.principal.via, `approval.${ctx.match[2]}`, { id: gate.id, action: gate.action, target: gate.target }, 'allow', 'ok');
   broadcast('approvals', { type: 'approval.resolved', entity: gate.id, event: ev });
   return { code: 200, body: db.prepare('SELECT * FROM approvals WHERE id=?').get(gate.id) };
+});
+
+/* =========================================================================================
+ * Comms: server-side channels, credentials, delivery, queue
+ * =======================================================================================*/
+route('GET', /^\/api\/v1\/comms$/, { permission: 'comms:read' }, (ctx) => {
+  const out = comms.listChannels();
+  return {
+    code: 200,
+    body: {
+      ...out,
+      stats: comms.messageStats(),
+      recent: comms.listMessages({ limit: 20 }),
+      // The browser is told exactly where secrets live, so the panel can say it out loud.
+      note: 'Credentials are stored encrypted on this gateway and are never returned to a client.',
+      requestedBy: ctx.principal.name,
+    },
+  };
+});
+
+// Settings must be matched before the channel pattern (same method, different resource).
+route('PUT', /^\/api\/v1\/comms\/settings$/, { permission: 'comms:write', mutating: true }, (ctx) => {
+  const out = comms.saveSettings(ctx.body || {}, ctx.principal.name);
+  return { code: out.ok ? 200 : 400, body: out };
+});
+
+route('GET', /^\/api\/v1\/comms\/messages$/, { permission: 'comms:read' }, (ctx) => ({
+  code: 200,
+  body: {
+    messages: comms.listMessages({ channel: ctx.query.channel || null, direction: ctx.query.direction || null, limit: ctx.query.limit }),
+    stats: comms.messageStats(),
+  },
+}));
+
+route('PUT', /^\/api\/v1\/comms\/([\w-]+)$/, { permission: 'comms:write', mutating: true }, (ctx) => {
+  const out = comms.saveChannel(ctx.match[1], ctx.body || {}, ctx.principal.name);
+  if (!out.ok) return { code: out.code || 400, body: out };
+  broadcast('comms', { type: 'comms.channel.updated', entity: ctx.match[1] });
+  return { code: 200, body: out };
+});
+
+route('DELETE', /^\/api\/v1\/comms\/([\w-]+)$/, { permission: 'comms:write', mutating: true }, (ctx) => {
+  const out = comms.deleteChannel(ctx.match[1], ctx.principal.name);
+  if (!out.ok) return { code: out.code || 400, body: out };
+  broadcast('comms', { type: 'comms.channel.cleared', entity: ctx.match[1] });
+  return { code: 200, body: out };
+});
+
+route('POST', /^\/api\/v1\/comms\/([\w-]+)\/send$/, { permission: 'comms:write', mutating: true }, async (ctx) => {
+  const b = ctx.body || {};
+  const text = typeof b.text === 'string' ? b.text : '';
+  if (!text.trim()) return { code: 400, body: { error: 'text is required' } };
+  const out = await comms.sendChannelMessage(ctx.match[1], {
+    text,
+    title: typeof b.title === 'string' ? b.title : 'SwarmOS',
+    actor: ctx.principal.name,
+    dedupeKey: typeof b.dedupeKey === 'string' ? b.dedupeKey.slice(0, 120) : null,
+    fetchImpl: gatewayFetch,
+  });
+  audit(ctx.principal.id, ctx.principal.via, 'comms.send', { channel: ctx.match[1], ok: out.ok, reason: out.reason || null }, out.ok ? 'allow' : 'deny', out.ok ? 'ok' : 'failed');
+  broadcast('comms', { type: out.ok ? 'comms.sent' : 'comms.failed', entity: ctx.match[1] });
+  return { code: out.ok ? 200 : out.code || 502, body: out };
+});
+
+route('POST', /^\/api\/v1\/comms\/queue$/, { permission: 'comms:write', mutating: true }, async (ctx) => {
+  const out = await comms.processQueue({ fetchImpl: gatewayFetch });
+  audit(ctx.principal.id, ctx.principal.via, 'comms.queue.run', out, 'allow', 'ok');
+  return { code: 200, body: out };
+});
+
+/*
+ * Public routes: providers have no session, so authenticity comes from the adapter's signature.
+ * Both are CSRF-exempt by construction (`public: true` skips session handling) and are audited.
+ */
+route('GET', /^\/api\/v1\/comms\/([\w-]+)\/verify$/, { public: true }, async (ctx) => {
+  const out = await comms.verifyHandshake(ctx.match[1], { query: ctx.query, headers: ctx.req.headers });
+  audit('provider', ctx.match[1], 'comms.verify', { channel: ctx.match[1], ok: out.ok }, out.ok ? 'allow' : 'deny', out.ok ? 'ok' : 'refused');
+  if (!out.ok) return { code: out.code, body: { error: out.error } };
+  return { code: 200, text: out.challenge };
+});
+
+route('POST', /^\/api\/v1\/comms\/([\w-]+)\/inbound$/, { public: true, mutating: true, rawBody: true }, async (ctx) => {
+  const headerObj = {};
+  for (const [k, v] of Object.entries(ctx.req.headers)) headerObj[k.toLowerCase()] = v;
+  const out = await comms.handleInbound(ctx.match[1], {
+    headers: headerObj,
+    rawBody: ctx.rawBody,
+    json: Object.keys(ctx.body || {}).length ? ctx.body : null,
+    dedupeKey: typeof headerObj['x-swarmos-delivery'] === 'string' ? headerObj['x-swarmos-delivery'] : null,
+  });
+  if (!out.ok) return { code: out.code || 400, body: { error: out.error } };
+  return { code: 200, body: { ok: true, duplicate: Boolean(out.duplicate), reply: out.reply, delivered: out.delivered, deliveryError: out.deliveryError ?? null } };
 });
 
 /* ---------- events / audit ---------- */
@@ -559,10 +674,12 @@ async function handleRequest(req, res) {
   const match = requestedPath.match(routeMatch.pattern) || [];
 
   let body = {};
+  let rawBody = '';
   if (['POST', 'PATCH', 'PUT'].includes(req.method)) {
-    const parsed = await readBody(req);
+    const parsed = await readBody(req, { allowRaw: routeMatch.meta.rawBody === true });
     if (!parsed.ok) return fail(res, parsed.status, parsed.error, { 'x-swarmos-request-id': rid });
     body = parsed.body;
+    rawBody = parsed.raw || '';
   }
 
   const isPublic = routeMatch.meta.public === true;
@@ -604,8 +721,18 @@ async function handleRequest(req, res) {
 
   try {
     const out = (await routeMatch.handler({
-      req, res, match, query, body, principal, requestId: rid,
+      req, res, match, query, body, rawBody, principal, requestId: rid,
     })) || { code: 200, body: {} };
+    // Providers expect plain text on a verification handshake, not a JSON-encoded string.
+    if (out.text !== undefined) {
+      res.writeHead(out.code ?? 200, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'x-swarmos-request-id': rid,
+        ...(out.headers || {}),
+      });
+      res.end(String(out.text));
+      return;
+    }
     json(res, out.code ?? 200, out.body ?? {}, { 'x-swarmos-request-id': rid, ...(out.headers || {}) });
   } catch (err) {
     audit(principal?.id || 'anonymous', principal?.via || 'api', `${req.method} ${requestedPath}`, {}, 'allow', 'error');
@@ -682,7 +809,20 @@ export function createGateway() {
     });
   });
 
-  return { server, wss, bootstrap, authMode: mode.mode, authWarning: mode.warning };
+  // The retry worker is off in tests (SWARMOS_COMMS_DISABLE=1) and unref'd, so it never holds a
+  // process open — `processQueue` is driven explicitly instead.
+  const queueTicker = comms.startQueueTicker();
+
+  return {
+    server,
+    wss,
+    bootstrap,
+    authMode: mode.mode,
+    authWarning: mode.warning,
+    queueTicker,
+    /** Test seam: route provider calls to a local mock instead of the network. */
+    setFetch(fn) { gatewayFetch = fn; comms.setServiceFetch(fn); },
+  };
 }
 
 export async function startGateway({ port = PORT } = {}) {

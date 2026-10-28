@@ -18,6 +18,10 @@ import {
   maskSecret, defaultComms,
 } from './commsChannels.js';
 import { deliver, capabilities, adapterFor } from './commsAdapters.js';
+import {
+  canReadGatewayComms, canWriteGatewayComms, commsIsGateway, refreshComms, releaseComms,
+  saveChannelOnGateway, sendOnGateway, gatewayCommsState, commsSourceLabel, runQueueOnGateway,
+} from './commsGateway.js';
 import './comms.css';
 
 /* ---------- store helpers ---------- */
@@ -36,9 +40,18 @@ const rerender = () => import('./main.js').then((m) => m.rerender()).catch(() =>
 /* =========================================================================================
  * Gateway operations (shared by the UI and the Copilot)
  * =======================================================================================*/
-export function saveChannelConfig(id, configPatch) {
+/**
+ * Save credentials. With a gateway session they go to the gateway (encrypted server-side, masked on
+ * the way back); otherwise they stay in the browser store. Never reports success before it is saved.
+ */
+export async function saveChannelConfig(id, configPatch) {
   const channel = getChannel(id);
   if (!channel) return { ok: false, error: `Unknown channel “${id}”.` };
+  if (canReadGatewayComms()) {
+    const out = await saveChannelOnGateway(id, configPatch);
+    if (!out.ok) return out;
+    return { ok: true, mode: 'gateway', status: record(id).status };
+  }
   setState((s) => {
     s.comms = s.comms || defaultComms();
     const rec = s.comms.channels[id] || (s.comms.channels[id] = { enabled: false, config: {}, routing: { copilot: true, agents: [] } });
@@ -76,6 +89,30 @@ export function toggleChannel(id, enabled) {
 export async function sendTest(id, { text = 'SwarmOS test message — gateway reachable.', fetchImpl } = {}) {
   const channel = getChannel(id);
   if (!channel) return { ok: false, error: `Unknown channel “${id}”.` };
+  if (canReadGatewayComms()) {
+    // Server-side delivery: the gateway holds the credentials and reports the provider's answer.
+    const out = await sendOnGateway(id, text);
+    if (!out.ok) return out;
+    const delivered = out.delivered;
+    setState((s) => {
+      s.comms.log = [{
+        id: uid('cl'), at: now(), channel: id, direction: 'out', ok: delivered,
+        text: String(text).slice(0, 160),
+        detail: delivered ? out.detail : (out.error || (out.queued ? 'Queued for retry.' : 'Delivery failed.')),
+      }, ...(s.comms.log || [])].slice(0, 60);
+      if (delivered && id === 'browser') {
+        s.comms.inbox = [{ id: uid('msg'), title: 'SwarmOS', text, ts: now(), channel: 'browser', from: 'system' }, ...(s.comms.inbox || [])].slice(0, 50);
+      }
+    }, 'comms-test');
+    return {
+      ok: delivered,
+      mode: 'gateway',
+      queued: out.queued,
+      detail: out.detail || (delivered ? 'Provider accepted the message.' : ''),
+      error: delivered ? undefined : (out.queued ? `${out.error} — queued for retry on the gateway.` : out.error),
+      reason: out.reason,
+    };
+  }
   const rec = record(id);
   const result = await deliver(id, rec.config, { text, title: 'SwarmOS' }, fetchImpl ? { fetchImpl } : undefined);
   setState((s) => {
@@ -312,6 +349,7 @@ views.comms = {
   render() {
     const s = getState();
     const comms = s.comms || defaultComms();
+    const gw = gatewayCommsState();
     const verified = CHANNELS.filter((c) => channelStatus(c.id, comms.channels[c.id]) === 'verified').length;
     const enabled = CHANNELS.filter((c) => comms.channels[c.id]?.enabled).length;
     return `
@@ -326,9 +364,14 @@ views.comms = {
       <div class="banner ${verified ? 'info' : 'warn'}" style="margin-bottom:12px">
         ${icon('shield', 16)}
         <div><strong>Honest state:</strong> a channel is only “verified” after the provider accepted a real
-        test. Credentials live in this browser store in this build — the gateway has no comms routes yet,
-        so cloud deliveries need outbound network and will fail here with the provider's error.
+        test. ${esc(commsSourceLabel().text)}
         ${verified ? '' : 'None of the cloud channels is verified right now.'}</div>
+      </div>
+
+      <div class="row wrap" style="gap:8px;margin-bottom:12px">
+        <button class="btn sm" data-act="comms-refresh">${icon('refresh', 16)} ${canReadGatewayComms() ? 'Reload from gateway' : 'Refresh'}</button>
+        ${canWriteGatewayComms() ? `<button class="btn sm" data-act="comms-queue">${icon('broadcast', 16)} Run retry queue${gw.stats?.out?.queued ? ` (${gw.stats.out.queued})` : ''}</button>` : ''}
+        ${gw.at ? `<span class="tiny muted">Last read ${new Date(gw.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : ''}
       </div>
 
       <div class="comms-grid">${CHANNELS.map(channelTile).join('')}</div>
@@ -402,7 +445,8 @@ function channelSheet(id) {
             <div class="tiny muted" style="margin-top:3px">${esc(f.help)}${f.env?.[f.key] ? ` · env ${esc(f.env[f.key])}` : ''}</div>
           </div>`;
         }).join('')}
-        <div class="tiny muted">Saved values are never echoed back: secrets render as ••••last4. Changing any field clears the verification badge.</div>
+        <div class="tiny muted">Saved values are never echoed back: secrets render as ••••last4. Changing any field clears the verification badge.
+        ${canReadGatewayComms() ? 'These values are stored encrypted on the gateway and never returned to this browser.' : 'No gateway session — these values are kept in this browser only.'}</div>
         ${missing.length ? `<div class="tiny" style="color:var(--warning);margin-top:6px">Still required to send: ${esc(missing.join(', '))}</div>` : ''}
         ${missingIn.length ? `<div class="tiny" style="color:var(--warning);margin-top:4px">Inbound webhooks cannot verify yet: ${esc(missingIn.join(', '))}</div>` : ''}
       </div>
@@ -461,7 +505,7 @@ function commandSheet() {
 
 /* ---------- actions ---------- */
 on('comms-open', (el, ds) => channelSheet(ds.id));
-on('comms-save', (el, ds) => {
+on('comms-save', async (el, ds) => {
   const sheet = document.querySelector('.sheet.open');
   if (!sheet) return;
   const patch = {};
@@ -469,10 +513,29 @@ on('comms-save', (el, ds) => {
     if (input.dataset.secret === '1' && /^••••/.test(input.value)) return; // untouched masked secret
     patch[input.dataset.cf] = input.value;
   });
-  const out = saveChannelConfig(ds.id, patch);
+  if (el) { el.disabled = true; el.textContent = 'Saving…'; }
+  const out = await saveChannelConfig(ds.id, patch);
+  if (el) { el.disabled = false; el.innerHTML = `${icon('check', 15)} Save`; }
   if (!out.ok) return toast(out.error, 'bad');
   closeAllSheets();
-  toast('Saved — not verified until a live test succeeds', 'warn');
+  toast(out.mode === 'gateway'
+    ? 'Saved on the gateway (encrypted) — not verified until a live test succeeds'
+    : 'Saved in this browser — not verified until a live test succeeds', 'warn');
+  rerender();
+});
+
+on('comms-refresh', async () => {
+  if (!canReadGatewayComms()) { rerender(); return; }
+  const out = await refreshComms();
+  toast(out.ok ? `Read ${out.channels} channels from the gateway` : out.error, out.ok ? 'ok' : 'bad');
+  rerender();
+});
+
+on('comms-queue', async () => {
+  const out = await runQueueOnGateway();
+  toast(out.ok
+    ? `Queue: ${out.sent ?? 0} sent, ${out.failed ?? 0} failed, ${out.deferred ?? 0} deferred`
+    : out.error, out.ok ? 'ok' : 'bad');
   rerender();
 });
 on('comms-toggle', (el, ds) => {

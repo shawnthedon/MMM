@@ -18,6 +18,7 @@ import './skillsMatrix.js';
 import './skillsImportView.js';
 import './comms.js';
 import './local.js';
+import { refreshComms, releaseComms, canReadGatewayComms } from './commsGateway.js';
 
 let currentRoute = 'home';
 let currentParams = {};
@@ -146,13 +147,21 @@ function boot() {
       const auth = getAuth();
       // Then data: adopt the server's rows (or keep demo rows and say so).
       initDataSync();
+      // Comms is gateway-owned when a session holds comms:read; otherwise the panel keeps its
+      // browser-only credentials and says so.
+      if (canReadGatewayComms()) refreshComms({ silent: true }).catch(() => {});
+      else releaseComms();
       rerender();
       if (isApiMode() && auth.status === 'anonymous' && currentRoute !== 'login') navigate('login');
       else if (isApiMode() && auth.status === 'unreachable' && currentRoute !== 'login') navigate('login');
     })
     .catch(() => {});
 
-  subscribeAuth(() => {
+  subscribeAuth((auth) => {
+    // Follow the session: adopt server-side channels on sign-in, drop them on sign-out so a stale
+    // "verified" badge can never survive.
+    if (auth?.status === 'authenticated' && canReadGatewayComms()) refreshComms({ silent: true }).catch(() => {});
+    else if (auth?.status === 'anonymous' || auth?.status === 'unreachable') releaseComms();
     refreshChrome(currentRoute);
     // The sign-in view owns its own form state and repaints itself, so a session poll must not
     // clobber what the user is typing.

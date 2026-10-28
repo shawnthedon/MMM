@@ -4,6 +4,30 @@ Nothing here is needed to use the panel: an unconfigured channel simply reports
 `Not configured`. Fill a channel's outbound fields to move it to **Configured · unverified**, then run
 **Send test** to reach **Delivery verified**.
 
+## Where the values go
+
+* **Signed in to a gateway with `comms:write`** — the values are POSTed once, encrypted with
+  AES-256-GCM under a key derived from `SWARMOS_SECRET`, and stored in `comms_channels`. The browser
+  only ever receives `••••last4`. Delivery, retries and webhooks run on the gateway
+  ([details](server-side.md)).
+* **No gateway session** — they stay in this browser's store, and the panel says so.
+
+Set `SWARMOS_SECRET` on the gateway before production: without it the gateway generates
+`data/.comms-key` and warns that the key is local to that machine.
+
+## Redirect URLs to register with each provider
+
+| Provider | What to register |
+| --- | --- |
+| Telegram | `setWebhook https://<host>/api/v1/comms/telegram/inbound` with `secret_token` = `webhookSecret` |
+| WhatsApp | callback `https://<host>/api/v1/comms/whatsapp/inbound`, verify token = `verifyToken` |
+| Slack | Events URL `https://<host>/api/v1/comms/slack/inbound`, Interactivity same URL |
+| Discord | Interactions endpoint `https://<host>/api/v1/comms/discord/inbound` |
+| SMS (Twilio) | messaging webhook `https://<host>/api/v1/comms/sms/inbound` (form-encoded) |
+
+The host must be reachable over HTTPS from the provider. `localhost` works only through a tunnel; the
+gateway's CORS allowlist does not apply to these public routes, but the signature check does.
+
 ## Telegram
 | Field | Where to get it | Required |
 | --- | --- | --- |

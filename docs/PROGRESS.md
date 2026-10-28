@@ -71,6 +71,35 @@
 - ✅ Evidence: `npm run test:local` (13 checks).
 - ⬜ Phases 2–6 (runtime spike, model manager, offline text, image feasibility/feature) — not started.
 
+### Comms — server-side credentials + routes — ✅
+- ✅ **Migration 003** — `comms_channels` (encrypted config, routing, verification), `comms_messages`
+  (one row per attempt, dedupe key, retry cursor), `comms_settings` (quiet hours, rate limit, retries).
+- ✅ **Encryption at rest** — AES-256-GCM with a key derived from `SWARMOS_SECRET` (HKDF-SHA256); a
+  generated `data/.comms-key` with a warning only when the env var is absent. Tampered ciphertext
+  decrypts to nothing instead of guessing. API returns `••••last4`; a masked value sent back is
+  ignored, never stored over the real secret.
+- ✅ **Routes** — `GET /comms`, `PUT /comms/settings`, `GET /comms/messages`, `PUT|DELETE /comms/:channel`,
+  `POST /comms/:channel/send`, `POST /comms/queue`, plus public `GET /comms/:channel/verify` and
+  `POST /comms/:channel/inbound`. `comms:read` for every role, `comms:write` from Operator; every call
+  audited (including refusals).
+- ✅ **Delivery honesty** — one `comms_messages` row per attempt; verified only by a provider-accepted
+  send; `4xx` fails, network/timeout/rate-limit/5xx queue with `30s→2m→5m→15m` backoff up to
+  `retryLimit`, per-channel rate limit defers, quiet hours hold (`202`), `dedupeKey` makes sends
+  idempotent, bodies redacted (tokens, bearers, phone numbers).
+- ✅ **Inbound** — signature first over the raw body (Telegram secret token, Meta HMAC, Slack v0 with
+  a 5-minute replay window, Twilio form params), `x-swarmos-delivery` dedupe, deterministic commands
+  from gateway rows, gated commands refused, replies delivered through the same path.
+- ✅ **Fan-out** — task-done and approval-needed enqueue to channels routed to that agent; delivery
+  happens in the queue worker, so an outage delays instead of losing or faking.
+- ✅ **Browser** — `src/commsGateway.js` adopts masked channel state when the session holds
+  `comms:read`, saves/sends through the gateway, drops it on sign-out, and the persist filter refuses
+  to write gateway-owned comms to localStorage. Without a session the panel keeps its browser-only
+  behaviour and states it.
+- ✅ Evidence: `npm run test:comms-gateway` (27 checks, real HTTP + mocked provider) and
+  `npm run test:comms` (22 — panel, adapters, browser gateway path).
+- ⬜ Not done: Discord Ed25519 interactions, Web Push/VAPID, a separate retry worker, template
+  selection in the panel, key rotation. Doc: [`comms/server-side.md`](comms/server-side.md).
+
 ### Mobile-first responsive audit — ✅
 - ✅ Removed the last desktop-first breakpoints: every stylesheet is now authored phone-first
   (`min-width` only; `test:responsive` fails on any `max-width` query).
@@ -215,6 +244,14 @@ POST /api/v1/tasks                     → create task
 PATCH /api/v1/tasks/:id                → move/assign/update
 GET  /api/v1/approvals                 → all approvals
 POST /api/v1/approvals/:id/allow|deny  → resolve a gate
+GET  /api/v1/comms                      → channels (masked), settings, stats, recent messages
+PUT  /api/v1/comms/:channel             → save config / enable / routing (encrypted at rest)
+DELETE /api/v1/comms/:channel           → remove credentials + verification
+POST /api/v1/comms/:channel/send        → real delivery (idempotent with dedupeKey)
+POST /api/v1/comms/queue                → run the retry queue now
+GET  /api/v1/comms/messages             → delivery log (redacted bodies)
+GET  /api/v1/comms/:channel/verify      → provider handshake (public: Meta hub.challenge, Slack)
+POST /api/v1/comms/:channel/inbound     → signed webhook (public, signature-gated, deduped)
 GET  /api/v1/events?cursor=            → event feed (replayable)
 GET  /api/v1/audit                     → recent audit rows (audit:read)
 GET  /api/v1/audit/verify              → hash-chain check (audit:verify)

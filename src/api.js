@@ -194,6 +194,13 @@ export const api = {
   requestApproval: (body) => request('/api/v1/approvals', { method: 'POST', body }),
   decideApproval: (id, decision) =>
     request(`/api/v1/approvals/${encodeURIComponent(id)}/${decision === 'deny' ? 'deny' : 'allow'}`, { method: 'POST' }),
+  comms: () => request('/api/v1/comms'),
+  saveCommsChannel: (id, body) => request(`/api/v1/comms/${encodeURIComponent(id)}`, { method: 'PUT', body }),
+  deleteCommsChannel: (id) => request(`/api/v1/comms/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  sendComms: (id, body) => request(`/api/v1/comms/${encodeURIComponent(id)}/send`, { method: 'POST', body }),
+  runCommsQueue: () => request('/api/v1/comms/queue', { method: 'POST', body: {} }),
+  saveCommsSettings: (body) => request('/api/v1/comms/settings', { method: 'PUT', body }),
+  commsMessages: (params = '') => request(`/api/v1/comms/messages${params}`),
   events: (cursor = 0) => request(`/api/v1/events?cursor=${Number(cursor) || 0}`),
   audit: (limit = 50) => request(`/api/v1/audit?limit=${Number(limit) || 50}`),
   verifyAudit: () => request('/api/v1/audit/verify'),

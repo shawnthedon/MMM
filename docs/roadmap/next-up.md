@@ -3,7 +3,7 @@
 Written to be picked up cold, without the chat that produced it. Each item lists the files, the data
 model, the edge cases that matter, and "done when" checks that a test can assert.
 
-Last updated: 2026-10-27 · Baseline: Kanban board shipped (`npm run test:kanban` 26/26); next up is live Comms then Local AI phase 2.
+Last updated: 2026-10-27 · Baseline: Kanban board (26/26) and server-side Comms (27/27 + 22/22) shipped; next up is Local AI phase 2 (COOP/COEP headers, then a runtime spike).
 
 ---
 
@@ -28,37 +28,29 @@ All acceptance criteria below are met; the implementation notes and the limits t
 - Not done (deliberately, no endpoint/column exists): server-side dependencies, card ordering,
   delete on a gateway. These refuse rather than pretend.
 
-## 2. Comms: make the gateways live
+## 2. ✅ Comms: make the gateways live — SHIPPED
 
-Already built: channel catalogue, adapters, signature verification, panel, routing, Copilot seam,
-18/18 tests. Missing: **persistence and routes**.
+Done in this round: migration 003 (`comms_channels`, `comms_messages`, `comms_settings`), route set
+with `comms:read`/`comms:write`, AES-256-GCM credentials server-side (masked on every read, never
+persisted by the browser), delivery rows per attempt with backoff/quiet hours/rate limit, idempotent
+sends, redaction, signature-gated inbound with replay dedupe and provider handshakes, fan-out from
+task-done / approval-needed, and a panel that states where the secrets live.
 
-1. **Migration** `comms_channels` (id, workspace, channel, config_ciphertext, enabled, verified_at,
-   last_test, created_by, updated_at) + `comms_messages` (direction, channel, body_redacted, status,
-   provider_id, created_at). Encrypt secrets with a key derived from `SWARMOS_SECRET`.
-2. **Routes** (RBAC `comms:read`/`comms:write`, audit every call):
-   ```
-   POST /api/v1/comms/:channel/inbound    signature-gated, CSRF-exempt
-   GET  /api/v1/comms/:channel/verify     Meta hub.challenge, Slack url_verification
-   POST /api/v1/comms/:channel/send       server-side delivery only
-   GET  /api/v1/comms/status              status + last test, never secrets
-   ```
-   Wire them straight to `handleInbound()` / `deliver()` from `src/comms*.js` — the logic exists.
-3. **Move credentials server-side**: the browser stops storing secrets; the panel reads masked values
-   only. The panel already displays `••••last4` and never echoes values.
-4. **Outbound queue** with retry/backoff, per-channel rate limit, quiet hours, redaction in logs.
-5. **Agent fan-out**: task-done / approval-needed / run-failed events → `routesFor(agentId)`.
-6. **Web Push** for the browser channel (VAPID), so alerts arrive outside an open tab.
-7. Provider limits to respect: Meta 24-hour window (templates), Discord 3 s ACK, Slack 3 s ack +
-   `response_url`, Twilio signature URL.
+Evidence: `npm run test:comms-gateway` (27) and `npm run test:comms` (22). Doc:
+[`../comms/server-side.md`](../comms/server-side.md), credentials per channel in
+[`../comms/credentials.md`](../comms/credentials.md).
 
-**Done when:** a real Telegram message sent from the panel appears in Telegram, an inbound `/status`
-gets an answer, the same message shows in `comms_messages` with the provider id and in the audit
-chain, and no secret is ever returned by `GET /api/v1/comms/status`.
+Still open (smaller, ordered):
 
-**Credentials needed:** see [`../comms/credentials.md`](../comms/credentials.md).
-
----
+1. **Discord interactions** — Ed25519 verification with the app public key (the adapter refuses today,
+   which is why Discord inbound is unusable).
+2. **Web Push (VAPID)** for the browser channel, so alerts arrive outside an open tab. Needs a key
+   pair, `push_subscriptions`, and a service-worker `push` handler.
+3. **Worker split** — the retry ticker is in-process and `unref`'d. Move it to a loop or a separate
+   process so retries survive a gateway restart schedule.
+4. **Provider rate-limit headers** — parse `Retry-After` / `x-ratelimit-*` instead of only our counter.
+5. **Template selection** for WhatsApp outside the 24-hour window (adapter already supports it).
+6. **Key rotation** for `SWARMOS_SECRET` (a key ring with versioned ciphertext).
 
 ## 3. Local (on-device AI) — phases 2–6
 

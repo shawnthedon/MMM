@@ -199,7 +199,7 @@ Or: push to GitHub → **vercel.com/new** → import `swarmos` → Framework: **
 ## 🧪 Quality checks
 
 ```bash
-npm test            # smoke 33 · copilot 6 · auth 16 · read sync 12 · designer 18 · skills 23 · comms 18 · responsive 17 · local 13 · kanban 26 · gateway 28
+npm test            # smoke 33 · copilot 6 · auth 16 · read sync 12 · designer 18 · skills 23 · comms 22 · responsive 17 · local 13 · kanban 26 · comms-gateway 27 · gateway 28
 npm run smoke       # boots the real app — every route renders
 npm run test:readsync  # gateway rows replace fixtures, provenance labels, no persistence
 npm run test:designer  # designer shortcuts, validation split, definition save paths
@@ -208,6 +208,7 @@ npm run test:comms     # channel status honesty, live-test outcomes, webhook sig
 npm run test:responsive # mobile-first CSS rules, tap targets, viewport meta, fluid controls
 npm run test:local     # module-grid geometry + on-device AI preflight (capability probes, honest verdicts)
 npm run test:kanban    # board zoom, wire geometry, confirm-then-move, Copilot board intents
+npm run test:comms-gateway # server-side credentials, delivery outcomes, retry queue, webhook signatures
 npm run test:gateway   # RBAC, CSRF, lockout, separation of duties, audit chain
 npm run lint        # code style (after Phase-1 tooling)
 ```
@@ -224,7 +225,8 @@ npm run lint        # code style (after Phase-1 tooling)
 | 🔄 [Read Sync](docs/copilot/read-sync.md) | How module screens read the gateway and how demo vs live data is labelled |
 | 🧭 [Agent Designer](docs/copilot/agent-designer.md) | Guided agent creation: steps, validation states, honest boundaries, shortcuts |
 | ⚡ [Skills Hub & Matrix](docs/copilot/skills-hub.md) | Import formats, scanning/quarantine rules, typed relationship matrix, export |
-| 📡 [Comms gateways](docs/comms/channels.md) | Six channels, adapter contract, signature checks, status model, planned routes |
+| 📡 [Comms gateways](docs/comms/channels.md) | Six channels, adapter contract, signature checks, status model |
+| 🔐 [Comms server-side](docs/comms/server-side.md) | Encrypted credentials, comms routes, delivery outcomes, retry queue, webhooks, fan-out |
 | 🔑 [Comms credentials](docs/comms/credentials.md) | Exactly what to supply per channel and where it is stored |
 | 🗺 [Next up](docs/roadmap/next-up.md) | Open work with acceptance criteria (live comms, Local AI phases 2–6) |
 | 🧱 [Kanban board](docs/kanban/board.md) | One write seam, zoom mechanics, dependency wires, move confirmation, Copilot intents, limits |

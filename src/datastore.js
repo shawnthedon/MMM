@@ -126,6 +126,13 @@ setPersistFilter((state) => {
   for (const slice of GATEWAY_SLICES) {
     if (state.provenance?.[slice] === 'gateway') out[slice] = demoSnapshot[slice];
   }
+  // Comms channels are gateway-owned when a session holds comms:read: the statuses and masked
+  // configuration must not survive in localStorage, where they would later look live.
+  if (state.provenance?.comms === 'gateway') {
+    out.comms = { ...(state.comms || {}), log: [], channels: undefined };
+    delete out.comms.channels;
+    out.commsGateway = { status: 'demo', note: 'gateway rows are not persisted', error: null, at: null };
+  }
   return out;
 });
 

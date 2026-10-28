@@ -40,7 +40,7 @@
     "audit:verify": "node -e \"import('./apps/gateway/src/db.js').then(m=>console.log(m.verifyAuditChain()))\"",
     "icons": "node scripts/gen-icons.mjs",
     "smoke": "node --import ./scripts/register-css-stub.mjs scripts/smoke.mjs",
-    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:responsive && npm run test:local && npm run test:kanban && npm run test:gateway",
+    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:responsive && npm run test:local && npm run test:kanban && npm run test:comms-gateway && npm run test:gateway",
     "test:copilot": "node --import ./scripts/register-css-stub.mjs scripts/copilot-tour.mjs",
     "test:auth": "node --import ./scripts/register-css-stub.mjs scripts/auth-ui-test.mjs",
     "test:gateway": "node --no-warnings scripts/gateway-auth-test.mjs",
@@ -50,7 +50,8 @@
     "test:comms": "node --import ./scripts/register-css-stub.mjs scripts/comms-test.mjs",
     "test:responsive": "node --import ./scripts/register-css-stub.mjs scripts/responsive-test.mjs",
     "test:local": "node --import ./scripts/register-css-stub.mjs scripts/local-test.mjs",
-    "test:kanban": "node --import ./scripts/register-css-stub.mjs scripts/kanban-test.mjs"
+    "test:kanban": "node --import ./scripts/register-css-stub.mjs scripts/kanban-test.mjs",
+    "test:comms-gateway": "node --no-warnings scripts/comms-gateway-test.mjs"
   },
   "devDependencies": {
     "happy-dom": "^21.0.1",
