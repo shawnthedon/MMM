@@ -12,7 +12,7 @@
     <a href="./#/local">← Back to Local AI</a>
     <h1>Local AI runtime spike</h1>
     <p class="notice"><strong>Experimental, not a finished feature.</strong> No model is supplied. You must provide a small compatible GGUF with a licence you can use. This runs a raw text completion, not a chat assistant. Model compatibility, memory safety and mobile performance are unproven.</p>
-    <p>Open this page online first to load the app, import a model and prepare the runtime. Then turn off the network before loading and testing. The model stays in this browser’s private storage; the runtime is same-origin. Nothing is sent to a cloud model.</p>
+    <p>Open this page online first to load the app, import a model and prepare the runtime. Then disconnect the device from the network before loading and testing. Browser developer-tools offline emulation alone may not disconnect workers. The model stays in this browser’s private storage; the runtime is same-origin. Nothing is sent to a cloud model.</p>
     <section aria-labelledby="model-title">
       <h2 id="model-title">1. Import a model</h2>
       <p>One file, up to 512 MiB. Replacing it overwrites the previous spike file. Only the GGUF header is checked; a matching header does not prove integrity, safety, licence or compatibility.</p>

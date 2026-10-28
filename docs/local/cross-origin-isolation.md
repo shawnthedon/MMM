@@ -60,5 +60,5 @@ or site-isolation-disabling defaults, which would invalidate the measurement.
 
 Header implementation and automated checks are in place; target-device/production verification is
 pending. This is not phase-2 runtime PASS. The separate experimental spike now has desktop-only
-offline inference evidence; no model is bundled and there is no cloud fallback. For evidence and remaining checks see
+inference evidence in an externally disconnected Linux network namespace; mobile airplane mode remains unverified. No model is bundled and there is no cloud fallback. For evidence and remaining checks see
 [`runtime-spike-research.md`](runtime-spike-research.md).

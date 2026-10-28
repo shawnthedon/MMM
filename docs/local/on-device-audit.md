@@ -93,7 +93,7 @@ optimism. Every failure path must release allocations and surface an actionable 
 | Phase | Status | Exit evidence required before PASS |
 | --- | --- | --- |
 | 1 Audit | **done** (this document + preflight screen) | capabilities measured on the target device; architecture and risks recorded |
-| 2 Runtime spike | **in progress**, desktop-only offline evidence | one small GGUF loaded and queried offline in airplane mode on a real device; licence, bundle size, load time, tokens/sec, memory recorded |
+| 2 Runtime spike | **in progress**, desktop-only network-namespace evidence | one small GGUF loaded and queried offline in airplane mode on a real device; licence, bundle size, load time, tokens/sec, memory recorded |
 | 3 Model manager | not started | import/reject tests, real download progress + cancel + recovery, checksum verification, lifecycle persistence |
 | 4 Offline text | not started | streaming + stop, airplane-mode test, network log showing no upload |
 | 5 Image feasibility | not started | side-by-side runtime/model comparison on real hardware with timings and quality notes |

@@ -3,7 +3,7 @@
 Written to be picked up cold, without the chat that produced it. Each item lists the files, the data
 model, the edge cases that matter, and "done when" checks that a test can assert.
 
-Last updated: 2026-10-28 · Experimental Local AI runtime runs a tiny model offline in desktop Chromium; deployed host and mobile devices remain unverified. Runtime phase 2 has not passed.
+Last updated: 2026-10-28 · Experimental Local AI runtime ran a tiny model in an externally disconnected Linux network namespace; deployed host and mobile devices remain unverified. Runtime phase 2 has not passed.
 
 ---
 
@@ -66,7 +66,10 @@ Order of work, each gated on real evidence:
    third-party integrations under COEP/COOP. Evidence: [`../local/cross-origin-isolation.md`](../local/cross-origin-isolation.md).
 2. **Runtime spike (phase 2, in progress)** — separate `local-spike.html` and `src/localRuntime.js`
    load an imported GGUF from OPFS using pinned wllama and stream raw completions. Desktop Chromium
-   offline test passed with a tiny mixed-Q4 fixture. Finish binary licensing review, deployment and
+   page-offline test ran a tiny mixed-Q4 fixture; the worker remained network-capable. Follow-up
+   verification covers worker observation during generation, stop, interrupted writes and corrupt
+   model rejection; an externally disconnected Linux namespace run passed, but is not mobile
+   airplane-mode proof. Finish binary licensing review, deployment and
    intended-device airplane-mode testing, network audit, real performance/memory/thermal evidence
    and lifecycle failures before marking PASS. Evidence and limits:
    [`../local/runtime-spike-research.md`](../local/runtime-spike-research.md).

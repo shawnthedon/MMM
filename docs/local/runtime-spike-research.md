@@ -26,7 +26,7 @@ run; it is not cached as a standalone offline entry point. The normal PWA shell 
 * `src/localRuntime.js` accepts local file blobs, uses a fixed OPFS directory/name, fetches only the
   same-origin WASM to a blob URL before going offline, never uses a URL-based model loader, and
   suppresses runtime logs. Closing the tab can end work; storage may be evicted by the browser.
-  Network isolation remains a test result for the tested runtime/browser, not a universal guarantee.
+  A later Linux network-namespace test isolated the whole test browser from external networks; this is not mobile-device evidence (see below).
 
 ## Desktop evidence — 28 October 2026
 
@@ -50,18 +50,88 @@ quality benchmark.
   online; Chromium's offline mode was then enabled. A real model load took **0.26 s**, and a
   64-token raw completion took **0.14 s** (~**461.89 tokens/s**, including prompt processing).
   The run produced 175 output characters and unloaded successfully. The page-level request log
-  recorded zero HTTP requests after offline mode was enabled; Chromium offline mode additionally
-  prevented network traffic. This is not a device airplane-mode test or a comprehensive network
-  audit of every browser/worker.
+  recorded zero HTTP requests after page offline mode was enabled. **Correction:** a subsequent
+  sentinel test showed that Puppeteer's page offline setting did not disconnect the dedicated worker
+  from the local server. The earlier run therefore did not establish network disconnection for the
+  worker and must not be treated as a complete offline or privacy test. See the follow-up below.
 * An offline navigation back to the normal PWA still returned the real application shell. Peak
   runtime memory, thermal behaviour and battery consumption were **not measured**; browser APIs do
   not reliably expose these. Numbers are a single small-model sandbox run and must not be generalized.
 
+## Follow-up desktop verification — 28 October 2026
+
+A repeated run on built Vite preview and headless Chromium 153 using the same 277,024-byte fixture
+found and fixed two failures: wllama's native `load` result can report `success=false` while its JS
+`loadModel()` still resolves, and stopping its iterator stream produced an unhandled abort rejection.
+The spike now validates the actual native context (`success` and nonzero dimensions) before marking
+a model loaded, uses the callback streaming API, treats an abort as stopped even if a provider
+returns normally, and retains failed cleanup for an explicit retry. A runtime-asset redirect is
+refused. This validates the selected runtime's result; it is still **not** a full GGUF integrity or
+licence validation.
+
+The updated browser test exercised a real interrupted OPFS replacement (the previous model's SHA-256
+remained unchanged), rejected a truncated GGUF at runtime load, exercised the Stop button during real
+streaming without an unhandled exception, verified that unload terminated the model worker, and
+performed a second load/unload. Eleven mock-backed tests additionally cover cancellation, quota,
+invalid context, redirect and failed-cleanup retry. The 320 px check passed in desktop Chromium.
+
+For generation and stop, Chrome DevTools Protocol was attached to the existing dedicated model
+worker. A deliberate local HTTP sentinel request was observed, validating the observer; it was also
+**reachable despite page offline emulation**. Excluding that sentinel, zero HTTP(S) requests were
+observed from the instrumented worker during generation/stop and zero from the page during the first
+inference. Worker instrumentation starts **after** model load and does not prove coverage of other
+workers, service workers, other browsers, or network traffic at process level. The test does not
+prove airplane-mode operation: only a physically disconnected target device or equivalent verified
+network isolation and an appropriate network capture can do that. This supersedes the stronger claim
+in the previous report. No prompt, completion, or model data was included in the sentinel.
+
+### Linux network-namespace run
+
+The same updated browser test was subsequently run in a Linux network namespace with **only the
+loopback interface** and no external IPv4/IPv6 routes. The test process checks that configuration
+before launching Vite and Chromium; both page and model workers inherit the namespace. The tiny
+GGUF loaded from OPFS, generated 64 tokens, stopped, unloaded, loaded again and rejected the truncated
+file. The loopback sentinel remained reachable (expected, as it is the local test server); the
+instrumented model worker made no HTTP(S) requests during generation/stop, excluding the sentinel.
+One sample measured **0.33 s** load and **0.16 s** generation (~**388.13 tokens/s**, including
+prompt processing). This establishes disconnected-external-network behaviour only for this Linux
+sandbox and fixture; it does not establish mobile airplane mode or complete network logging during
+worker startup. Peak memory, heat and battery remain unmeasured.
+
+To repeat in a disposable Linux environment with `ip`, `unshare`, permission to create a network
+namespace, the Chromium dependencies and a prepared GGUF (adjust the user and paths):
+
+```sh
+sudo unshare -n sh -c 'ip link set lo up && exec sudo -u user env MMM_SPIKE_REQUIRE_NETWORK_NAMESPACE=1 MMM_SPIKE_MODEL=/tmp/mmm-stories260k-q4.gguf LD_LIBRARY_PATH=/tmp/chromium-libs/lib npm run test:local-spike:browser'
+```
+
+The namespace preflight aborts unless loopback is the only interface and there are no external
+routes. Ordinary `npm run test:local-spike:browser` does not create or assert this namespace.
+The fixture can be reconstructed outside the repository from the pinned sources above using a local
+llama.cpp build; it is not necessary to download model weights for normal app use:
+
+```sh
+git clone https://github.com/wbrown/tinyoai.git /tmp/mmm-tinyoai
+git -C /tmp/mmm-tinyoai checkout 90338dac3a48648f257aa80752638dae4873dda2
+git clone https://github.com/ggml-org/llama.cpp.git /tmp/mmm-llama
+git -C /tmp/mmm-llama checkout 8642541b255bfb5dc39cd351a178be09013a55d6
+cmake -S /tmp/mmm-llama -B /tmp/mmm-llama/build -DLLAMA_BUILD_EXAMPLES=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/mmm-llama/build --target llama-convert-llama2c-to-ggml llama-quantize -j 4
+/tmp/mmm-llama/build/bin/llama-convert-llama2c-to-ggml --copy-vocab-from-model /tmp/mmm-tinyoai/assets/tok512.bin --llama2c-model /tmp/mmm-tinyoai/assets/stories260K.bin --llama2c-output-model /tmp/mmm-stories260k.gguf
+/tmp/mmm-llama/build/bin/llama-quantize /tmp/mmm-stories260k.gguf /tmp/mmm-stories260k-q4.gguf Q4_0
+sha256sum /tmp/mmm-stories260k-q4.gguf
+```
+
+The follow-up sample loaded in **0.29 s** and generated 64 tokens in **0.15 s**, about **430.30
+tokens/s**, on the same sandbox class; timing includes prompt processing. Peak memory, battery and
+thermal effects remain unmeasured. These results are not representative of mobile inference.
+
 Run `npm run test:local-runtime` for mock-backed lifecycle/failure checks. The optional real-browser
 test requires the separately installed tools from [cross-origin-isolation.md](cross-origin-isolation.md)
 and a local GGUF: `MMM_SPIKE_MODEL=/path/to/model.gguf npm run test:local-spike:browser`. In a minimal
-Linux sandbox, set `LD_LIBRARY_PATH` as shown in that document. The test enables browser offline mode,
-uses the UI for import/load/generation/unload, and checks page requests plus PWA shell preservation.
+Linux sandbox, set `LD_LIBRARY_PATH` as shown in that document. The test emulates offline mode for
+its page, inspects the dedicated runtime worker after load, and checks PWA shell preservation. It is
+not an airplane-mode test, and deliberately demonstrates the worker-emulation limitation.
 
 ## Remaining phase-2 gate
 

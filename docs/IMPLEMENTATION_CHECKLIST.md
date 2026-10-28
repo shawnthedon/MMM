@@ -415,8 +415,9 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
 
 - [ ] **Local AI phase 2 runtime spike** — separate `local-spike.html` loads a user-provided GGUF
   from OPFS through pinned wllama, streams raw completion and unloads. Desktop Chromium offline
-  test passed on a tiny mixed-Q4 fixture; mobile airplane-mode evidence, memory/thermal measurements,
-  broader validation and binary attribution review are still required. No model is bundled; phase 2
+  test exercised a tiny mixed-Q4 fixture; its page-offline setting did not disconnect the worker.
+  Follow-up tests cover real stop, failed-model rejection and cleanup; mobile airplane-mode evidence,
+  memory/thermal measurements, broader validation and binary attribution review are still required. No model is bundled; phase 2
   is **not PASS**. See [`local/runtime-spike-research.md`](local/runtime-spike-research.md).
 
 - [ ] **Local AI isolation prerequisite** — COOP/COEP configured for Vite dev/preview and Vercel;

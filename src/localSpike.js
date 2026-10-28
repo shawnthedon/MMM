@@ -13,19 +13,19 @@ let working = false;
 let generating = false;
 function controls() {
   const state = runtime.status();
-  for (const id of ['import', 'delete']) $(id).disabled = working || state.loaded;
-  $('prepare').disabled = working || state.hasPreparedRuntime;
-  $('load').disabled = working || state.loaded || !state.hasPreparedRuntime;
-  $('unload').disabled = working || !state.hasPreparedRuntime;
+  for (const id of ['import', 'delete']) $(id).disabled = working || state.loaded || state.cleanupPending;
+  $('prepare').disabled = working || state.hasPreparedRuntime || state.cleanupPending;
+  $('load').disabled = working || state.loaded || state.cleanupPending || !state.hasPreparedRuntime;
+  $('unload').disabled = working || (!state.hasPreparedRuntime && !state.cleanupPending);
   $('generate').disabled = working || !state.loaded;
   $('stop').disabled = !generating;
-  $('model-file').disabled = working || state.loaded;
+  $('model-file').disabled = working || state.loaded || state.cleanupPending;
 }
 async function action(label, fn) {
   if (working) return;
   working = true; controls(); status(label);
   try { await fn(); }
-  catch (err) { status(`Not completed: ${err.message || String(err)}`); }
+  catch (err) { status(label === 'Generating locally…' && err?.name === 'AbortError' ? 'Generation stopped. Any partial output is shown above.' : `Not completed: ${err.message || String(err)}`); }
   finally { working = false; generating = false; controls(); }
 }
 async function showModel() {
@@ -40,14 +40,14 @@ $('delete').addEventListener('click', () => action('Deleting stored model…', a
   await runtime.deleteModel(); await showModel(); status('Stored spike model deleted.');
 }));
 $('prepare').addEventListener('click', () => action('Preparing same-origin WASM…', async () => {
-  await runtime.prepare(); status('Runtime asset prepared. Turn off the network before loading for an offline test.');
+  await runtime.prepare(); status('Runtime asset prepared. Disconnect the device network before loading for an offline test.');
 }));
 $('load').addEventListener('click', () => action('Loading the model locally…', async () => {
   const out = await runtime.load(); $('metrics').textContent = `Model load: ${(out.loadMs / 1000).toFixed(2)} seconds. Model file: ${(out.size / 1048576).toFixed(2)} MiB. Peak memory not measured.`;
   status('Model loaded locally. This does not establish model quality or mobile suitability.');
 }));
 $('generate').addEventListener('click', () => action('Generating locally…', async () => {
-  $('output').textContent = ''; generating = true; controls();
+  $('output').textContent = ''; $('metrics').textContent = 'No completed generation measurements yet.'; generating = true; controls();
   const out = await runtime.generate($('prompt').value, (text) => { $('output').textContent += text; });
   const rate = out.tokensPerSecond == null ? 'Token count and throughput not reported by runtime.' : `${out.tokens} tokens; ${out.tokensPerSecond.toFixed(2)} tokens/sec (including prompt processing).`;
   $('metrics').textContent = `Generation elapsed: ${(out.elapsedMs / 1000).toFixed(2)} seconds. ${rate} Peak memory not measured.`;
