@@ -21,7 +21,7 @@ every screen: **a capability appears as working only after this build has exerci
 | `src/voice/studio.js` | 340 | controller: buffer + queue + profiles + persistence, strategies, idle flush, generation invalidation |
 | `src/voice.js` | 599 | Voice Studio UI: Overview · Models · Type-to-speech · Voices · Diagnostics, plus Copilot hooks |
 | `src/voice.css` | 76 | mobile-first styling, RELAY tokens only |
-| `scripts/voice-test.mjs` | 592 | 48 deterministic tests (chunker, queue, studio, profiles, adapters, registry, store, UI) |
+| `scripts/voice-test.mjs` | 624 | 48 deterministic tests (chunker, queue, studio, profiles, adapters, registry, store, UI) |
 | `scripts/voice-browser-test.mjs` | 161 | 12 real-browser checks (Chromium, layouts, real `speechSynthesis`, Copilot 🔊) |
 
 Wiring changes: `src/main.js` (route + per-view `skipRender` hook), `src/shell.js` (route + module
