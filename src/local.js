@@ -194,6 +194,17 @@ views.local = {
         </div>
       </div>
 
+      <div class="section-title">Voice</div>
+      <div class="card">
+        <div class="row between wrap" style="gap:8px">
+          <div class="grow">
+            <div class="strong small">${icon('mic', 15)} Voice Studio</div>
+            <div class="tiny muted" style="margin-top:4px">Device text-to-speech, sentence streaming, voice profiles and the model catalogue. Cloning and Qwen2.5-Omni are blocked until an engine exists.</div>
+          </div>
+          <button class="btn sm" data-act="nav" data-to="voice">Open Voice Studio</button>
+        </div>
+      </div>
+
       <div class="section-title">What is deliberately absent</div>
       <div class="card">
         ${row('Model files', 'none bundled', 'warn', 'The build ships no weights and no tokenizer.')}

@@ -123,7 +123,11 @@ await check('the More panel shows modules as uniform four-per-row tiles', async 
   assert(grid, 'mod-grid container missing');
   assert(!q('.grid-3', s), 'old grid still present');
   const tiles = qa('.mod-tile', s);
-  eq(tiles.length, 12, `expected 12 modules (3 rows of 4), got ${tiles.length}`);
+  // The module registry grows as screens ship, so the count is a floor, not a fixed number.
+  // The invariant that matters is the layout: four equal columns at every width.
+  assert(tiles.length >= 12, `expected at least 12 modules, got ${tiles.length}`);
+  assert(/\.mod-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/.test(styles), 'mod-grid must be four equal columns');
+  assert(!/\.mod-grid\s*\{[^}]*grid-template-columns:\s*repeat\((?!4)/.test(styles), 'no rule may override the four-column grid');
   tiles.forEach((t) => {
     assert(q('.mod-ico svg', t), 'every tile needs an icon');
     assert(q('.mod-label', t), 'every tile needs a label');
@@ -132,6 +136,7 @@ await check('the More panel shows modules as uniform four-per-row tiles', async 
   });
   const labels = tiles.map((t) => text(q('.mod-label', t)));
   assert(labels.includes('Local'), `Local tile missing (got ${labels.join(', ')})`);
+  assert(labels.includes('Voice Studio'), `Voice Studio tile missing (got ${labels.join(', ')})`);
   assert(new Set(labels).size === labels.length, 'duplicate module labels');
 });
 
@@ -160,8 +165,13 @@ await check('the Local screen distinguishes the experimental spike from producti
   assert(/No model is bundled/i.test(html), 'must state no model is bundled');
   assert(/not implemented/i.test(html), 'must state features are not implemented');
   assert(/never/i.test(html) && /Cloud fallback/i.test(html), 'must state there is no cloud fallback');
-  assert(qa('[data-act]', view()).length === 1, 'the only control is Re-measure (no inert load/generate buttons)');
+  // Re-measure plus the Voice Studio deep link are the only controls: both do something real.
+  // Anything that would pretend to load or run a model is forbidden.
+  const controls = qa('[data-act]', view()).map((el) => el.dataset.act);
   assert(/Re-measure/.test(html), 're-measure control missing');
+  assert(controls.every((act) => ['local-rescan', 'nav'].includes(act)), `unexpected control on Local: ${controls.join(', ')}`);
+  const navLink = qa('[data-act="nav"]', view())[0];
+  eq(navLink?.dataset.to, 'voice', 'the Local screen deep-links to Voice Studio');
   const phases = qa('.local-phase', view());
   eq(phases.length, local.PHASES.length, 'all spec phases listed');
   assert(/this screen/.test(text(phases[0])), 'phase 1 marked as this screen');
