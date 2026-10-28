@@ -766,7 +766,8 @@ function navigateIntent(word) {
   const target = NAV_MAP[String(word || '').trim().toLowerCase()];
   if (!target) return null;
   setTimeout(() => import('../main.js').then((m) => m.navigate(target)).catch(() => {}), 220);
-  return answer(`Opening ${target}.`, {
+  const label = { voice: 'Voice Studio' }[target] || target;
+  return answer(`Opening ${label}.`, {
     title: 'Navigation',
     confidence: 'observed',
     refs: [{ label: 'src/shell.js — routes', ref: 'src/shell.js', status: 'verified' }],
@@ -897,6 +898,14 @@ async function askIntent(lc, raw, ctx) {
       }
     );
   }
+  // Navigation and the singing constraint are answerable from live app state, not the pack.
+  const openM = raw.match(/^(?:open|go to|navigate to|show)\s+(.+)/i);
+  if (openM) {
+    const nav = navigateIntent(openM[1].trim().split(/\s+/)[0]);
+    if (nav) return nav;
+  }
+  if (/\bsing\b/i.test(lc) && /\b(can|does|will|able|why)\b/i.test(lc)) return singingAnswer(raw);
+
   const results = searchKnowledge(raw, { limit: 3 });
   if (results.length) {
     const card = knowledgeCard(raw, results);
@@ -910,6 +919,28 @@ async function askIntent(lc, raw, ctx) {
     ].join('\n'),
     { refs: [{ label: `knowledge pack ${knowledgeStats().version} — no match`, ref: 'src/copilot/knowledge.js', status: 'verified' }] }
   );
+}
+
+/**
+ * Singing is the one voice request that must never be hedged: browser speech synthesis cannot sing,
+ * and no installed engine can. Shared by the voice mode branch and plain questions.
+ */
+export function singingAnswer(raw) {
+  return {
+    type: 'answer',
+    title: 'Singing request — unsupported',
+    confidence: 'verified',
+    text: [
+      `You asked: “${raw}”.`,
+      'Voice Studio can speak typed text through the device speech engine, but no installed engine can sing: browser speech synthesis does not accept pitch curves or melodies, and the candidates in the spec (Local TTS, NeuTTS, OpenVoice) were not verified here for licence, mobile runtime or singing capability.',
+      'To deliver this honestly we need: a verified singing-capable component, its licence reviewed, a consent/ownership record for the source voice, protected profile storage, and synthetic-output labelling. None of that exists yet.',
+    ].join('\n'),
+    refs: [
+      { label: 'docs/copilot/PHASE0_DISCOVERY.md §5', ref: 'docs/copilot/PHASE0_DISCOVERY.md', status: 'verified' },
+      { label: 'src/copilot/capabilities.js — voice', ref: 'src/copilot/capabilities.js', status: 'verified' },
+      { label: 'docs/voice/VOICE_STUDIO.md — capability matrix', ref: 'docs/voice/VOICE_STUDIO.md', status: 'verified' },
+    ],
+  };
 }
 
 /* ---------- operate mode routing ---------- */
@@ -1061,24 +1092,7 @@ export async function handle(text, ctx = {}) {
       }
       case 'voice': {
         if (/sing/.test(lc)) {
-          res = {
-            text: 'Singing is not supported by this build, and voice cloning does not imply singing.',
-            card: {
-              type: 'answer',
-              title: 'Singing request — unsupported',
-              confidence: 'verified',
-              text: [
-                `You asked: “${raw}”.`,
-                'Voice Studio can speak typed text through the device speech engine, but no installed engine can sing: browser speech synthesis does not accept pitch curves or melodies, and the candidates in the spec (Local TTS, NeuTTS, OpenVoice) were not verified here for licence, mobile runtime or singing capability.',
-                'To deliver this honestly we need: a verified singing-capable component, its licence reviewed, a consent/ownership record for the source voice, protected profile storage, and synthetic-output labelling. None of that exists yet.',
-              ].join('\n'),
-              refs: [
-                { label: 'docs/copilot/PHASE0_DISCOVERY.md §5', ref: 'docs/copilot/PHASE0_DISCOVERY.md', status: 'verified' },
-                { label: 'docs/voice/VOICE_STUDIO.md — capability matrix', ref: 'docs/voice/VOICE_STUDIO.md', status: 'verified' },
-                { label: 'src/copilot/capabilities.js — voice', ref: 'src/copilot/capabilities.js', status: 'verified' },
-              ],
-            },
-          };
+          res = { text: 'Singing is not supported by this build, and voice cloning does not imply singing.', card: singingAnswer(raw) };
         } else if (/open|studio|editor|read|speak|listen|typing|type/.test(lc)) {
           setTimeout(() => import('../voice.js').then((m) => m.openVoiceTab('tts')).catch(() => {}), 240);
           res = {

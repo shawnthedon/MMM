@@ -122,7 +122,7 @@ function panelHTML() {
       <div class="cp-tray" id="cp-tray" aria-label="Quick actions"></div>
       <form class="cp-composer" id="cp-form" novalidate>
         <textarea class="cp-input" id="copilot-input" rows="1" maxlength="2000"
-                  aria-label="Message Copilot" placeholder="Ask about this screen, or tell me what to do…"></textarea>
+                  aria-label="Message Copilot" placeholder="Ask about this screen…"></textarea>
         <button class="cp-voice" type="button" data-cp="voice-input" aria-label="Voice input (not available in this build)">${icon('mic', 18)}</button>
         <button class="cp-send" type="submit" aria-label="Send message">${icon('send', 18)}</button>
       </form>

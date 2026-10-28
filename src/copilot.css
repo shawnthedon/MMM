@@ -381,7 +381,7 @@ button.cp-chip:active { background: var(--elevated); }
   background: color-mix(in srgb, var(--surface) 94%, transparent);
 }
 .cp-input {
-  flex: 1; min-height: 40px; max-height: 116px; resize: none;
+  flex: 1; min-height: 44px; max-height: 116px; resize: none; line-height: 1.4;
   background: var(--bg-2); color: var(--text);
   border: 1px solid var(--border); border-radius: 12px;
   padding: 10px 12px; font-size: 13.5px; line-height: 1.4;
