@@ -69,7 +69,13 @@ export function createVoiceStudio({
     engine,
     onEvent: (event) => {
       if (event.type === 'chunk-end') { spokenChunks += 1; lastSpokenAt = now(); }
-      if (event.type === 'error') { error = event.error; status = 'error'; }
+      if (event.type === 'error') {
+        error = event.error;
+        // Missing capability (no voices, unsupported engine) is a blocked state, not a crash: the
+        // UI must explain it the same way every time the editor is opened.
+        const capability = ['no-voices', 'unsupported', 'not-allowed'].includes(event.error?.code);
+        status = capability ? 'blocked' : 'error';
+      }
       if (event.type === 'status' && status !== 'error') {
         if (event.status === 'speaking') status = 'speaking';
         else if (event.status === 'paused') status = 'paused';

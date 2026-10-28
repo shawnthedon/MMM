@@ -148,10 +148,14 @@ export function createBrowserSpeechAdapter(env = globalThis) {
     utter.onend = () => finish(resolve, { requestId, playedChars: String(text).length, local: chosen ? chosen.localService === true : null });
     utter.onerror = (event) => {
       if (signal?.aborted) { finish(reject, abortError()); return; }
-      const code = event?.error || 'engine-error';
+      const raw = event?.error || 'engine-error';
+      const noVoices = !voices.length;
+      const code = raw === 'synthesis-failed' && noVoices ? 'no-voices' : raw;
       const error = new Error(code === 'not-allowed'
         ? 'The browser blocked speech playback. Start playback from a tap or click.'
-        : `Speech engine error: ${code}.`);
+        : code === 'no-voices'
+          ? 'The speech engine could not start: this browser reports no installed voices and no audio device, so nothing can be spoken here.'
+          : `Speech engine error: ${raw}.`);
       error.code = code;
       finish(reject, error);
     };

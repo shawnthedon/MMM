@@ -223,12 +223,13 @@ function ttsHTML() {
       <div class="vs-voice-row">
         <label class="tiny muted" for="vs-profile">Voice</label>
         <select class="input" id="vs-profile">
-          ${activeProfiles.map((profile) => `<option value="${esc(profile.id)}" ${settings.selectedProfileId === profile.id ? 'selected' : ''}>${esc(profile.name)}${profile.status === 'active' ? '' : ` — ${profile.status}`}</option>`).join('')}
+          ${activeProfiles.map((profile) => `<option value="${esc(profile.id)}" ${settings.selectedProfileId === profile.id ? 'selected' : ''}>${esc(profile.name)}</option>`).join('')}
         </select>
         <button class="btn sm" data-act="voice-tab" data-tab="voices">Manage</button>
       </div>
-      ${snap.usingFallback ? `<div class="banner warn vs-inline-banner">${icon('shield', 15)}<div>${esc(snap.fallbackReason)}</div></div>` : ''}
-      ${snap.status === 'blocked' && snap.error ? `<div class="banner bad vs-inline-banner">${icon('shield', 15)}<div><strong>Speech blocked.</strong> ${esc(snap.error.message)}</div></div>` : ''}
+      <div class="vs-profile-status tiny muted" id="vs-profile-status">${esc(activeProfiles.find((profile) => profile.id === settings.selectedProfileId)?.status === 'active' ? 'Ready — this voice can speak here.' : 'This voice needs an engine; you will hear the device voice instead.')}</div>
+      ${snap.usingFallback && !['blocked', 'error'].includes(snap.status) ? `<div class="banner warn vs-inline-banner">${icon('shield', 15)}<div>${esc(snap.fallbackReason)}</div></div>` : ''}
+      <div id="vs-live-status"></div>
 
       <textarea id="vs-editor" class="vs-editor" aria-label="Text to speak" placeholder="Hello! Type your message here and MMM will speak it with the selected voice.">${esc(studio?.text || '')}</textarea>
       <div class="vs-editor-meta tiny muted">
@@ -372,16 +373,24 @@ function rerenderSafely() {
 
 function paintLive() {
   const live = document.getElementById('vs-live');
-  if (!live) return;
   const snap = lastSnapshot;
   if (!snap) return;
-  const copy = snap.status === 'speaking' ? `Speaking · generation ${snap.generation}`
-    : snap.status === 'paused' ? 'Paused'
-      : snap.status === 'blocked' ? 'Blocked — see the message above'
-        : snap.status === 'error' ? 'Error — see below'
-          : snap.pendingText ? 'Buffered — waiting for a sentence boundary' : 'Ready';
-  live.textContent = copy;
-  live.dataset.state = snap.status;
+  const needsAttention = snap.error && ['blocked', 'error'].includes(snap.status);
+  if (live) {
+    const copy = snap.status === 'speaking' ? `Speaking · generation ${snap.generation}`
+      : snap.status === 'paused' ? 'Paused'
+        : snap.status === 'blocked' ? 'Blocked — no engine can speak here'
+          : snap.status === 'error' ? 'Error — speech failed'
+            : snap.pendingText ? 'Buffered — waiting for a sentence boundary' : 'Ready';
+    live.textContent = copy;
+    live.dataset.state = snap.status;
+  }
+  // The banner is injected rather than re-rendered: repainting the view would drop the caret.
+  const host = document.getElementById('vs-live-status');
+  if (!host) return;
+  if (!needsAttention) { host.innerHTML = ''; return; }
+  const tone = snap.status === 'error' ? 'bad' : 'warn';
+  host.innerHTML = `<div class="banner ${tone} vs-inline-banner" role="status">${icon('shield', 15)}<div><strong>${snap.status === 'error' ? 'Speech failed.' : 'Speech blocked.'}</strong> ${esc(snap.error.message)}</div></div>`;
 }
 
 function updateCounts() {

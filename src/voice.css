@@ -2,7 +2,18 @@
  * Mobile-first. Uses RELAY tokens only; no literal colours.
  */
 .vs { max-width: 960px; margin: 0 auto; }
-.vs-tabs { margin-bottom: 14px; }
+.vs-tabs {
+  /* Five sections, no horizontal scrolling: three equal tiles over two equal tiles on small
+     screens, one row of five once there is room. Every tile keeps identical geometry. */
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px;
+  overflow: visible;
+}
+.vs-tabs button { grid-column: span 2; min-width: 0; white-space: normal; line-height: 1.15; text-align: center; padding: 0 8px; }
+.vs-tabs button:nth-child(4), .vs-tabs button:nth-child(5) { grid-column: span 3; }
+@media (min-width: 620px) {
+  .vs-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .vs-tabs button, .vs-tabs button:nth-child(4), .vs-tabs button:nth-child(5) { grid-column: auto; padding: 0 10px; }
+}
 
 .vs-kicker { color: var(--accent-secondary); font-size: 10px; font-weight: 700; letter-spacing: .13em; }
 .vs-hero { display: flex; flex-direction: column; gap: 16px; margin: 6px 0 20px; }
@@ -54,7 +65,10 @@
 .vs-editor-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; }
 #vs-live[data-state='speaking'] { color: var(--state-success); }
 #vs-live[data-state='paused'] { color: var(--state-warning); }
-#vs-live[data-state='blocked'], #vs-live[data-state='error'] { color: var(--state-error); }
+#vs-live[data-state='blocked'] { color: var(--state-warning); }
+#vs-live[data-state='error'] { color: var(--state-error); }
+.vs-profile-status { margin: 0 0 10px; }
+.vs-inline-banner { margin: 0 0 10px; }
 
 .vs-playback { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 .vs-playback .btn { flex: 1 1 auto; min-width: 96px; }
