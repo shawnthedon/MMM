@@ -223,6 +223,7 @@ npm run lint        # code style (after Phase-1 tooling)
 | --- | --- |
 | 📐 [Design Spec](docs/DESIGN_SPEC.md) | Full 12-module spec, governance, data model, providers |
 | ✅ [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) | Functional build: 19 phases, seed data & restore guide |
+| 🚀 [Production Roadmap](docs/PRODUCTION_ROADMAP.md) | **Start here.** Ordered plan out of demo mode into live operation: demo inventory + rectification, NFR checklist, TODO list, beginner recipes, resource links |
 | 🗺 [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | Non-functional track to production + 100+ resource links |
 | 🔄 [Read Sync](docs/copilot/read-sync.md) | How module screens read the gateway and how demo vs live data is labelled |
 | 🧭 [Agent Designer](docs/copilot/agent-designer.md) | Guided agent creation: steps, validation states, honest boundaries, shortcuts |
