@@ -577,6 +577,48 @@ await check('G5 the settings screen exposes no fake voice install button', async
   tabs.forEach((node) => assert(node.textContent.trim().length > 0));
 });
 
+/* =====================================================================================
+ * H. Copilot surface
+ * ===================================================================================*/
+const orchestrator = await import('../src/copilot/orchestrator.js');
+const capabilities = await import('../src/copilot/capabilities.js');
+
+await check('H1 the voice capability reports measured evidence, not a canned success', () => {
+  const cap = capabilities.getCapability('voice');
+  assert.notEqual(cap.status, 'unverified', 'voice must resolve through its dynamic probe');
+  assert(['available', 'unconfigured', 'blocked'].includes(cap.status), `unexpected status ${cap.status}`);
+  assert.equal(cap.evidence.length > 0, true);
+  // Whatever this environment reports, the answer is measured and explained — and the entry is
+  // listed alongside every other capability, so it cannot be hidden.
+  assert(/speech|voice/i.test(cap.detail), `detail must explain the engine: ${cap.detail}`);
+  assert(capabilities.capabilityList().some((entry) => entry.id === 'voice'));
+});
+
+await check('H2 "can it sing?" answers with the real constraint and cites the delivery report', async () => {
+  const reply = await orchestrator.handle('can it sing?', {});
+  const card = reply.card || {};
+  const text = [reply.text, card.text, card.title].filter(Boolean).join(' ');
+  assert(/sing/i.test(text));
+  assert(/device speech engine|browser speech synthesis/i.test(text), 'must not claim that no speech engine exists at all');
+  const refs = (card.refs || []).map((ref) => ref.ref);
+  assert(refs.includes('docs/voice/VOICE_STUDIO.md'), `missing delivery-report reference (${refs.join(', ')})`);
+});
+
+await check('H3 the voice capability card names its blockers', async () => {
+  const reply = await orchestrator.handle('voice status', { mode: 'voice' });
+  const card = reply.card || {};
+  const text = [reply.text, card.text, card.capability?.detail, (card.capability?.requirements || []).join(' ')].join(' ');
+  assert(/clon|Qwen|install/i.test(text), `capability card said: ${text.slice(0, 140)}`);
+});
+
+await check('H4 "open voice studio" navigates from plain questions too', async () => {
+  const reply = await orchestrator.handle('open voice studio', {});
+  const text = [reply.text, reply.card?.text].join(' ');
+  assert(/voice studio/i.test(text), `navigation answer was: ${text.slice(0, 120)}`);
+  await tick(400);
+  assert.equal(win.location.hash, '#/voice', 'the route did not change');
+});
+
 console.log(results.join('\n'));
 console.log(`\nVOICE STUDIO: ${results.length - failures}/${results.length} PASSED`);
 process.exit(failures ? 1 : 0);

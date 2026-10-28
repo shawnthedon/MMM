@@ -21,7 +21,7 @@ every screen: **a capability appears as working only after this build has exerci
 | `src/voice/studio.js` | 340 | controller: buffer + queue + profiles + persistence, strategies, idle flush, generation invalidation |
 | `src/voice.js` | 599 | Voice Studio UI: Overview · Models · Type-to-speech · Voices · Diagnostics, plus Copilot hooks |
 | `src/voice.css` | 76 | mobile-first styling, RELAY tokens only |
-| `scripts/voice-test.mjs` | 582 | 44 deterministic tests (chunker, queue, studio, profiles, adapters, registry, store, UI) |
+| `scripts/voice-test.mjs` | 624 | 48 deterministic tests (chunker, queue, studio, profiles, adapters, registry, store, UI) |
 | `scripts/voice-browser-test.mjs` | 161 | 12 real-browser checks (Chromium, layouts, real `speechSynthesis`, Copilot 🔊) |
 
 Wiring changes: `src/main.js` (route + per-view `skipRender` hook), `src/shell.js` (route + module
@@ -108,7 +108,7 @@ POST   /v1/voice-profiles/:id/speech      synthesise with a profile
 
 ## 5. Test evidence
 
-`npm run test:voice` → **44/44 PASSED** (deterministic, fake engine).
+`npm run test:voice` → **48/48 PASSED** (deterministic, fake engine).
 
 | Acceptance test | Coverage |
 | --- | --- |
@@ -138,6 +138,7 @@ POST   /v1/voice-profiles/:id/speech      synthesise with a profile
 | Security: unreachable host reports unreachable | E3 |
 | Chunking: abbreviations, decimals, ellipsis, word-boundary split | A1–A4 |
 | UI: route, all five sections, accessible labels, no dead controls | G3–G5 |
+| Copilot: measured capability, singing constraint, navigation | H1–H4 |
 
 `npm run test:voice:browser` (Chromium 320/390/1440 px) → **12/12 PASSED**: no horizontal overflow,
 ≥44 px targets, real engine probe, fallback banner visible, typing produced real `speak()` calls,
@@ -146,7 +147,7 @@ no cloud fallback claimed, Copilot 🔊 reached the engine, zero page errors.
 
 Full suite: `npm test` green (smoke, copilot tour, auth 16/16, readsync 12/12, designer 18/18,
 skills 23/23, comms 23/23, design 13/13, responsive 17/17, local 13/13, kanban 26/26, scroll 10/10,
-comms-gateway 28/28, gateway 30/30, session-safety 8/8, plus voice 44/44). `npm run build` clean.
+comms-gateway 28/28, gateway 30/30, session-safety 8/8, plus voice 48/48). `npm run build` clean.
 
 ## 6. Copilot surface
 
@@ -162,6 +163,9 @@ comms-gateway 28/28, gateway 30/30, session-safety 8/8, plus voice 44/44). `npm 
   overview and states that the only browser recogniser uploads audio to a network service.
 - **Mode chip.** The Voice mode hint now says what is true: device speech works, cloning and
   Qwen2.5-Omni are blocked.
+- **Navigation and the singing question work from any mode**, not only Operate/Voice: “open voice
+  studio” opens the screen and “can it sing?” returns the constraint with the delivery-report
+  reference. Composer placeholder shortened so it is never clipped next to the mic button.
 - **Speech to Copilot is not linked to model output.** Replies are still deterministic retrieval
   over the knowledge pack — speaking them does not make them generated text.
 
