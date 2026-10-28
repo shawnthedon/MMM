@@ -178,7 +178,7 @@ h3 { font-size: 16px; font-weight: 700; }
 [data-theme='light'] .input { background: var(--bg-2); }
 textarea.input { resize: vertical; min-height: 88px; line-height: 1.5; }
 .input::placeholder { color: var(--text-3); }
-.seg { display: flex; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-s); padding: 3px; gap: 3px; }
+.seg { display: flex; background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-s); padding: 3px; gap: 3px; }
 .seg button { flex: 1; min-height: 44px; border-radius: 7px; font-size: 12.5px; font-weight: 700; color: var(--text-2); }
 .seg button.active { background: var(--accent-hover); color: var(--text-on-accent); }
 

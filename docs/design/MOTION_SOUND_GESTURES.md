@@ -163,6 +163,17 @@ Full suite `npm test` is green, `npm run build` is clean, and the browser suites
 (`test:relay:browser`, `test:scroll:browser`, `test:voice:browser`) were updated for the
 full-screen overlay and re-passed.
 
+## 7b. Screenshots (real Chromium, 390 × 844)
+
+| Screen | File |
+| --- | --- |
+| Immersive stage: hologram, rings, central mic, consent/mic caption | `docs/design/copilot-stage-390.png` |
+| Advanced surface: modes, answer card with sources, composer | `docs/design/copilot-advanced-390.png` |
+
+The stage screenshot is the blank → hologram resolved state at 390 px; the advanced shot is after
+tapping the title and sending "status", showing the deterministic live-state answer with its
+`OBSERVED` / `VERIFIED` source labels — no model call is claimed there.
+
 ## 8. What is deliberately not claimed
 
 | Not claimed | Why |
