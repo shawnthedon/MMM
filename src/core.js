@@ -102,6 +102,23 @@ export function seed() {
       notify: { approvals: true, failures: true, deploys: true, budget: true, digest: true },
       trustWeights: { success: 12, compliance: 10, approvals: 8, evals: 8, uptime: 6, incidents: 15, cost: 8 },
       retention: { runs: '90d', logs: '30d', memory: '180d' },
+      voice: {
+        autoSpeak: true,
+        strategy: 'sentence',
+        selectedProfileId: 'my-cloned-voice',
+        modelId: 'browser-speech',
+        rate: 1,
+        pitch: 1,
+        lang: '',
+        idleFlushMs: 900,
+        maxChars: 280,
+        localEndpoint: '',
+        cloningEndpoint: '',
+        profiles: [
+          { id: 'device-default', name: 'Device voice', kind: 'device', engine: 'browser-speech', voiceRef: '', consent: null, status: 'active', createdAt: null, note: 'Uses whichever voice the operating system selects.' },
+          { id: 'my-cloned-voice', name: 'My cloned voice', kind: 'cloned', engine: '', voiceRef: '', consent: null, status: 'needs-engine', createdAt: null, note: 'Requires a configured local cloning engine and a recorded consent decision.' },
+        ],
+      },
     },
     gateway: { status: 'healthy', version: '0.1.0-proto', uptimeSince: mins(60 * 24 * 3), storageMb: 248, sqlite: 'WAL' },
     // Where each slice came from. 'demo' = seeded fixtures in this browser; 'gateway' = fetched
@@ -341,6 +358,17 @@ function migrate(saved) {
   if (!Array.isArray(next.matrixHistory)) next.matrixHistory = [];
   if (!Array.isArray(next.skillImports)) next.skillImports = [];
   if (!next.comms || !next.comms.channels) next.comms = cloneComms();
+  // Voice Studio settings were added after the first saves: fill defaults without overwriting a
+  // user's saved choices, and restore the two seed profiles if the list is missing or broken.
+  const voiceDefaults = seed().settings.voice;
+  next.settings = next.settings || {};
+  const savedVoice = next.settings.voice && typeof next.settings.voice === 'object' ? next.settings.voice : {};
+  const mergedVoice = { ...voiceDefaults, ...savedVoice };
+  if (!Array.isArray(mergedVoice.profiles) || !mergedVoice.profiles.length) mergedVoice.profiles = voiceDefaults.profiles;
+  mergedVoice.profiles = mergedVoice.profiles
+    .map((profile) => ({ ...voiceDefaults.profiles.find((seedProfile) => seedProfile.id === profile.id), ...profile }))
+    .filter((profile) => profile && profile.id);
+  next.settings.voice = mergedVoice;
   return next;
 }
 

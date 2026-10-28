@@ -893,6 +893,14 @@ views.settings = {
     return `
       <div class="page-head"><h1>Settings</h1><div class="sub">Everything is live — toggles persist instantly</div></div>
 
+      <div class="section-title">Voice &amp; speech</div>
+      <div class="card">
+        <div class="kv"><span class="k">Auto-speak</span><span class="tiny muted">${st.voice?.autoSpeak ? 'on — finished sentences are spoken' : 'off — press Play in Voice Studio'}</span></div>
+        <div class="kv"><span class="k">Chunking</span><span class="tiny muted">${esc(st.voice?.strategy || 'sentence')}</span></div>
+        <div class="kv"><span class="k">Voice</span><span class="tiny muted">${esc((st.voice?.profiles || []).find((p) => p.id === st.voice?.selectedProfileId)?.name || 'device default')}</span></div>
+        <button class="btn sm" style="margin-top:10px" data-act="nav" data-to="voice">${icon('mic', 15)} Open Voice Studio</button>
+      </div>
+
       <div class="section-title">Appearance</div>
       <div class="card">
         <div class="kv"><span class="k">Theme</span>

@@ -18,6 +18,7 @@ export const routes = [
   { id: 'plugins', label: 'Plugins', icon: 'plug', title: 'Plugin Marketplace' },
   { id: 'comms', label: 'Comms', icon: 'broadcast', title: 'Comms' },
   { id: 'local', label: 'Local', icon: 'cpu', title: 'Local AI' },
+  { id: 'voice', label: 'Voice Studio', icon: 'mic', title: 'Voice Studio' },
   // Kept as routes for titles/highlighting, but not shown in the All-modules grid (see HIDDEN).
   { id: 'matrix', label: 'Skills Matrix', icon: 'graph', title: 'Skills Matrix' },
   { id: 'analytics', label: 'Analytics', icon: 'chart', title: 'Analytics' },
@@ -300,7 +301,7 @@ function sidebarHTML() {
     </nav>
     <div class="side-caption">BUILD &amp; CONNECT</div>
     <nav class="side-nav" aria-label="Desktop modules">
-      ${['designer', 'skills', 'models', 'comms', 'local', 'terminal'].map(item).join('')}
+      ${['designer', 'skills', 'models', 'voice', 'comms', 'local', 'terminal'].map(item).join('')}
       <button class="side-link" data-act="more">${icon('grid', 19)}<span>All modules</span></button>
     </nav>
     <div class="side-spacer"></div>

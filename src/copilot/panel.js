@@ -123,6 +123,7 @@ function panelHTML() {
       <form class="cp-composer" id="cp-form" novalidate>
         <textarea class="cp-input" id="copilot-input" rows="1" maxlength="2000"
                   aria-label="Message Copilot" placeholder="Ask about this screen, or tell me what to do…"></textarea>
+        <button class="cp-voice" type="button" data-cp="voice-input" aria-label="Voice input (not available in this build)">${icon('mic', 18)}</button>
         <button class="cp-send" type="submit" aria-label="Send message">${icon('send', 18)}</button>
       </form>
     </section>`;
@@ -434,9 +435,13 @@ function messageHTML(m) {
     return `<div class="cp-msg me"><div class="cp-bubble">${md(m.text)}</div>
       <div class="cp-msg-meta">You · ${new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
   }
+  const speakable = [m.text, m.card?.text, m.card?.title].filter(Boolean).join(' ').slice(0, 2000);
   return `<div class="cp-msg bot">
     <div class="cp-bubble">${m.text && !m.card ? md(m.text) : ''}${cardHTML(m.card, m)}</div>
-    <div class="cp-msg-meta">Copilot · ${esc(modeMeta(m.mode || session.mode).label)} mode · ${new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+    <div class="cp-msg-meta">
+      <span class="cp-msg-meta-text">Copilot · ${esc(modeMeta(m.mode || session.mode).label)} mode · ${new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+      <button class="cp-speak" type="button" data-cp="speak" data-msg="${esc(m.id)}" data-text="${esc(speakable)}" aria-label="Read this reply aloud">${icon('mic', 15)}<span>Speak</span></button>
+    </div>
   </div>`;
 }
 
@@ -798,6 +803,31 @@ function onClick(e) {
     case 'stop':
       stopPending();
       break;
+    case 'speak': {
+      // Real playback through Voice Studio's engine. Failures are announced, never swallowed.
+      const text = t.dataset.text || '';
+      import('../voice.js')
+        .then((voice) => {
+          const result = voice.speakText(text, {
+            onError: (reason) => toast(reason, 'bad'),
+          });
+          if (result?.ok) t.dataset.state = 'speaking';
+          else toast(result?.reason || 'Speech is unavailable in this browser.', 'warn');
+        })
+        .catch(() => toast('Voice Studio failed to load, so nothing was spoken.', 'bad'));
+      break;
+    }
+    case 'voice-input': {
+      // Speech recognition is deliberately absent: Chromium's recogniser uploads audio to a network
+      // service, which would break the no-silent-upload rule. Say so instead of pretending.
+      import('../voice.js')
+        .then((voice) => {
+          voice.openVoiceTab('overview');
+          toast('Voice input is not implemented: the only browser recogniser uploads audio to a network service.', 'warn');
+        })
+        .catch(() => {});
+      break;
+    }
     case 'arm':
       arm(msgId);
       break;

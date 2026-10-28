@@ -18,6 +18,7 @@ import './skillsMatrix.js';
 import './skillsImportView.js';
 import './comms.js';
 import './local.js';
+import './voice.js';
 import { refreshComms, releaseComms, canReadGatewayComms } from './commsGateway.js';
 
 let currentRoute = 'home';
@@ -151,6 +152,7 @@ subscribe((state, label) => {
   const v = views[currentRoute];
   if (v?.persistent && label?.startsWith('term')) return; // terminal updates imperatively
   if (window.__dragging) return; // kanban drag in progress
+  if (typeof v?.skipRender === 'function' && v.skipRender(label)) return; // view owns its DOM right now
   if (label === 'sim') {
     if (v?.persistent) return;
     const ae = document.activeElement;

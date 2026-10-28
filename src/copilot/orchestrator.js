@@ -24,7 +24,7 @@ export const MODES = [
   { id: 'build', label: 'Build', icon: 'robot', hint: 'Inspect agents, teams and prompts; propose new definitions' },
   { id: 'knowledge', label: 'Knowledge', icon: 'doc', hint: 'Search the versioned, source-linked knowledge pack' },
   { id: 'training', label: 'Training', icon: 'cpu', hint: 'Dataset checks — the training backend is not available' },
-  { id: 'voice', label: 'Voice', icon: 'mic', hint: 'Engine status — no verified cloning engine exists here' },
+  { id: 'voice', label: 'Voice', icon: 'mic', hint: 'Device speech works; cloning and Qwen2.5-Omni are blocked' },
   { id: 'activity', label: 'Activity', icon: 'chart', hint: 'Recent Copilot actions, events and approvals' },
 ];
 
@@ -759,7 +759,7 @@ const NAV_MAP = {
   home: 'home', agents: 'agents', agent: 'agents', teams: 'teams', team: 'teams', swarm: 'teams', swarms: 'teams',
   tasks: 'tasks', task: 'tasks', kanban: 'tasks', chat: 'chat', skills: 'skills', skill: 'skills', models: 'models',
   model: 'models', plugins: 'plugins', plugin: 'plugins', telegram: 'telegram', analytics: 'analytics', files: 'artifacts',
-  artifacts: 'artifacts', terminal: 'terminal', settings: 'settings',
+  artifacts: 'artifacts', terminal: 'terminal', settings: 'settings', voice: 'voice', tts: 'voice',
 };
 
 function navigateIntent(word) {
@@ -1069,17 +1069,28 @@ export async function handle(text, ctx = {}) {
               confidence: 'verified',
               text: [
                 `You asked: “${raw}”.`,
-                'No voice engine is installed, and the three candidates in the spec (Local TTS, NeuTTS, OpenVoice) were not verified here for licence, mobile runtime or singing capability. Text-to-speech cannot produce singing.',
+                'Voice Studio can speak typed text through the device speech engine, but no installed engine can sing: browser speech synthesis does not accept pitch curves or melodies, and the candidates in the spec (Local TTS, NeuTTS, OpenVoice) were not verified here for licence, mobile runtime or singing capability.',
                 'To deliver this honestly we need: a verified singing-capable component, its licence reviewed, a consent/ownership record for the source voice, protected profile storage, and synthetic-output labelling. None of that exists yet.',
               ].join('\n'),
               refs: [
                 { label: 'docs/copilot/PHASE0_DISCOVERY.md §5', ref: 'docs/copilot/PHASE0_DISCOVERY.md', status: 'verified' },
+                { label: 'docs/voice/VOICE_STUDIO.md — capability matrix', ref: 'docs/voice/VOICE_STUDIO.md', status: 'verified' },
                 { label: 'src/copilot/capabilities.js — voice', ref: 'src/copilot/capabilities.js', status: 'verified' },
               ],
             },
           };
+        } else if (/open|studio|editor|read|speak|listen|typing|type/.test(lc)) {
+          setTimeout(() => import('../voice.js').then((m) => m.openVoiceTab('tts')).catch(() => {}), 240);
+          res = {
+            text: 'Opening Voice Studio. The editor speaks what you type with the selected voice; every blocker (cloning, Qwen2.5-Omni, speech input) is labelled there.',
+            card: answer(['Open Voice Studio', ...
+              'Type in the editor: finished sentences are spoken while you write (sentence strategy), or hold until you press Play with the manual strategy.',
+              '“My cloned voice” is the default profile but falls back to the device voice until a cloning engine is configured — the fallback is always stated, never silent.',
+              'Use 🔊 on any Copilot reply to hear it read in the same voice.',
+            ].join('\n'), { title: 'Opening Voice Studio', refs: [{ label: 'src/voice.js — Voice Studio', ref: 'src/voice.js', status: 'verified' }] }),
+          };
         } else {
-          res = { text: 'Voice Studio reports its exact status — no cloning, no generation, no fake progress.', card: capabilityCard('voice') };
+          res = { text: 'Voice Studio reports its exact status — device speech works, cloning and model installs stay blocked.', card: capabilityCard('voice') };
         }
         break;
       }
@@ -1249,7 +1260,7 @@ export const SUGGESTIONS = {
   build: ['list agents', 'show prompt Researcher-01', 'create agent Astra as research analyst'],
   knowledge: ['gateway auth', 'training methods', 'OpenSMS requirements', 'secret handling'],
   training: ['inspect dataset', 'what can validation check?'],
-  voice: ['can it sing?', 'which engines are supported?'],
+  voice: ['can it sing?', 'open voice studio', 'which engines are supported?'],
   activity: ['show recent work', 'pending approvals'],
 };
 

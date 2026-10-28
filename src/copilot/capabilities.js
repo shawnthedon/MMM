@@ -8,6 +8,7 @@ import { isApiMode } from '../api.js';
 import { getAuth, can } from '../auth.js';
 import { knowledgeStats } from './knowledge.js';
 import { memorySummary } from './memory.js';
+import { getState } from '../core.js';
 
 const CAPS = {
   knowledge: {
@@ -122,15 +123,55 @@ const CAPS = {
     id: 'voice',
     label: 'Voice Studio',
     status: 'unverified',
-    summary: 'Candidate engines are not installed or verified; singing is unsupported.',
+    summary: 'Device text-to-speech works; cloning and Qwen2.5-Omni are not available here.',
     detail:
-      'NeuTTS and OpenVoice upstream descriptions were reviewed, but model/dependency licences and mobile execution remain unverified and neither is installed. Local TTS remains unidentified. Text-to-speech is not singing: “now sing …” has no supported path, and no consent/profile storage exists yet.',
+      'Voice Studio speaks through the browser/OS speech engine and reports each voice’s localService flag. There is no model downloader, no cloned-voice engine and no hosted speech provider, so those paths stay blocked with an explicit reason. Speech recognition is not offered because Chromium’s recogniser is network-backed. Singing is unsupported.',
     requirements: [
-      'Verify each upstream repo, licence (code + weights) and mobile runtime',
-      'Engine adapter with capability declaration (speech vs singing)',
-      'Consent record, protected voice profiles, deletion + synthetic labelling',
+      'A configured local TTS/cloning host for cloning (none ships)',
+      'Pinned Qwen2.5-Omni runtime + licence review before any install',
+      'Consent records and reference-audio handling on the host',
     ],
-    evidence: () => 'no engine adapter, no audio pipeline, no consent store',
+    evidence: () => {
+      const voice = getState().settings.voice || {};
+      const synth = typeof globalThis !== 'undefined' ? globalThis.speechSynthesis : null;
+      const voices = typeof synth?.getVoices === 'function' ? synth.getVoices() : [];
+      const local = voices.filter((entry) => entry.localService === true).length;
+      return synth
+        ? `${voices.length} device voice(s) · ${local} on-device · model ${voice.modelId || 'browser-speech'} · auto-speak ${voice.autoSpeak ? 'on' : 'off'}`
+        : 'no speechSynthesis in this environment';
+    },
+    dynamic() {
+      const voice = getState().settings.voice || {};
+      const synth = typeof globalThis !== 'undefined' ? globalThis.speechSynthesis : null;
+      const voices = typeof synth?.getVoices === 'function' ? synth.getVoices() : [];
+      if (!synth) {
+        return {
+          status: 'blocked',
+          summary: 'This environment exposes no speech engine, so nothing can be spoken.',
+          detail: 'speechSynthesis is missing (headless browser, unsupported browser or a locked-down webview). Voice Studio still shows the catalogue and its blockers.',
+          requirements: ['A browser/OS speech engine, or a configured local TTS host'],
+          evidence: 'speechSynthesis unavailable',
+        };
+      }
+      if (!voices.length) {
+        return {
+          status: 'unconfigured',
+          summary: 'The speech engine exists but reports no installed voices yet.',
+          detail: 'Voices usually appear after the first interaction or a voiceschanged event. Open Voice Studio and press Play once, then re-measure.',
+          requirements: ['At least one system voice'],
+          evidence: '0 voices reported',
+        };
+      }
+      const local = voices.filter((entry) => entry.localService === true).length;
+      return {
+        status: 'available',
+        summary: `Text-to-speech works through the device engine (${voices.length} voice${voices.length === 1 ? '' : 's'}${local ? `, ${local} on-device` : ''}).`,
+        detail:
+          'Playback is real and sentence-level; word-level streaming is not claimed. Voice cloning needs a configured local engine plus consent, and Qwen2.5-Omni is catalogue-only. No cloud speech provider exists, so a failure cannot silently upload audio.',
+        requirements: local === voices.length ? [] : ['Some voices may use the network; on-device voices stay local'],
+        evidence: `${voices.length} voices · ${local} on-device · model ${voice.modelId || 'browser-speech'}`,
+      };
+    },
   },
   channels: {
     id: 'channels',
