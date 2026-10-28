@@ -32,7 +32,7 @@ what the Notification/Push APIs allow while a service worker is registered.
 | Secure context | WASM workers, storage APIs and WebGPU are all gated on HTTPS/localhost. |
 | WebAssembly | Without it there is no local runtime at all → verdict **blocked**. |
 | WASM SIMD | Token generation is several times slower without it. |
-| Threads (`SharedArrayBuffer`) | Requires **cross-origin isolation** (COOP `same-origin` + COEP `require-corp`). The Vite dev server and Vercel deploy do **not** send those headers today — enabling them is a real, testable change. |
+| Threads (`SharedArrayBuffer`) | Requires **cross-origin isolation** (COOP `same-origin` + COEP `require-corp`). Vite dev/preview and Vercel are configured to send these headers; desktop browser evidence and deployment/device caveats are documented in [cross-origin isolation](cross-origin-isolation.md). |
 | WebGPU + adapter | Only a *possible* acceleration path; adapter presence is checked, nothing is allocated. |
 | OPFS / persistent storage | Multi-GB weights must not live in `localStorage`; without OPFS the fallback is IndexedDB (slower). |
 | Storage quota | Reports real free bytes, so "will this model fit" is answered with a number. |
@@ -43,11 +43,12 @@ Verdicts are deliberately about the **platform**: `blocked` · `constrained` · 
 
 ## 3. Known blockers before phase 2 can even start
 
-1. **Cross-origin isolation** — add COOP/COEP to `vite.config.js` (dev) and `vercel.json` (prod), then
-   re-run the preflight; without it inference is single-threaded.
+1. **Cross-origin isolation** — headers are configured for Vite dev/preview and Vercel; a desktop browser
+   verified online and offline. Verify the deployed app and intended mobile devices; without isolation
+   threads are unavailable. See [evidence and limitations](cross-origin-isolation.md).
 2. **Runtime choice + licence** — llama.cpp (`ggml`) is the realistic WASM target; check its licence,
    the build/ABI story for a WASM artifact, and whether we ship a prebuilt `.wasm` (size!) or build it.
-   No runtime has been adopted.
+   No runtime has been adopted; see [candidate research](runtime-spike-research.md).
 3. **Storage strategy** — OPFS for weights, IndexedDB for job/metadata state (the spec forbids
    `localStorage` or in-memory blobs for this).
 4. **No native background downloads** — a browser tab cannot guarantee resumable large downloads or

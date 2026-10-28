@@ -1,5 +1,7 @@
 /* SwarmOS service worker — offline shell + stale-while-revalidate assets */
-const CACHE = 'swarmos-v1';
+// Invalidate the pre-isolation shell: offline navigation must not reuse a cached document
+// without the COOP/COEP headers from before the deployment.
+const CACHE = 'swarmos-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/favicon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

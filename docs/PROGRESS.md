@@ -57,7 +57,7 @@
   two-line label with reserved height), so icons line up and every tile is exactly the same size.
 - ✅ Replaced per-tile inline sizing/avatars with `.mod-tile`; 12 modules = 3 tidy rows.
 
-### Local (on-device AI) — 🟨 phase 1 only
+### Local (on-device AI) — 🟨 preflight + isolation prerequisite
 - ✅ **Entry point** — new **Local** tile in the More panel (badged *new*), route `#/local`.
 - ✅ **Phase-1 audit** — [`local/on-device-audit.md`](local/on-device-audit.md) records MMM's real
   platform (Vite PWA, no native shell, localStorage + gateway SQLite, no IndexedDB/OPFS yet), the
@@ -69,7 +69,12 @@
 - ✅ **Honesty** — no model bundled, no download, no inference, no cloud fallback; the only control is
   *Re-measure*. Candidate presets are listed as unverified with licence/size caveats.
 - ✅ Evidence: `npm run test:local` (13 checks).
-- ⬜ Phases 2–6 (runtime spike, model manager, offline text, image feasibility/feature) — not started.
+- 🟨 **Isolation prerequisite** — COOP/COEP on Vite dev/preview + Vercel and service-worker cache
+  upgrade. HTTP/config checks pass; headless desktop Chromium verified online/offline isolation and
+  shared WASM memory on the built preview. Deployed Vercel and intended mobile devices remain
+  unverified. Evidence: [`local/cross-origin-isolation.md`](local/cross-origin-isolation.md).
+- ⬜ Phases 2–6 (runtime spike, model manager, offline text, image feasibility/feature) — not started;
+  an unadopted runtime candidate is researched in [`local/runtime-spike-research.md`](local/runtime-spike-research.md).
 
 ### Comms — server-side credentials + routes — ✅
 - ✅ **Migration 003** — `comms_channels` (encrypted config, routing, verification), `comms_messages`

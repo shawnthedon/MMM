@@ -413,6 +413,12 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
     than guesses. Gateway moves use `PATCH /api/v1/tasks/:id` (`task:write`).
   - Evidence: `npm run test:kanban` (26 checks). Doc: [`kanban/board.md`](kanban/board.md).
 
+- [ ] **Local AI isolation prerequisite** — COOP/COEP configured for Vite dev/preview and Vercel;
+  old PWA shell cache invalidated. `npm run test:isolation` checks HTTP/config; desktop Chromium
+  confirms online/offline isolation and shared WASM memory. Deployed host and mobile verification
+  remain open; this is not a runtime or inference PASS. See
+  [`local/cross-origin-isolation.md`](local/cross-origin-isolation.md).
+
 - [x] **4.14 Comms: server-side credentials, routes, delivery queue** — `apps/gateway/src/comms.js`,
   `apps/gateway/migrations/003_comms.sql`, `apps/gateway/server.js`, `src/commsGateway.js`
   - Credentials encrypted with AES-256-GCM (key from `SWARMOS_SECRET`), masked on every read; the
