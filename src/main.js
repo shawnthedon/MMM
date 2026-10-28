@@ -20,9 +20,13 @@ import './comms.js';
 import './local.js';
 import './voice.js';
 import { refreshComms, releaseComms, canReadGatewayComms } from './commsGateway.js';
+import { pageIn, initMotion } from './motion.js';
+import { enhanceSwipeCards } from './gestures.js';
+import { routes } from './shell.js';
 
 let currentRoute = 'home';
 let currentParams = {};
+let previousRoute = 'home';
 /** Identity of the view currently in the DOM, so a re-render can tell navigation from an update. */
 let renderedKey = null;
 
@@ -126,10 +130,16 @@ export function rerender({ resetScroll = false } = {}) {
   enhanceSwitches(viewEl);
   v.mount && v.mount(currentParams);
   refreshChrome(currentRoute);
+  // Gestures are attached to the freshly rendered cards (already-wired nodes are skipped).
+  enhanceSwipeCards(viewEl);
   renderedKey = key;
   if (navigating) {
     viewEl.scrollTop = 0;
     window.scrollTo(0, 0);
+    const order = routes.map((r) => r.id);
+    const direction = order.indexOf(currentRoute) >= order.indexOf(previousRoute) ? 'forward' : 'back';
+    pageIn(viewEl, { direction });
+    previousRoute = currentRoute;
   } else if (saved) {
     restoreScroll(saved, viewEl);
   }
@@ -229,6 +239,9 @@ function registerSW() {
 /* ---------- boot ---------- */
 function boot() {
   const root = document.getElementById('app');
+  // Animation engine first: it is code-split, and every screen should have it ready by the time
+  // the first tap lands.
+  initMotion();
   renderShell(root);
   applyTheme();
   parseHash();

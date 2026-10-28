@@ -625,3 +625,57 @@ input[type='range']::-webkit-slider-thumb {
 }
 @media (min-width: 1024px) { .deck-lower { grid-template-columns: 1.1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { .deck-agent { transition: none; } }
+
+/* ---------- swipeable agent cards ----------
+ * The card sits in a wrapper with two action layers underneath. Nothing is revealed until the
+ * card actually moves, and the same actions exist as buttons, so a touch device without pointer
+ * events loses nothing. */
+.swipe-wrap { position: relative; border-radius: var(--radius); overflow: hidden; isolation: isolate; }
+.swipe-wrap + .swipe-wrap { margin-top: 8px; }
+.swipe-under {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px;
+  opacity: 0;
+  transition: opacity .12s linear;
+  font-size: 12px; font-weight: 700;
+  pointer-events: none;
+}
+/* A left swipe slides the card away to the left, so what it reveals sits on the right edge. */
+.swipe-under[data-side='left'] {
+  flex-direction: column; justify-content: center; align-items: flex-end;
+  padding-right: 18px;
+  background: linear-gradient(270deg, color-mix(in srgb, var(--state-success) 26%, var(--surface)), color-mix(in srgb, var(--state-success) 4%, var(--surface)));
+  color: var(--state-success);
+}
+.swipe-under[data-side='left'] .swipe-under-label { display: inline-flex; align-items: center; gap: 6px; }
+/* A right swipe reveals the stop action on the left edge. */
+.swipe-under[data-side='right'] {
+  justify-content: flex-start;
+  padding-left: 18px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--state-warning) 26%, var(--surface)), color-mix(in srgb, var(--state-warning) 4%, var(--surface)));
+  color: var(--state-warning);
+}
+.swipe-under-label { display: inline-flex; align-items: center; gap: 6px; }
+.swipe-under-note { font-size: 10px; font-weight: 600; opacity: .8; }
+.swipe-surface {
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 12px;
+  background: var(--surface);
+  will-change: transform;
+  touch-action: pan-y;               /* horizontal drags belong to the card, vertical to the page */
+}
+.swipe-surface.deck-agent { display: flex; flex-direction: column; align-items: stretch; }
+.swipe-wrap[data-swipe-state='armed'] .swipe-under[data-side='left'] {
+  background: color-mix(in srgb, var(--state-error) 30%, var(--surface));
+  color: var(--state-error);
+}
+.swipe-wrap[data-swipe-state='armed'] .swipe-surface { border-color: var(--state-error); }
+.swipe-wrap[data-swipe-state='left'] .swipe-surface,
+.swipe-wrap[data-swipe-state='right'] .swipe-surface { transition: transform 180ms cubic-bezier(.2,.8,.2,1); }
+.swipe-hint {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px; color: var(--text-muted); margin: 8px 2px 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .swipe-under, .swipe-surface { transition: none; }
+}

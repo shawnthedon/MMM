@@ -109,3 +109,23 @@ from updates:
   is live. Agent/task provenance is labelled; this is not production telemetry.
 - Custom accent presets, font scale, reduced-motion override and sandboxed custom CSS from the
   broader appearance requirement are **not** implemented.
+
+---
+
+## Motion & sound (2026-10-28)
+
+Full contract: [`MOTION_SOUND_GESTURES.md`](./MOTION_SOUND_GESTURES.md).
+
+- anime.js 4.5.0 (MIT) drives every animation, loaded through `src/motion.js` only. No component
+  imports the library directly, and it is code-split so a partial DOM can never break the bundle.
+- Motion is decoration: with `prefers-reduced-motion` (or Settings → Motion & sound → Reduced) every
+  surface is placed in its end state synchronously and leftover inline styles are cleared.
+- The Copilot is now a **full-screen immersive overlay** at every width, opened on a blank holographic
+  stage with a central microphone, with the title **Advanced Copilot** toggling the control surface.
+- Interface sound is synthesised with WebAudio (no files, no network), default on, one switch in
+  Settings, and silent until the first gesture unlocks audio.
+- Agent cards respond to swipe left (run), swipe right (stop) and swipe left + hold (delete after a
+  typed confirmation). The same actions remain available as buttons and keyboard shortcuts, so
+  gesture support never becomes the only route to a capability.
+- New tokens used: none. The stage, swipe layers and consent card are built from existing custom
+  properties; `src/copilot.css` is asserted to contain no literal hex colours.

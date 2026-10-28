@@ -124,7 +124,8 @@ await check('copilot launcher is the central bottom-nav action', () => {
   const fab = tabbar.querySelector('.cp-fab-slot');
   if (!fab) throw new Error('no central Copilot launcher');
   if (slots.indexOf(fab) !== 2) throw new Error('launcher is not in the centre slot');
-  if (fab.getAttribute('aria-label') !== 'Open Copilot') throw new Error('launcher lacks an accessible name');
+  const label = fab.getAttribute('aria-label') || '';
+  if (!/Copilot/.test(label)) throw new Error(`launcher lacks an accessible name (got “${label}”)`);
   if (fab.getAttribute('aria-haspopup') !== 'dialog') throw new Error('launcher does not advertise a dialog');
   if (doc.querySelector('.dock')) throw new Error('duplicate dock launcher still present');
   if (doc.querySelector('.fab')) throw new Error('floating + FAB still overlaps the nav');

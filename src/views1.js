@@ -29,6 +29,22 @@ function writeBlocked(slice, label, action) {
 
 const permissionDenied = (perm) => isApiMode() && !can(perm);
 
+/**
+ * Agent cards are swipeable: left = run, right = stop, left + hold = delete (confirmed).
+ * The card inside stays a normal button, so tapping still opens the agent and the same actions
+ * also exist as buttons on the agent screen — gestures are an accelerator, not the only route.
+ */
+function swipeCard(agent, inner, { cls = 'list-card', extra = '' } = {}) {
+  const hint = 'Swipe left to run, swipe right to stop, or swipe left and hold to delete.';
+  return `<div class="swipe-wrap" data-swipe-card data-swipe-id="${esc(agent.id)}" data-swipe-name="${esc(agent.name)}">
+      <div class="swipe-under" data-side="left" aria-hidden="true"><span class="swipe-under-label">${icon('play', 15)} Run</span><span class="swipe-under-note">hold to delete</span></div>
+      <div class="swipe-under" data-side="right" aria-hidden="true"><span class="swipe-under-label">${icon('stop', 15)} Stop</span></div>
+      <button class="${cls} swipe-surface" data-act="open-agent" data-id="${esc(agent.id)}"
+              aria-describedby="swipe-help" style="width:100%;text-align:left" title="${hint}">${inner}</button>
+      ${extra}
+    </div>`;
+}
+
 export const views = {};
 
 /* ================= HOME ================= */
@@ -72,14 +88,14 @@ views.home = {
         </div>
 
         <div class="deck-section-heading"><div><div class="deck-kicker">YOUR FLEET</div><h2>Agent telemetry</h2></div><button class="deck-link" data-act="nav" data-to="agents">All agents ${icon('right', 15)}</button></div>
+        <p class="swipe-hint" id="swipe-help">${icon('left', 12)} Swipe left to run · swipe right to stop · swipe left and hold to delete.</p>
         <div class="deck-agents">
           ${s.agents.slice(0, 3).map((agent) => `
-            <button class="deck-agent" data-act="open-agent" data-id="${esc(agent.id)}">
+            ${swipeCard(agent, `
               <div class="deck-agent-top">${avatar(agent.name)}<span class="chip tiny ${agent.status === 'running' ? 'ok' : agent.status === 'error' ? 'bad' : agent.status === 'paused' ? 'warn' : ''}">${esc(agent.status)}</span></div>
               <div class="deck-agent-name">${esc(agent.name)}</div><div class="deck-agent-role">${esc(agent.role || 'Agent profile')}</div>
               <div class="deck-agent-divider"></div>
-              <div class="deck-agent-meta"><span>${esc(agent.framework)}</span><span>Trust <strong>${esc(agent.trust)}</strong></span></div>
-            </button>`).join('') || '<div class="deck-empty">No agents in this workspace yet.</div>'}
+              <div class="deck-agent-meta"><span>${esc(agent.framework)}</span><span>Trust <strong>${esc(agent.trust)}</strong></span></div>`, { cls: 'deck-agent' })}`).join('') || '<div class="deck-empty">No agents in this workspace yet.</div>'}
         </div>
 
         <div class="deck-lower">
@@ -136,8 +152,8 @@ views.agents = {
         <span class="chip">Swarmzero</span><span class="chip">AutoPentest</span><span class="chip">A.I.M.A</span>
         <span class="chip">Nautilus</span><span class="chip">OpenAI Swarm</span>
       </div>
-      ${s.agents.map((a) => `
-        <button class="list-card" data-act="open-agent" data-id="${a.id}" style="width:100%;text-align:left">
+      <p class="swipe-hint" id="swipe-help">${icon('left', 12)} Swipe left to run · swipe right to stop · swipe left and hold to delete. Or open an agent and use its buttons.</p>
+      ${s.agents.map((a) => swipeCard(a, `
           ${avatar(a.name)}
           <div class="grow">
             <div class="row" style="gap:6px"><span class="strong small">${esc(a.name)}</span>
@@ -152,8 +168,7 @@ views.agents = {
           <div class="col" style="align-items:flex-end;gap:6px">
             <span class="chip tiny" style="color:${trustColor(a.trust)}">◈ ${a.trust}</span>
             <div class="trust-bar"><i style="width:${a.trust}%;background:${trustColor(a.trust)}"></i></div>
-          </div>
-        </button>`).join('')}`;
+          </div>`)).join('')}`;
   },
 };
 
@@ -958,6 +973,67 @@ on('toggle-agent', async (el, ds) => {
   toast('Agent state updated', 'ok');
   import('./main.js').then((m) => m.rerender());
 });
+
+/* ---------- swipe commands ----------
+ * Same authority checks as the buttons: a gesture can never do more than the screen would allow.
+ */
+async function setAgentState(id, status, source) {
+  const a = getAgent(id);
+  if (!a) return;
+  if (status === a.status) {
+    toast(`${a.name} is already ${status}`, '');
+    return;
+  }
+  if (isLive('agents')) {
+    if (permissionDenied('agent:write')) {
+      toast('Your role cannot change agent state on the gateway', 'bad');
+      return;
+    }
+    try {
+      const row = await updateAgent(id, { status });
+      toast(`${row.name} is now ${row.status} on the gateway · ${source}`, 'ok');
+    } catch (err) {
+      toast(`Gateway refused: ${esc(err.message)}`, 'bad');
+    }
+    import('./main.js').then((m) => m.rerender());
+    return;
+  }
+  setState((st) => {
+    const row = st.agents.find((x) => x.id === id);
+    if (row) {
+      row.status = status;
+      row.lastActive = now();
+      logEvent('agent', `${row.name} ${status} · ${source}`);
+    }
+  }, `agent-${status}`);
+  toast(`${a.name} ${status === 'running' ? 'started' : 'stopped'}`, status === 'running' ? 'ok' : '');
+  import('./main.js').then((m) => m.rerender());
+}
+
+document.addEventListener('swipe-command', (event) => {
+  const { action, id } = event.detail || {};
+  const agent = id ? getAgent(id) : null;
+  if (!agent) return;
+  if (action === 'run') setAgentState(id, 'running', 'swiped left');
+  else if (action === 'stop') setAgentState(id, 'paused', 'swiped right');
+  else if (action === 'arm') deleteAgentWithConfirm(id);
+});
+
+function deleteAgentWithConfirm(id) {
+  const a = getAgent(id);
+  if (!a) return;
+  if (writeBlocked('agents', a.name, 'delete')) return;
+  confirmModal({
+    title: `Delete ${esc(a.name)}?`,
+    body: `You swiped left and held. ${esc(a.name)} will be soft-deleted with 30-day restore; runs and audit logs are preserved.`,
+    confirmText: 'Delete agent', danger: true, requireText: 'DELETE',
+    onConfirm: () => {
+      setState((st) => { st.agents = st.agents.filter((x) => x.id !== id); logEvent('agent', `Agent ${a.name} deleted`); }, 'del-agent');
+      toast('Agent deleted', 'ok');
+      import('./main.js').then((m) => m.rerender());
+    },
+  });
+}
 
 on('delete-agent', (el, ds) => {
   const a = getAgent(ds.id);
