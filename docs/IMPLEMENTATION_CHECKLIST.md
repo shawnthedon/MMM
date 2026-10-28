@@ -413,6 +413,17 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
     than guesses. Gateway moves use `PATCH /api/v1/tasks/:id` (`task:write`).
   - Evidence: `npm run test:kanban` (26 checks). Doc: [`kanban/board.md`](kanban/board.md).
 
+- [x] **4.14 Comms: server-side credentials, routes, delivery queue** — `apps/gateway/src/comms.js`,
+  `apps/gateway/migrations/003_comms.sql`, `apps/gateway/server.js`, `src/commsGateway.js`
+  - Credentials encrypted with AES-256-GCM (key from `SWARMOS_SECRET`), masked on every read; the
+    browser never receives a secret and never persists one when the gateway owns comms.
+  - Routes for channels, settings, messages, send, queue, provider verify handshakes and signed
+    inbound webhooks; `comms:read` / `comms:write`, audited including denials.
+  - Delivery outcomes recorded per attempt, retry with backoff + limits, quiet hours, rate limit,
+    idempotent sends, redaction; failed sends report the provider's own message.
+  - Evidence: `npm run test:comms-gateway` (27) + `npm run test:comms` (22).
+  - Doc: [`comms/server-side.md`](comms/server-side.md). Open: Discord Ed25519, Web Push, worker split.
+
 - [ ] **4.6 Wire Agent Manager UI to reality**
   - “Run” starts a real run; the **Logs** tab streams real trace lines; tool calls show real args/results (redacted per policy); memory tab shows real counts + search.
 

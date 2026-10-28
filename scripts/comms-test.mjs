@@ -148,7 +148,7 @@ await check('selecting a gateway opens advanced settings for that channel', asyn
 /* ---------- 3. status honesty ---------- */
 await check('saving credentials never marks a channel verified', async () => {
   await fresh('comms');
-  const out = comms.saveChannelConfig('telegram', { botToken: '123:abc', chatId: '42' });
+  const out = await comms.saveChannelConfig('telegram', { botToken: '123:abc', chatId: '42' });
   assert(out.ok, 'save failed');
   const rec = state().comms.channels.telegram;
   eq(rec.verifiedAt, null, 'verifiedAt stays null after saving');
@@ -209,7 +209,7 @@ await check('the browser channel delivers into the in-app inbox and verifies', a
 const sign = (algo, key, data) => createHmac(algo, key).update(data).digest('hex');
 
 await check('Telegram inbound needs the secret token header', async () => {
-  comms.saveChannelConfig('telegram', { webhookSecret: 's3cret' });
+  await comms.saveChannelConfig('telegram', { webhookSecret: 's3cret' });
   comms.toggleChannel('telegram', true);
   const body = JSON.stringify({ message: { text: '/status', from: { username: 'maya' }, chat: { id: 42 } } });
   const bad = await comms.handleInbound('telegram', { headers: { 'x-telegram-bot-api-secret-token': 'wrong' }, rawBody: body });
@@ -220,7 +220,7 @@ await check('Telegram inbound needs the secret token header', async () => {
 });
 
 await check('Slack inbound is rejected outside the replay window and on a bad digest', async () => {
-  comms.saveChannelConfig('slack', { botToken: 'xoxb-1', signingSecret: 'shh', channel: '#ops' });
+  await comms.saveChannelConfig('slack', { botToken: 'xoxb-1', signingSecret: 'shh', channel: '#ops' });
   comms.toggleChannel('slack', true);
   const body = 'text=%2Fagents&user=U1&channel=C1';
   const nowTs = Math.floor(Date.now() / 1000);
@@ -236,7 +236,7 @@ await check('Slack inbound is rejected outside the replay window and on a bad di
 });
 
 await check('WhatsApp inbound uses the app secret as the sha256 key', async () => {
-  comms.saveChannelConfig('whatsapp', { accessToken: 'EAAG-secret', phoneNumberId: '1', verifyToken: 'v', recipient: '+2348000000000' });
+  await comms.saveChannelConfig('whatsapp', { accessToken: 'EAAG-secret', phoneNumberId: '1', verifyToken: 'v', recipient: '+2348000000000' });
   comms.toggleChannel('whatsapp', true);
   const raw = JSON.stringify({ entry: [{ changes: [{ value: { messages: [{ from: '2348000000000', text: { body: '/tasks' } }] } }] }] });
   const signature = `sha256=${sign('sha256', 'EAAG-secret', raw)}`;
@@ -250,8 +250,8 @@ await check('WhatsApp inbound uses the app secret as the sha256 key', async () =
 });
 
 await check('SMS inbound verifies the Twilio HMAC-SHA1 signature', async () => {
-  comms.saveChannelConfig('sms', { baseUrl: 'https://api.twilio.test', accountSid: 'AC1', authToken: 'tok', from: '+1555', to: '+2348' });
-  comms.saveChannelConfig('sms', { webhookUrl: 'https://app.test/api/v1/comms/sms/inbound' });
+  await comms.saveChannelConfig('sms', { baseUrl: 'https://api.twilio.test', accountSid: 'AC1', authToken: 'tok', from: '+1555', to: '+2348' });
+  await comms.saveChannelConfig('sms', { webhookUrl: 'https://app.test/api/v1/comms/sms/inbound' });
   comms.toggleChannel('sms', true);
   const params = { From: '+2348000000000', Body: '/status' };
   const data = 'https://app.test/api/v1/comms/sms/inbound' + Object.keys(params).sort().map((k) => k + params[k]).join('');
@@ -359,6 +359,111 @@ await check('secrets are never echoed back in the panel', async () => {
   assert(tokenInput, 'token field rendered');
   assert(/^••••/.test(tokenInput.value), `secret must be masked (got “${tokenInput.value}”)`);
   assert(!text(s).includes('123:abc'), 'raw token is not in the sheet');
+});
+
+/* =========================================================================================
+ * Gateway-backed comms (browser side)
+ * The panel must hand credentials to the gateway when a session holds comms:read, receive masked
+ * values back, and fall back honestly when there is no session.
+ * =======================================================================================*/
+const api = await import('../src/api.js');
+const auth = await import('../src/auth.js');
+const gw = await import('../src/commsGateway.js');
+const realFetch = globalThis.fetch;
+
+function stubGateway({ permissions = ['read', 'comms:read', 'comms:write'], channelStatus = 'configured_unverified' } = {}) {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const path = String(url).replace('http://gw.test', '');
+    calls.push({ path, method: init.method || 'GET' });
+    const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    if (path === '/api/v1/auth/session') {
+      return json(200, { principal: { id: 'pr-1', name: 'Owner', role: 'Owner' }, permissions, csrfToken: 'csrf-token-value' });
+    }
+    if (path === '/api/v1/comms' && (init.method || 'GET') === 'GET') {
+      return json(200, {
+        channels: [{
+          id: 'telegram',
+          label: 'Telegram',
+          kind: 'cloud',
+          status: channelStatus,
+          enabled: true,
+          verifiedAt: channelStatus === 'verified' ? Date.now() : null,
+          lastTest: channelStatus === 'verified' ? { ok: true, detail: 'Provider accepted the message (HTTP 200).' } : null,
+          config: { botToken: '••••alue', chatId: '-1001234567890' },
+          missing: [],
+          missingInbound: ['webhookSecret'],
+          routing: { copilot: true, agents: [] },
+        }],
+        settings: { quietHours: '', rateLimitPerMin: 20, retryLimit: 3, commands: { '/status': true } },
+        stats: { out: { sent: 2, failed: 0, queued: 1, deferred: 0 }, in: { received: 3, rejected: 0 } },
+        encryption: { algorithm: 'aes-256-gcm', keySource: 'env', secretsServerSide: true },
+        note: 'Credentials are stored encrypted on this gateway and are never returned to a client.',
+        requestedBy: 'Owner',
+      });
+    }
+    if (path.startsWith('/api/v1/comms/telegram/send')) return json(200, { ok: true, status: 200, detail: 'Provider accepted the message (HTTP 200).' });
+    if (path.startsWith('/api/v1/comms/')) return json(200, { ok: true, channel: { id: 'telegram' } });
+    return json(404, { error: 'not found' });
+  };
+  return calls;
+}
+
+await check('with a gateway session the panel states that credentials are server-side', async () => {
+  api.setGatewayUrl('http://gw.test');
+  stubGateway();
+  await auth.refreshSession({ silent: true });
+  assert(auth.can('comms:read'), 'session carries comms:read');
+  const out = await gw.refreshComms();
+  eq(out.ok, true, 'gateway comms loaded');
+  assert(gw.commsIsGateway(), 'comms reports gateway provenance');
+  const label = gw.commsSourceLabel();
+  eq(label.kind, 'gateway', 'source label is the gateway');
+  assert(/encrypted on the gateway/.test(label.text), `label explains storage (${label.text})`);
+  assert(/never returned/.test(label.text), 'label says secrets do not come back to the browser');
+
+  await fresh('comms');
+  const body = text(view());
+  assert(/encrypted on the gateway/.test(body), 'the panel prints the storage location');
+  assert(/••••alue/.test(JSON.stringify(state().comms.channels.telegram.config)), 'only masked values reached the browser');
+  eq(state().comms.channels.telegram.status, 'configured_unverified', 'the server status is adopted verbatim');
+  assert(!JSON.stringify(state()).includes('123:abc'), 'no plaintext secret anywhere in state');
+});
+
+await check('saving sends the patch to the gateway, never to localStorage', async () => {
+  const calls = stubGateway();
+  const out = await comms.saveChannelConfig('telegram', { botToken: 'new-token-value-9999', chatId: '-100' });
+  eq(out.ok, true, 'save accepted');
+  eq(out.mode, 'gateway', 'the gateway path was used');
+  const put = calls.find((c) => c.method === 'PUT' && c.path === '/api/v1/comms/telegram');
+  assert(put, 'PUT /api/v1/comms/telegram was called');
+  // window.localStorage is written asynchronously (debounced 250 ms)
+  await sleep(320);
+  const stored = win.localStorage.getItem('swarmos.v2') || win.localStorage.getItem('swarmos-state') || '{}';
+  assert(!stored.includes('new-token-value-9999'), 'the secret never reached localStorage');
+});
+
+await check('a gateway test reports the server delivery result', async () => {
+  stubGateway({ channelStatus: 'verified' });
+  await gw.refreshComms();
+  const result = await comms.sendTest('telegram');
+  eq(result.mode, 'gateway', 'server-side delivery');
+  eq(result.ok, true, 'delivered');
+  assert(/Provider accepted/.test(result.detail || ''), `the provider detail is relayed (${result.detail})`);
+});
+
+await check('without a session the panel says credentials are browser-only', async () => {
+  globalThis.fetch = async () => new Response('{}', { status: 401, headers: { 'content-type': 'application/json' } });
+  await auth.refreshSession({ silent: true });
+  gw.releaseComms();
+  assert(!gw.canReadGatewayComms(), 'no gateway comms permission');
+  const label = gw.commsSourceLabel();
+  eq(label.kind, 'demo', 'demo source');
+  assert(/browser/i.test(label.text), `label states browser-only storage (${label.text})`);
+  await fresh('comms');
+  assert(/browser only|this browser/i.test(text(view())), 'the panel prints the browser-only warning');
+  globalThis.fetch = realFetch;
+  api.setGatewayUrl('');
 });
 
 console.log(results.join('\n'));
