@@ -124,7 +124,7 @@ const CAPS = {
     status: 'unverified',
     summary: 'Candidate engines are not installed or verified; singing is unsupported.',
     detail:
-      'Local TTS, NeuTTS and OpenVoice are candidates from the spec. Their licences, maintenance, mobile runtimes and audio capabilities were not verified here. Text-to-speech is not singing: “now sing …” has no supported path, and no consent/profile storage exists yet.',
+      'NeuTTS and OpenVoice upstream descriptions were reviewed, but model/dependency licences and mobile execution remain unverified and neither is installed. Local TTS remains unidentified. Text-to-speech is not singing: “now sing …” has no supported path, and no consent/profile storage exists yet.',
     requirements: [
       'Verify each upstream repo, licence (code + weights) and mobile runtime',
       'Engine adapter with capability declaration (speech vs singing)',
@@ -135,18 +135,18 @@ const CAPS = {
   channels: {
     id: 'channels',
     label: 'Communication gateway',
-    status: 'demo',
-    summary: 'Telegram screen is a UI simulation; other channels are unverified.',
+    status: 'unverified',
+    summary: 'Gateway adapters exist; live external providers have not been verified here.',
     detail:
-      'No inbound or outbound transport exists. Telegram, WhatsApp, Slack, Discord, Signal and iMessage each require their own verified connector, credentials, identity mapping and rate limits. No channel can trigger a privileged action today.',
-    requirements: ['Per-channel adapter + credentials in a server-side store', 'Identity mapping, allowlists, rate limits, delivery receipts'],
-    evidence: () => 'Telegram view renders from demo state only',
+      'Gateway Comms implements encrypted channel settings and outbound requests for Telegram, WhatsApp, Discord, Slack and Twilio, plus signature-gated inbound routes. Mock tests are not live delivery evidence. OpenSMS, sender identity mapping and operation-bound approvals remain missing.',
+    requirements: ['Provider credentials and authorised live tests', 'Identity mapping, complete rate limits, delivery receipts and approval governance'],
+    evidence: () => 'see apps/gateway/src/comms.js and scripts/comms-gateway-test.mjs',
   },
   opensms: {
     id: 'opensms',
     label: 'OpenSMS (Android SMS)',
     status: 'unconfigured',
-    summary: 'Not connected. Needs a server-side proxy and a verified device topology.',
+    summary: 'Not implemented. Needs a dedicated server-side adapter and a verified device topology.',
     detail:
       'OpenSMS is a separate Apache-2.0 Android app; its Python classes and Android permissions cannot be inherited by browser code. Only a thin adapter over its authenticated HTTP API is sound. An API key must never reach client JavaScript, and HTTPS→plain-HTTP LAN calls are unreliable, so a server-side proxy is a prerequisite. No remote start/stop will be offered: the inspected /control/ route is unauthenticated and does not actually control the server.',
     requirements: [

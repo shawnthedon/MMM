@@ -5,7 +5,7 @@ import {
 } from './core.js';
 import { openSheet, closeAllSheets, toast, confirmModal, on, actions } from './shell.js';
 import { sourceTagHTML, sourceBannerHTML } from './sourceui.js';
-import { isLive, createAgent, updateAgent, createTask, updateTask } from './datastore.js';
+import { isLive, getStatus, createAgent, updateAgent, createTask, updateTask } from './datastore.js';
 import { isApiMode } from './api.js';
 import { can } from './auth.js';
 import {
@@ -36,65 +36,73 @@ views.home = {
   title: 'Command Deck',
   render() {
     const s = getState();
-    const spend = s.agents.reduce((a, x) => a + x.costToday, 0);
-    const running = s.agents.filter((a) => a.status === 'running').length;
-    const pend = pendingApprovals();
-    const live = s.swarms.filter((w) => w.status === 'live');
-    const spark = s.usage.map((u) => u.cost);
+    const sync = getStatus();
+    const spend = s.agents.reduce((sum, agent) => sum + (Number(agent.costToday) || 0), 0);
+    const running = s.agents.filter((agent) => agent.status === 'running').length;
+    const pending = pendingApprovals();
+    const swarms = s.swarms.filter((swarm) => swarm.status === 'live');
+    const trust = s.agents.length ? Math.round(s.agents.reduce((sum, agent) => sum + (Number(agent.trust) || 0), 0) / s.agents.length) : 0;
+    const gatewayLabel = !isApiMode() ? 'Demo workspace' : sync.status === 'live' ? 'Gateway synced' : `Gateway ${sync.status}`;
     return `
-      <div class="page-head">
-        <h1>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, Maya</h1>
-        <div class="sub">Gateway ${esc(s.gateway.status)} · v${esc(s.gateway.version)} · SQLite ${esc(s.gateway.sqlite)}</div>
-      </div>
+      <div class="deck">
+        <div class="deck-heading">
+          <div>
+            <div class="deck-eyebrow font-mono"><span class="deck-eyebrow-dot"></span> RELAY / WORKSPACE OVERVIEW</div>
+            <h1>Command deck<span class="deck-title-dot">.</span></h1>
+            <p>Your workspace at a glance. Monitor your agents, activity and work in progress.</p>
+          </div>
+          <div class="deck-actions">
+            <span class="deck-mode"><span class="deck-mode-dot"></span>${esc(gatewayLabel)}</span>
+            <button class="btn primary" data-act="new-agent">${icon('plus', 17)} New agent</button>
+          </div>
+        </div>
 
-      ${pend.length ? `
-        <div class="banner warn">
-          ${icon('shield', 18)}
-          <div class="grow"><strong>${pend.length} approval${pend.length > 1 ? 's' : ''}</strong> need you · ${esc(pend[0].action)} ${sourceTagHTML('approvals')}</div>
-          <button class="btn sm" data-act="notifications">Review</button>
+        ${pending.length ? `<div class="deck-alert">
+          <span class="deck-alert-icon">${icon('shield', 18)}</span>
+          <div class="grow"><strong>${pending.length} approval${pending.length === 1 ? '' : 's'} awaiting review</strong><span>${esc(pending[0].action)} · ${isLive('approvals') ? 'Gateway' : 'Demo data'}</span></div>
+          <button class="btn sm" data-act="notifications">Review ${icon('right', 15)}</button>
         </div>` : ''}
 
-      <div class="grid-2">
-        <div class="stat"><div class="k">Spend today</div><div class="v">${fmtMoney(spend)}</div><div class="d">budget posture: green</div></div>
-        <div class="stat"><div class="k">Agents</div><div class="v">${running}<span class="muted" style="font-size:14px">/${s.agents.length}</span></div><div class="d">running now</div></div>
-        <div class="stat"><div class="k">Live swarms</div><div class="v">${live.length}</div><div class="d">${s.tasks.filter((t) => t.column === 'doing').length} tasks in flight</div></div>
-        <div class="stat"><div class="k">Fleet trust</div><div class="v">${Math.round(s.agents.reduce((a, x) => a + x.trust, 0) / s.agents.length)}</div><div class="d">avg score</div></div>
-      </div>
+        <div class="deck-section-heading"><div><div class="deck-kicker">WORKSPACE PULSE</div><h2>Overview</h2></div><span class="deck-caption font-mono">CURRENT SNAPSHOT</span></div>
+        <div class="deck-metrics">
+          <div class="deck-metric"><div class="deck-metric-top"><span>Agents running</span><span class="deck-metric-icon">${icon('robot', 17)}</span></div><div class="deck-value">${running}<small> / ${s.agents.length}</small></div><div class="deck-metric-foot"><span class="deck-status-dot"></span>${isLive('agents') ? 'Gateway data' : 'Demo data'}</div></div>
+          <div class="deck-metric"><div class="deck-metric-top"><span>Tasks in progress</span><span class="deck-metric-icon">${icon('board', 17)}</span></div><div class="deck-value">${s.tasks.filter((task) => task.column === 'doing').length}</div><div class="deck-metric-foot">${isLive('tasks') ? 'Gateway tasks' : 'Demo tasks'}</div></div>
+          <div class="deck-metric"><div class="deck-metric-top"><span>Spend today</span><span class="deck-metric-icon">${icon('chart', 17)}</span></div><div class="deck-value">${fmtMoney(spend)}</div><div class="deck-metric-foot">${isLive('agents') ? 'Reported by gateway' : 'Demo figures'}</div></div>
+          <div class="deck-metric"><div class="deck-metric-top"><span>Fleet trust</span><span class="deck-metric-icon">${icon('shield', 17)}</span></div><div class="deck-value">${trust}<small> / 100</small></div><div class="deck-metric-foot">Average across agents</div></div>
+        </div>
 
-      <div class="card" style="margin-top:12px">
-        <div class="row between"><strong class="small">Spend (24h)</strong><span class="chip tiny">${fmtMoney(spark.reduce((a, b) => a + b, 0))}</span></div>
-        ${sparkline(spark)}
-      </div>
+        <div class="deck-section-heading"><div><div class="deck-kicker">YOUR FLEET</div><h2>Agent telemetry</h2></div><button class="deck-link" data-act="nav" data-to="agents">All agents ${icon('right', 15)}</button></div>
+        <div class="deck-agents">
+          ${s.agents.slice(0, 3).map((agent) => `
+            <button class="deck-agent" data-act="open-agent" data-id="${esc(agent.id)}">
+              <div class="deck-agent-top">${avatar(agent.name)}<span class="chip tiny ${agent.status === 'running' ? 'ok' : agent.status === 'error' ? 'bad' : agent.status === 'paused' ? 'warn' : ''}">${esc(agent.status)}</span></div>
+              <div class="deck-agent-name">${esc(agent.name)}</div><div class="deck-agent-role">${esc(agent.role || 'Agent profile')}</div>
+              <div class="deck-agent-divider"></div>
+              <div class="deck-agent-meta"><span>${esc(agent.framework)}</span><span>Trust <strong>${esc(agent.trust)}</strong></span></div>
+            </button>`).join('') || '<div class="deck-empty">No agents in this workspace yet.</div>'}
+        </div>
 
-      <div class="section-title">Live now</div>
-      ${live.length ? live.map((w) => `
-        <button class="list-card" data-act="open-swarm" data-id="${w.id}" style="width:100%;text-align:left">
-          <div class="avatar" style="background:var(--elevated);color:var(--brand)">${icon('swarm', 18)}</div>
-          <div class="grow">
-            <div class="row"><span class="strong small">${esc(w.name)}</span><span class="pulse-dot live"></span></div>
-            <div class="tiny muted ellipsis">${esc(w.objective)}</div>
-            <div class="progress" style="margin-top:6px"><i style="width:${Math.round(w.progress * 100)}%"></i></div>
-          </div>
-          <div class="tiny muted">${Math.round(w.progress * 100)}%</div>
-        </button>`).join('') : `
-        <div class="empty"><div class="e-ico">⬡</div><div>No live swarms — deploy one in seconds.</div>
-        <button class="btn primary" data-act="new-swarm" style="margin-top:12px">Deploy swarm</button></div>`}
-
-      <div class="section-title row between">Recent activity ${sourceTagHTML('events')}</div>
-      <div class="card">
-        ${s.events.slice(0, 6).map((ev, i) => `
-          <div class="row" style="padding:7px 0;${i ? 'border-top:1px solid var(--border-soft)' : ''};gap:10px">
-            <span class="pulse-dot ${ev.type === 'approval' ? 'warn' : ev.type === 'swarm' ? 'run' : 'idle'}"></span>
-            <div class="grow small">${esc(ev.text)}</div>
-            <div class="tiny muted">${fmtTime(ev.ts)}</div>
-          </div>`).join('')}
-      </div>
-
-      <div class="section-title">Quick actions</div>
-      <div class="grid-3">
-        <button class="btn col" data-act="new-agent" style="height:auto;padding:14px 8px">${icon('robot', 20)}<span class="tiny">New agent</span></button>
-        <button class="btn col" data-act="new-swarm" style="height:auto;padding:14px 8px">${icon('swarm', 20)}<span class="tiny">Deploy</span></button>
-        <button class="btn col" data-act="nav" data-to="terminal" style="height:auto;padding:14px 8px">${icon('terminal', 20)}<span class="tiny">Terminal</span></button>
+        <div class="deck-lower">
+          <section class="deck-panel">
+            <div class="deck-panel-head"><div><div class="deck-kicker">WORK IN PROGRESS</div><h2>Active swarms</h2></div><button class="deck-link" data-act="nav" data-to="teams">View all ${icon('right', 15)}</button></div>
+            <p class="deck-panel-sub">${swarms.length} active · demo simulation, not agent execution</p>
+            ${swarms.length ? swarms.slice(0, 3).map((swarm) => `<button class="deck-swarm" data-act="open-swarm" data-id="${esc(swarm.id)}">
+              <div class="deck-swarm-icon">${icon('swarm', 18)}</div><div class="grow"><div class="deck-swarm-name">${esc(swarm.name)}</div><div class="deck-swarm-desc">${esc(swarm.objective)}</div><div class="progress"><i style="width:${Math.max(0, Math.min(100, Math.round(swarm.progress * 100)))}%"></i></div></div><span class="deck-percent">${Math.round(swarm.progress * 100)}%</span>
+            </button>`).join('') : '<div class="deck-empty">No active demo swarms.</div>'}
+          </section>
+          <section class="deck-panel">
+            <div class="deck-panel-head"><div><div class="deck-kicker">EVENT STREAM</div><h2>Recent activity</h2></div>${sourceTagHTML('events')}</div>
+            <p class="deck-panel-sub">The latest events in your workspace.</p>
+            <div class="deck-events">${s.events.slice(0, 4).map((event) => `<div class="deck-event"><span class="deck-event-dot"></span><div class="grow">${esc(event.text)}</div><span class="deck-event-time">${fmtTime(event.ts)}</span></div>`).join('') || '<div class="deck-empty">No recent events.</div>'}</div>
+          </section>
+        </div>
+        <div class="deck-section-heading"><div><div class="deck-kicker">GET STARTED</div><h2>Quick actions</h2></div></div>
+        <div class="deck-quick">
+          <button data-act="open-designer"><span class="deck-quick-icon">${icon('spark', 19)}</span><span><strong>Design an agent</strong><small>Configure a new profile</small></span>${icon('right', 16)}</button>
+          <button data-act="nav" data-to="tasks"><span class="deck-quick-icon">${icon('board', 19)}</span><span><strong>Open tasks</strong><small>See the board</small></span>${icon('right', 16)}</button>
+          <button data-act="nav" data-to="terminal"><span class="deck-quick-icon">${icon('terminal', 19)}</span><span><strong>Open terminal</strong><small>Explore the console</small></span>${icon('right', 16)}</button>
+        </div>
+        <div class="deck-footnote">${icon('shield', 15)} <span>Showing ${esc(gatewayLabel.toLowerCase())}. Swarms and usage remain demo data.</span></div>
       </div>`;
   },
 };
@@ -103,7 +111,7 @@ export function sparkline(vals, color = 'url(#sg)') {
   const w = 300, h = 44, max = Math.max(...vals, 0.01), min = Math.min(...vals, 0);
   const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - 4 - ((v - min) / (max - min || 1)) * (h - 10)}`);
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-    <defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6C8CFF"/><stop offset="1" stop-color="#22D3EE"/></linearGradient></defs>
+    <defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--accent-primary)"/><stop offset="1" stop-color="var(--accent-secondary)"/></linearGradient></defs>
     <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
   </svg>`;
 }
@@ -399,7 +407,7 @@ function swarmMonitor(id) {
   if (!w) return `<div class="empty">Swarm not found</div>`;
   const pos = { n1: [70, 18], n2: [70, 110], n3: [210, 110], n4: [70, 202], n5: [210, 202], n6: [140, 294] };
   const edges = [['n1', 'n2'], ['n1', 'n3'], ['n2', 'n4'], ['n2', 'n5'], ['n3', 'n5'], ['n4', 'n6'], ['n5', 'n6']];
-  const color = (st) => (st === 'done' ? '#34D399' : st === 'running' ? '#818CF8' : st === 'error' ? '#F87171' : '#64748F');
+  const color = (st) => (st === 'done' ? 'var(--state-success)' : st === 'running' ? 'var(--accent-secondary)' : st === 'error' ? 'var(--state-error)' : 'var(--text-muted)');
   return `
     <button class="btn sm" data-act="nav" data-to="teams">${icon('left', 14)} Swarms</button>
     <div class="card" style="margin-top:12px">
@@ -422,14 +430,14 @@ function swarmMonitor(id) {
     <div class="dag-wrap"><div class="dag"><svg viewBox="0 0 360 360" width="100%" height="330">
       ${edges.map(([a, b]) => {
         const [x1, y1] = pos[a]; const [x2, y2] = pos[b];
-        return `<line class="edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#2E3B55" stroke-width="2.5"/>`;
+        return `<line class="edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--border-default)" stroke-width="2.5"/>`;
       }).join('')}
       ${w.nodes.map((n) => {
         const [x, y] = pos[n.id] || [140, 180];
         return `<g>
-          <rect x="${x - 56}" y="${y - 18}" width="112" height="36" rx="10" fill="#121826" stroke="${color(n.status)}" stroke-width="2"/>
-          <text x="${x}" y="${y - 2}" text-anchor="middle" fill="#EAF0FA" font-size="11" font-weight="700">${esc(n.label)}</text>
-          <text x="${x}" y="${y + 11}" text-anchor="middle" fill="#93A1BA" font-size="8.5">${esc(n.status)} · ${fmtMoney(n.spent)}</text>
+          <rect x="${x - 56}" y="${y - 18}" width="112" height="36" rx="10" fill="var(--bg-surface)" stroke="${color(n.status)}" stroke-width="2"/>
+          <text x="${x}" y="${y - 2}" text-anchor="middle" fill="var(--text-primary)" font-size="11" font-weight="700">${esc(n.label)}</text>
+          <text x="${x}" y="${y + 11}" text-anchor="middle" fill="var(--text-muted)" font-size="8.5">${esc(n.status)} · ${fmtMoney(n.spent)}</text>
         </g>`;
       }).join('')}
     </svg></div></div>

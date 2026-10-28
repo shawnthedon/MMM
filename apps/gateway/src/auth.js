@@ -296,6 +296,26 @@ function resolveSessionCookie(secret) {
   };
 }
 
+/** Re-check an established WebSocket identity without storing its raw credential. */
+export function revalidateContext(context) {
+  if (!context) return null;
+  if (context.via === 'dev-open') return authMode().mode === 'dev-open' ? context : null;
+  const holder = findPrincipalById(context.id);
+  if (!holder || holder.status !== 'active') return null;
+  if (context.sessionId) {
+    const found = activeSession(context.sessionId);
+    if (!found.session || found.session.principal_id !== context.id) return null;
+    return principalContext(holder, { via: context.via, sessionId: context.sessionId });
+  }
+  if (context.tokenId) {
+    const token = db.prepare('SELECT * FROM capability_tokens WHERE id = ?').get(context.tokenId);
+    if (!token || token.principal_id !== context.id || token.revoked_at || (token.expires_at && token.expires_at <= Date.now())) return null;
+    try { return principalContext(holder, { via: context.via, tokenId: token.id, scopes: JSON.parse(token.scopes_json) }); }
+    catch { return null; }
+  }
+  return null;
+}
+
 /* ---------- request authentication ---------- */
 export function authMode() {
   const configured = String(process.env.SWARMOS_AUTH || 'required').toLowerCase();

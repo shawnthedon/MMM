@@ -434,13 +434,14 @@ await check('CORS only echoes allowlisted origins with credentials', async () =>
   assert(!bad.headers.get('access-control-allow-credentials'), 'no credentials header for unknown origin');
 });
 
-function rawUpgrade(cookieHeader) {
+function rawUpgrade(cookieHeader, origin = null) {
   return new Promise((resolve) => {
     const socket = net.connect(PORT, '127.0.0.1', () => {
       socket.write(
         `GET /ws HTTP/1.1\r\nHost: 127.0.0.1:${PORT}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
           `Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n` +
           (cookieHeader ? `Cookie: ${cookieHeader}\r\n` : '') +
+          (origin ? `Origin: ${origin}\r\n` : '') +
           '\r\n'
       );
     });
@@ -489,6 +490,30 @@ await check('WebSocket hello identifies the principal and refuses topics above i
   assert(sub, 'subscribe acknowledgement missing');
   assert(sub.topics.includes('agents'), 'agents topic granted');
   assert(sub.refused.includes('audit'), 'audit topic refused for operator');
+});
+
+await check('WebSocket rejects a hostile browser origin', async () => {
+  const cookie = `${auth.SESSION_COOKIE}=${owner.jar[auth.SESSION_COOKIE]}`;
+  assert(/403/.test(await rawUpgrade(cookie, 'http://evil.example')), 'hostile origin denied');
+  assert(/101/.test(await rawUpgrade(cookie, 'http://localhost:5173')), 'allowlisted origin accepted');
+  assert(/101/.test(await rawUpgrade(cookie, BASE)), 'same origin accepted');
+});
+
+await check('revoked WebSocket session cannot receive later broadcasts', async () => {
+  const fresh = client('10.8.9.1');
+  eq((await fresh.login('operator@test.local', 'NewPassw0rd!77')).status, 200, 'fresh operator session');
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { cookie: `${auth.SESSION_COOKIE}=${fresh.jar[auth.SESSION_COOKIE]}` } });
+  const seen = [];
+  const hello = new Promise((resolve, reject) => { ws.on('message', (raw) => { const msg = JSON.parse(String(raw)); seen.push(msg); if (msg.type === 'hello') resolve(); }); ws.on('error', reject); });
+  await hello;
+  const closed = new Promise((resolve) => ws.once('close', (code) => resolve(code)));
+  eq((await fresh.request('/api/v1/auth/logout', { method: 'POST', body: {}, csrf: true })).status, 200, 'session revoked');
+  const created = await owner.request('/api/v1/agents', { method: 'POST', body: { name: 'Revocation broadcast test' }, csrf: true });
+  eq(created.status, 201, 'broadcast triggered');
+  const code = await Promise.race([closed, new Promise((resolve) => setTimeout(() => resolve('timeout'), 1500))]);
+  eq(code, 4401, 'revoked client closed on broadcast');
+  assert(!seen.some((msg) => msg.type === 'agent.created'), 'no event delivered after revocation');
+  ws.terminate();
 });
 
 /* ---------- finish ---------- */

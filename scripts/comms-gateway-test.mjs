@@ -278,7 +278,7 @@ await check('quiet hours hold messages instead of sending them', async () => {
 });
 
 await check('the same dedupe key cannot send twice', async () => {
-  resetProvider({ status: 200 });
+  resetProvider({ status: 200, body: { ok: true } });
   const first = await owner.request('/api/v1/comms/telegram/send', { method: 'POST', csrf: true, body: { text: 'once', dedupeKey: 'job-123' } });
   eq(first.status, 200, 'first send ok');
   const second = await owner.request('/api/v1/comms/telegram/send', { method: 'POST', csrf: true, body: { text: 'once', dedupeKey: 'job-123' } });
@@ -358,7 +358,7 @@ await check('a gated command refuses to act from a channel', async () => {
 await check('Meta verification handshake echoes the challenge only for the stored token', async () => {
   await owner.request('/api/v1/comms/whatsapp', {
     method: 'PUT', csrf: true,
-    body: { config: { accessToken: 'EAAG-test-token-value-1234', phoneNumberId: '1029384756', verifyToken: 'verify-me-123', recipient: '+2348012345678' } },
+    body: { config: { accessToken: 'EAAG-test-token-value-1234', appSecret: 'meta-app-secret', phoneNumberId: '1029384756', verifyToken: 'verify-me-123', recipient: '+2348012345678' } },
   });
   const okRes = await fetch(`${BASE}/api/v1/comms/whatsapp/verify?hub.mode=subscribe&hub.verify_token=verify-me-123&hub.challenge=challenge-42`);
   eq(okRes.status, 200, 'correct token passes');
@@ -373,7 +373,7 @@ await check('Meta inbound requires a valid X-Hub-Signature-256', async () => {
     object: 'whatsapp_business_account',
     entry: [{ changes: [{ value: { messages: [{ from: '2348012345678', id: 'wamid.1', text: { body: '/tasks' } }] } }] }],
   });
-  const signature = `sha256=${createHmac('sha256', 'EAAG-test-token-value-1234').update(payload).digest('hex')}`;
+  const signature = `sha256=${createHmac('sha256', 'meta-app-secret').update(payload).digest('hex')}`;
   const bad = await fetch(`${BASE}/api/v1/comms/whatsapp/inbound`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-hub-signature-256': 'sha256=deadbeef' }, body: payload,
   });
@@ -393,6 +393,22 @@ await check('inbound to a disabled channel is refused', async () => {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-hub-signature-256': 'sha256=x' }, body: '{}',
   });
   eq(res.status, 403, 'disabled channel rejects inbound');
+});
+
+await check('SMS refuses private endpoints and verifies real form signatures', async () => {
+  const config = { baseUrl: 'http://127.0.0.1:9292', accountSid: 'ACmock', authToken: 'sms-test-token', from: '+15551234567', to: '+15557654321', webhookUrl: `${BASE}/api/v1/comms/sms/inbound` };
+  eq((await owner.request('/api/v1/comms/sms', { method: 'PUT', csrf: true, body: { config, enabled: true } })).status, 200, 'SMS configured');
+  resetProvider({ status: 201, body: { sid: 'SMmock' } });
+  const sent = await owner.request('/api/v1/comms/sms/send', { method: 'POST', csrf: true, body: { text: 'no SSRF' } });
+  assert(sent.status >= 400, 'private target rejected');
+  eq(providerCalls.length, 0, 'private endpoint was never contacted');
+  const params = new URLSearchParams({ From: '+15557654321', Body: '/tasks' });
+  const signed = config.webhookUrl + 'Body/tasksFrom+15557654321';
+  const signature = createHmac('sha1', config.authToken).update(signed).digest('base64');
+  const response = await fetch(`${BASE}/api/v1/comms/sms/inbound`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-twilio-signature': signature }, body: params.toString() });
+  eq(response.status, 200, 'signed Twilio form accepted');
+  assert(/Board/.test((await response.json()).reply), 'form parsed after verification');
+  await owner.request('/api/v1/comms/sms', { method: 'DELETE', csrf: true });
 });
 
 await check('unknown channels 404 on every comms route', async () => {

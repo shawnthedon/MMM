@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+const handlers = {};
+const deleted = [];
+const cache = { addAll: async () => {}, match: async () => null, put: async () => {} };
+const self = { location: { origin: 'https://app.test' }, addEventListener: (event, fn) => { handlers[event] = fn; }, clients: { claim: async () => {} }, skipWaiting: async () => {} };
+const caches = { keys: async () => ['swarmos-v2', 'other-app-v1', 'swarmos-v3'], delete: async (key) => deleted.push(key), open: async () => cache };
+vm.runInNewContext(readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8'), { self, caches, URL, fetch: async () => new Response('ok'), Response });
+let wait;
+handlers.activate({ waitUntil: (p) => { wait = p; } });
+await wait;
+assert.deepEqual(deleted, ['swarmos-v2']);
+const intercepted = (path, options = {}) => {
+  let value = false;
+  const request = new Request(`https://app.test${path}`, options);
+  handlers.fetch({ request, respondWith: () => { value = true; } });
+  return value;
+};
+assert.equal(intercepted('/api/v1/auth/session'), false);
+assert.equal(intercepted('/api/v1/agents'), false);
+assert.equal(intercepted('/healthz'), false);
+assert.equal(intercepted('/prefix/api/v1/agents', { cache: 'no-store' }), false);
+assert.equal(intercepted('/private-data'), false);
+assert.equal(intercepted('/assets/app.js', { headers: { authorization: 'Bearer x' } }), false);
+assert.equal(intercepted('/assets/app.js'), true);
+console.log('SERVICE WORKER SAFETY: old app cache purged, protected and dynamic requests bypass caching, static assets handled');

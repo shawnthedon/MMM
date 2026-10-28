@@ -61,7 +61,7 @@ export function sourceNoteHTML() {
 export function sourceTagHTML(slice) {
   const info = sourceExplanation(slice);
   const live = info.source === 'gateway';
-  return `<span class="chip tiny ${live ? 'ok' : 'warn'}" title="${esc(info.detail)}">${live ? 'live gateway' : 'demo data'}</span>`;
+  return `<span class="chip tiny ${live && info.label === 'live gateway' ? 'ok' : 'warn'}" title="${esc(info.detail)}">${esc(info.label)}</span>`;
 }
 
 /**

@@ -45,6 +45,26 @@ document.addEventListener('click', (e) => {
   }
 });
 
+document.addEventListener('keydown', (e) => {
+  const target = e.target.closest('.switch[data-act]');
+  if (target && (e.key === 'Enter' || e.key === ' ')) {
+    e.preventDefault();
+    target.click();
+  }
+});
+
+export function enhanceSwitches(root = document) {
+  root.querySelectorAll('.switch[data-act]').forEach((target) => {
+    if (!target.hasAttribute('role')) target.setAttribute('role', 'switch');
+    if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '0');
+    target.setAttribute('aria-checked', target.classList.contains('on') ? 'true' : 'false');
+    if (!target.hasAttribute('aria-label') && !target.hasAttribute('aria-labelledby')) {
+      const label = target.closest('.kv')?.querySelector('.k');
+      if (label?.textContent.trim()) target.setAttribute('aria-label', label.textContent.trim());
+    }
+  });
+}
+
 document.addEventListener('input', (e) => {
   const t = e.target.closest('input[type=range][data-act]');
   if (t && actions[t.dataset.act]) actions[t.dataset.act](t, t.dataset, e);
@@ -66,9 +86,11 @@ document.addEventListener('change', (e) => {
 
 export function applyTheme() {
   const s = getState().settings;
-  document.documentElement.setAttribute('data-theme', s.theme);
+  const theme = ['dark', 'light', 'oled', 'high-contrast'].includes(s.theme) ? s.theme : 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
   document.documentElement.setAttribute('data-density', s.density);
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', s.theme === 'dark' ? '#0B0F17' : '#F7F9FC');
+  const colour = window.getComputedStyle?.(document.documentElement).getPropertyValue('--bg-base').trim();
+  if (colour) document.querySelector('meta[name=theme-color]')?.setAttribute('content', colour);
 }
 
 /* ---------- toasts ---------- */
@@ -99,6 +121,7 @@ export function openSheet({ title, body, foot = '', wide = false, onClose = null
     ${foot ? `<div class="sheet-foot">${foot}</div>` : ''}`;
   root.appendChild(scrim);
   root.appendChild(sheet);
+  enhanceSwitches(sheet);
   requestAnimationFrame(() => { scrim.classList.add('open'); sheet.classList.add('open'); });
   const close = () => {
     scrim.classList.remove('open');
@@ -224,7 +247,7 @@ function notificationsSheet(navigate) {
         <div class="card">
           <div class="row between">
             <div class="row">
-              <div class="avatar sm" style="background:var(--warning);color:#0b0f17">${icon('shield', 14)}</div>
+              <div class="avatar sm" style="background:var(--bg-elevated);color:var(--state-warning)">${icon('shield', 14)}</div>
               <div><div class="strong small">${esc(a.action)}</div><div class="tiny muted">${esc(a.target)} · ${esc(a.principal)}</div></div>
             </div>
             <span class="chip tiny warn">${esc(a.risk)}</span>
@@ -263,10 +286,35 @@ function tabbarHTML() {
     <button data-act="more"><span class="tab-ico">${icon('grid', 20)}</span>More</button>`;
 }
 
+/* Persistent desktop navigation; the mobile navigation remains unchanged. */
+function sidebarHTML() {
+  const item = (id) => {
+    const route = routes.find((entry) => entry.id === id);
+    return `<button class="side-link" data-act="nav" data-to="${id}" data-desktop-tab="${id}">${icon(route.icon, 19)}<span>${route.label}</span></button>`;
+  };
+  return `<aside class="sidebar" aria-label="Workspace navigation">
+    <div class="side-brand"><div class="side-brand-mark">${icon('spark', 20)}</div><div><strong>RELAY</strong><span>MMM COMMAND CENTER</span></div></div>
+    <div class="side-caption">WORKSPACE</div>
+    <nav class="side-nav" aria-label="Desktop primary">
+      ${['home', 'agents', 'tasks', 'chat'].map(item).join('')}
+    </nav>
+    <div class="side-caption">BUILD &amp; CONNECT</div>
+    <nav class="side-nav" aria-label="Desktop modules">
+      ${['designer', 'skills', 'models', 'comms', 'local', 'terminal'].map(item).join('')}
+      <button class="side-link" data-act="more">${icon('grid', 19)}<span>All modules</span></button>
+    </nav>
+    <div class="side-spacer"></div>
+    <button class="side-copilot" data-act="copilot-open">${icon('spark', 18)} <span>Open Copilot</span></button>
+    ${item('settings')}
+    <div class="side-footer"><span class="side-pulse"></span><span>WORKSPACE CONSOLE</span></div>
+  </aside>`;
+}
+
 /* ---------- shell render ---------- */
 export function renderShell(root) {
   root.innerHTML = `
     <div class="app">
+      ${sidebarHTML()}
       <header class="topbar">
         <div class="ws" role="group" aria-label="${esc(getState().settings.workspaceName)} workspace">
           <div class="ws-logo" aria-hidden="true">⬡</div>
@@ -383,6 +431,12 @@ export function refreshChrome(routeId) {
   const active = tabFor[routeId] || null;
   document.querySelectorAll('#tabbar [data-tab]').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === active);
+  });
+  document.querySelectorAll('[data-desktop-tab]').forEach((button) => {
+    const selected = button.dataset.desktopTab === routeId;
+    button.classList.toggle('active', selected);
+    if (selected) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
   });
   const chatBtn = document.getElementById('chat-btn');
   if (chatBtn) {

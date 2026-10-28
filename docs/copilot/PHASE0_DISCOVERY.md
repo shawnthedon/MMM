@@ -10,9 +10,29 @@
 | Status | Evidence recorded; Phase 1 landed on top of this baseline |
 
 This is the report required by §16 of the master specification ("First Action for the
-Coding Agent"). It records **what exists today**, verified by reading the files named in each
+Coding Agent"). It records **what existed at the baseline**, verified by reading the files named in each
 row. Nothing here is an assumption about intended behaviour; where a capability is described
 only in a document, it is marked `documented` and **not** claimed as working.
+
+> **Historical baseline:** Sections 1–8 below describe discovery at commit `66b1bd3`, not
+> the current application. The following reconciliation supersedes conflicting present-tense claims.
+
+## Reconciliation — 2026-10-28
+
+| Area | Current finding and evidence | Status |
+| --- | --- | --- |
+| Frontend ↔ gateway | `src/api.js`, `src/auth.js`, `src/datastore.js` and `src/commsGateway.js` use authenticated REST; agents, tasks, approvals, events and comms have gateway-backed reads. `scripts/readsync-test.mjs`, `scripts/session-safety-test.mjs` and `scripts/comms-test.mjs` exercise the client. Other slices remain demo. | Partial; not a full integration acceptance pass |
+| Sessions and caches | Request/session epochs, cancellation, 401 invalidation, filtered persistence and service-worker static-only caching address cross-session races and the prior API cache exposure. The worker version invalidates old SwarmOS caches on activation. | Regression tests added; existing deployed workers update only when clients install/activate the new worker |
+| Gateway auth | Cookie sessions, CSRF, scoped tokens, RBAC, WebSocket origin/revocation checks, separation of duties and audit exist in `apps/gateway/src/auth.js`, `rbac.js` and `server.js`; `npm run test:gateway` and `test:comms-gateway` exercise a local gateway. | Partial; not complete Copilot governance |
+| Copilot actions | Some agent/task/approval CRUD uses real gateway endpoints. Browser confirmation cards are not server-bound approvals; there is no operation/parameter binding, expiry/replay enforcement for execution, or budget enforcement. Gateway-mode Copilot channel actions are blocked rather than reported as governed. | Incomplete |
+| Comms | Gateway channel CRUD, encrypted credentials, signatures, queue and mocked provider requests exist. Twilio requests are restricted to the official HTTPS endpoint; OpenSMS is not a Twilio-compatible endpoint and is not implemented. Provider acceptance is not final delivery. | Partial, live providers unverified |
+| Training | Metadata and bounded inline JSONL syntax inspection only; no model-specific dataset validator, real training worker, persisted training jobs or verified artifact registry. Local GGUF inference is not training. | Blocked, not complete |
+| Voice | No speech recognition, synthesis, voice cloning or singing engine integrated. Upstream source review is documented separately; neither mobile inference nor weight/dependency licences have been validated. | Blocked, not complete |
+| Browser control | No authorised browser automation adapter, origin policy or approval-bound execution. The in-app Browser comms channel is not browser control. | Blocked, not complete |
+
+The referenced `Copilot_Master_MMM_V2.md` is not present in this checkout. `docs/DESIGN_SPEC.md`
+is available, but cannot establish all of the missing master-spec contracts. See
+[`MISSION_VERIFICATION.md`](MISSION_VERIFICATION.md) for evidence, remaining risks and prerequisites.
 
 ---
 

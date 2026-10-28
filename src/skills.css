@@ -96,7 +96,7 @@
 }
 .mx-edge .hit:focus-visible { stroke: color-mix(in srgb, var(--brand) 40%, transparent); outline: none; }
 .mx-edge:hover line:not(.hit) { opacity: 1; stroke-width: 3; }
-.mx-edge.conflicts_with line:not(.hit) { stroke: var(--danger, #F87171); }
+.mx-edge.conflicts_with line:not(.hit) { stroke: var(--danger); }
 
 .mx-node { cursor: pointer; }
 .mx-node circle {
@@ -105,7 +105,7 @@
   stroke-width: 1.8;
 }
 .mx-node.pending circle { stroke: var(--warning); stroke-dasharray: 3 3; }
-.mx-node.unavailable circle { stroke: var(--danger, #F87171); fill: color-mix(in srgb, var(--danger, #F87171) 12%, var(--elevated)); }
+.mx-node.unavailable circle { stroke: var(--danger); fill: color-mix(in srgb, var(--danger) 12%, var(--elevated)); }
 .mx-node .ico { font-size: 13px; fill: var(--text); stroke: none; }
 .mx-node .lbl {
   font-size: 10.5px;
@@ -175,10 +175,10 @@
 }
 .mx-type.complements::before { border-top-style: dashed; color: var(--success); }
 .mx-type.depends_on::before { color: var(--brand); }
-.mx-type.inherits_from::before { border-top-style: dotted; color: var(--accent-2, #A78BFA); }
+.mx-type.inherits_from::before { border-top-style: dotted; color: var(--accent-2); }
 .mx-type.composes_with::before { border-top-style: dashed; color: var(--warning); }
 .mx-type.triggers::before { border-top-style: dotted; }
-.mx-type.conflicts_with::before { border-top-color: var(--danger, #F87171); color: var(--danger, #F87171); }
+.mx-type.conflicts_with::before { border-top-color: var(--danger); color: var(--danger); }
 .mx-type.supersedes::before { border-top-width: 3px; }
 .mx-type.related_to::before { border-top-style: dotted; }
 
@@ -222,7 +222,7 @@
   align-items: flex-start;
   color: var(--text-muted);
 }
-.imp-findings li.sev-error { color: var(--danger, #F87171); }
+.imp-findings li.sev-error { color: var(--danger); }
 .imp-findings li.sev-warning { color: var(--warning); }
 .imp-info { margin-top: 6px; font-size: 11.5px; color: var(--text-muted); }
 .imp-info > summary { cursor: pointer; }

@@ -40,6 +40,15 @@ let config = {
   source: storedUrl() ? 'local' : envUrl() ? 'env' : 'none',
 };
 let csrfToken = null;
+let sessionEpoch = 0;
+const activeControllers = new Set();
+
+/** Invalidate outstanding requests and their CSRF token when the identity changes. */
+export function invalidateApiSession() {
+  sessionEpoch += 1;
+  for (const controller of activeControllers) controller.abort();
+  csrfToken = null;
+}
 
 export class ApiError extends Error {
   constructor(message, { status = 0, code = 'error', body = null, requestId = null } = {}) {
@@ -74,7 +83,7 @@ export const mode = () => (isApiMode() ? 'api' : 'demo');
 export function setGatewayUrl(url) {
   const clean = normalize(url);
   config = { url: clean, source: clean ? 'local' : 'none' };
-  csrfToken = null;
+  invalidateApiSession();
   try {
     if (clean) globalThis.localStorage?.setItem(CONFIG_KEY, clean);
     else globalThis.localStorage?.removeItem(CONFIG_KEY);
@@ -95,9 +104,16 @@ async function request(path, { method = 'GET', body, headers = {}, timeoutMs = 8
   if (!isApiMode()) {
     throw new ApiError('No gateway configured — the app is running on local demo data.', { status: 0, code: 'no-gateway' });
   }
-  const controller = typeof AbortController === 'function' ? new AbortController() : null;
-  const timer = setTimeout(() => controller?.abort(), timeoutMs);
-  const finalSignal = signal || controller?.signal;
+  const epoch = sessionEpoch;
+  const controller = new AbortController();
+  activeControllers.add(controller);
+  let timedOut = false;
+  const abortExternal = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener('abort', abortExternal, { once: true });
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+  const cleanup = () => { clearTimeout(timer); signal?.removeEventListener('abort', abortExternal); activeControllers.delete(controller); };
+  const finalSignal = controller.signal;
 
   const h = { Accept: 'application/json', ...headers };
   if (body !== undefined) h['Content-Type'] = 'application/json';
@@ -115,17 +131,23 @@ async function request(path, { method = 'GET', body, headers = {}, timeoutMs = 8
       cache: 'no-store',
     });
   } catch (err) {
-    clearTimeout(timer);
+    cleanup();
     const aborted = err?.name === 'AbortError';
     throw new ApiError(
-      aborted ? `Gateway did not answer within ${timeoutMs} ms` : 'Gateway unreachable (network or CORS)',
-      { status: 0, code: aborted ? 'timeout' : 'network' }
+      timedOut ? `Gateway did not answer within ${timeoutMs} ms` : aborted ? 'Gateway request cancelled' : 'Gateway unreachable (network or CORS)',
+      { status: 0, code: timedOut ? 'timeout' : aborted ? 'cancelled' : 'network' }
     );
   }
-  clearTimeout(timer);
 
   const requestId = res.headers.get('x-swarmos-request-id');
-  const text = await res.text().catch(() => '');
+  let text;
+  try { text = await res.text(); } catch (err) {
+    cleanup();
+    throw new ApiError(timedOut ? `Gateway did not answer within ${timeoutMs} ms` : 'Gateway response interrupted',
+      { status: 0, code: timedOut ? 'timeout' : 'network' });
+  }
+  cleanup();
+  if (epoch !== sessionEpoch) throw new ApiError('Session changed while the request was in flight.', { code: 'stale-session' });
   let payload = null;
   if (text) {
     try {
@@ -136,7 +158,7 @@ async function request(path, { method = 'GET', body, headers = {}, timeoutMs = 8
   }
 
   if (!res.ok) {
-    if (res.status === 401 && typeof window !== 'undefined') {
+    if (res.status === 401 && !['/api/v1/auth/login', '/api/v1/auth/session'].includes(path) && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('swarmos:unauthenticated', { detail: { path } }));
     }
     const message =
@@ -158,12 +180,10 @@ export const api = {
 
   session: async () => {
     const out = await request('/api/v1/auth/session');
-    if (out.body?.csrfToken) setCsrfToken(out.body.csrfToken);
     return out.body;
   },
   login: async (email, password) => {
     const out = await request('/api/v1/auth/login', { method: 'POST', body: { email, password } });
-    if (out.body?.csrfToken) setCsrfToken(out.body.csrfToken);
     return out.body;
   },
   logout: async () => {

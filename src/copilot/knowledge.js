@@ -190,7 +190,7 @@ export const KNOWLEDGE = [
     updated: '2026-10-27',
     sensitivity: 'internal',
     body:
-      'Every data route now requires a credential; only GET /healthz and POST /api/v1/auth/login are public. Health reports nothing operational to an anonymous caller.\n' +
+      'Every data route now requires a credential; GET /healthz, POST /api/v1/auth/login and provider webhook/verification routes are public (webhooks require their configured signature). Health reports nothing operational to an anonymous caller.\n' +
       'Sessions: POST /api/v1/auth/login with email + password (override with --user/-u and --data for curl). The reply sets an HttpOnly, SameSite=Strict cookie (Secure behind TLS) and returns the principal, its permission list and an HMAC CSRF token. Mutations made with the cookie must send x-swarmos-csrf.\n' +
       'Passwords are stored as scrypt hashes with a per-user salt (N=16384, r=8, p=1) in the principals table. Argon2id would be stronger but needs a native dependency; that trade-off is documented rather than hidden.\n' +
       'API tokens: POST /api/v1/tokens issues swk_… secrets that are hashed at rest, carry explicit scopes (a subset of the holder’s permissions) and optional expiry. Bearer callers skip CSRF. Revocation is immediate.\n' +
@@ -351,7 +351,7 @@ export const KNOWLEDGE = [
       '• App store — presence, revision and size of swarmos-state-v1 (missing key means fixtures are in use).\n' +
       '• Gateway — fetch <gateway>/healthz with a 1.5 s abort; reports reachable, unreachable or unknown.\n' +
       '• Pending approvals — counted from live store state.\n' +
-      '• Service worker / install — presence of navigator.serviceWorker.\n' +
+      '• Service worker — checks registration where the browser exposes getRegistration.\n' +
       'Recovery: unreachable gateway is expected unless you run `npm run dev:gateway`; a stale or broken store can be reset by clearing site data (destroys demo edits).',
     sources: [
       { label: 'src/copilot/orchestrator.js — runDiagnostics()', ref: 'src/copilot/orchestrator.js' },
@@ -407,7 +407,7 @@ export const KNOWLEDGE = [
     updated: '2026-10-26',
     sensitivity: 'internal',
     body:
-      'Available now (real, over File Manager metadata): file count, type breakdown, total size, empty/oversized file flags, duplicate path detection, presence of labels for image sets (by filename convention only).\n' +
+      'Available now: File Manager metadata counts, types, sizes, empty-file and duplicate-path checks; bounded JSONL object syntax inspection for up to ten inline text artifacts. This does not establish model-specific schema or content safety.\n' +
       'Not available without a backend: audio decode/duration/sample-rate checks, image decoding and dimension checks, corruption scans, exact-duplicate hashing, annotation schema validation, licence/consent verification, and any compute/time estimate that would be defensible.\n' +
       'Copilot labels each line as checked or unchecked so the checklist cannot be mistaken for a full audit.',
     sources: [
@@ -426,7 +426,7 @@ export const KNOWLEDGE = [
     updated: '2026-10-26',
     sensitivity: 'internal',
     body:
-      'The spec proposes Local TTS, NeuTTS and OpenVoice as candidate cloning frameworks. None of them are integrated, and their repositories, licences (code and weights), maintenance status, mobile/browser runtime requirements and singing capability were NOT verified in this environment.\n' +
+      'NeuTTS and OpenVoice upstream repositories were reviewed; NeuTTS Air is listed as Apache-2.0 and OpenVoice V1/V2 as MIT by their projects. Weight/dependency licensing and actual mobile/browser execution are not verified; neither engine is integrated here. Local TTS remains unidentified.\n' +
       'Voice cloning and text-to-speech do not imply singing. A request such as “now sing, could this be love” must either go through a verified singing-capable component or be reported unsupported — it is currently unsupported.\n' +
       'Any implementation needs a consent/ownership confirmation, protected voice profiles, deletion controls and synthetic-output labelling. There is no storage or engine for that yet.',
     sources: [
@@ -445,9 +445,9 @@ export const KNOWLEDGE = [
     updated: '2026-10-26',
     sensitivity: 'internal',
     body:
-      'Telegram — a UI simulation on the Telegram screen (bot name, allowlist, topics, fake message log). No bot token, no polling, no outbound transport exists in the repo.\n' +
-      'WhatsApp, Slack, Discord, Signal, iMessage — not implemented and not verified; availability depends on each provider’s official API and terms. iMessage and Signal in particular have no generally available bot API for this use case.\n' +
-      'No channel can trigger privileged actions today because no inbound path exists. When one is added, identity mapping, allowlists, approval policy and audit must land first.',
+      'Comms has gateway-side Telegram, WhatsApp, Slack, Discord and Twilio request adapters and signature-gated inbound routes; tests use controlled mocks, not live providers.\n' +
+      'Signal and iMessage have no adapters here. Provider availability and terms must be independently checked; the implemented provider adapters have not been verified against live accounts.\n' +
+      'Inbound routes expose deterministic summaries and reject gated channel commands. Sender identity mapping, robust delivery controls and operation-bound approvals remain incomplete.',
     sources: [
       { label: 'src/views2.js — Telegram view', ref: 'src/views2.js' },
       { label: 'docs/PROGRESS.md — Phase 10 ⬜', ref: 'docs/PROGRESS.md' },
@@ -562,7 +562,7 @@ export const KNOWLEDGE = [
     sensitivity: 'internal',
     body:
       'Never place API keys, bearer tokens, passwords, session cookies or private keys in the app store, Copilot memory, a knowledge entry, a URL, a log line or a card. Copilot redacts secret-like patterns before persisting anything and does not echo them back.\n' +
-      'There is no secret store in this repo yet. Any integration needing a credential (OpenSMS, providers, channels) must pass through a server-side vault/proxy first.',
+      'Gateway Comms encrypts channel credentials at rest and returns masked values; demo-mode credentials remain browser-local. OpenSMS still needs a dedicated secure server adapter and topology.',
     sources: [
       { label: 'src/copilot/memory.js — redact()', ref: 'src/copilot/memory.js' },
       { label: 'Master spec §11.2', ref: 'Copilot_Master_MMM_V2.md §11.2' },
@@ -579,10 +579,10 @@ export const KNOWLEDGE = [
     updated: '2026-10-27',
     sensitivity: 'public',
     body:
-      'Comms (#/comms) owns every communication gateway: Telegram, WhatsApp Cloud API, Discord, Slack, SMS (OpenSMS/Twilio-compatible) and Browser. Telegram is no longer a separate module — it is the first channel inside Comms.\n' +
+      'Comms (#/comms) owns every communication gateway: Telegram, WhatsApp Cloud API, Discord, Slack, SMS (Twilio; OpenSMS is not implemented) and Browser. Telegram is no longer a separate module — it is the first channel inside Comms.\n' +
       'Each channel has: connection credentials (masked on read, cleared verification on change), routing (Copilot replies plus which agents report there), a command surface (/status, /agents, /tasks, /ask, and gated /approve, /copilot), delivery and safety settings (signature scheme, rate limit, redaction), an inbound endpoint and a real “Send test”.\n' +
       'Status is honest: not_configured until every required outbound field exists; configured_unverified after saving; verified only when the provider accepted a live test. The Browser channel delivers into the in-app inbox and is the only one that works without credentials. Saving credentials never grants permissions and never claims a bot is polling.\n' +
-      'Copilot can drive it: “comms status”, “test telegram”, “route SRE-Bot to slack”, “mute discord”, “wake discord”. It refuses to accept secrets in chat — credentials are entered in the panel only. Gateway routes POST /api/v1/comms/:channel/inbound are specified but not implemented yet.',
+      'Copilot can inspect comms; gateway-mode Copilot channel mutations are blocked pending server-bound governance. Gateway inbound routes exist and require signatures; live provider delivery has not been verified here.',
     sources: [
       { label: 'src/comms.js', ref: 'src/comms.js' },
       { label: 'src/commsChannels.js', ref: 'src/commsChannels.js' },
@@ -650,7 +650,7 @@ export const KNOWLEDGE = [
     sensitivity: 'public',
     body:
       'Built: PWA shell and 13 module views, demo state + fixtures, SQLite schema/migrations, gateway API with WebSocket broadcast and hash-chained audit, gateway authentication + RBAC (sessions, scoped tokens, lockout, separation of duties), sign-in UI and an API client, terminal, four test suites, design/progress docs, and the Copilot FAB + panel + modes + knowledge + memory + capability reporting.\n' +
-      'Not built: real LLM calls, agent execution, swarm scheduling, skills runtime, MCP integrations, full API-backed data sync (only actions are wired), training, voice, real channel connectors, browser control, analytics from real telemetry.\n' +
+      'Not built: real LLM calls, agent execution, swarm scheduling, skills runtime, MCP integrations, complete API-backed data sync (agents, tasks, approvals, events and comms are wired; other slices are demo), training, voice, OpenSMS, browser control, analytics from real telemetry.\n' +
       'Source of truth for the tracker is docs/PROGRESS.md; this entry summarises it and should be re-verified when that file changes.',
     sources: [
       { label: 'docs/PROGRESS.md', ref: 'docs/PROGRESS.md' },

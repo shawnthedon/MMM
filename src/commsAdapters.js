@@ -60,6 +60,7 @@ export const ADAPTERS = {
         body: { chat_id: config.chatId, text: msg.text, disable_web_page_preview: true },
       };
     },
+    isSuccess: ({ status, json }) => status >= 200 && status < 300 && json?.ok === true,
     healthRequest(config) {
       return { url: `https://api.telegram.org/bot${config.botToken}/getMe`, method: 'GET', headers: {} };
     },
@@ -74,8 +75,8 @@ export const ADAPTERS = {
     id: 'whatsapp',
     async verify(headers, rawBody, config) {
       const sig = header(headers, 'x-hub-signature-256');
-      if (!sig || !config?.accessToken) return false;
-      const digest = await hmac('SHA-256', config.accessToken, rawBody);
+      if (!sig || !config?.appSecret) return false;
+      const digest = await hmac('SHA-256', config.appSecret, rawBody);
       return safeEqual(sig, `sha256=${await toHex(digest)}`);
     },
     buildSend(config, msg) {
@@ -92,6 +93,7 @@ export const ADAPTERS = {
           : { messaging_product: 'whatsapp', to, type: 'text', text: { body: msg.text } },
       };
     },
+    isSuccess: ({ status, json }) => status >= 200 && status < 300 && Boolean(json?.messages?.[0]?.id),
     healthRequest(config) {
       return { url: `https://graph.facebook.com/v20.0/${config.phoneNumberId}?fields=verified_name,display_phone_number`, method: 'GET', headers: { authorization: `Bearer ${config.accessToken}` } };
     },
@@ -103,7 +105,7 @@ export const ADAPTERS = {
     },
     /** Meta requires answering the GET verification handshake. */
     verifyHandshake(query, config) {
-      return query?.['hub.mode'] === 'subscribe' && safeEqual(query?.['hub.verify_token'], config?.verifyToken);
+      return Boolean(config?.verifyToken && query?.['hub.verify_token']) && query?.['hub.mode'] === 'subscribe' && safeEqual(query['hub.verify_token'], config.verifyToken);
     },
   },
 
@@ -134,6 +136,7 @@ export const ADAPTERS = {
         body: { content: msg.text, allowed_mentions: { parse: [] } },
       };
     },
+    isSuccess: ({ status, json }) => status >= 200 && status < 300 && Boolean(json?.id),
     healthRequest(config) {
       return { url: 'https://discord.com/api/v10/users/@me', method: 'GET', headers: { authorization: `Bot ${config.botToken}` } };
     },
@@ -175,7 +178,7 @@ export const ADAPTERS = {
       return { text: body.event.text || '', from: body.event.user, chatId: body.event.channel };
     },
     /** Slack answers are not `ok` via HTTP status: the payload carries ok:false. */
-    isSuccess: (res) => res?.status >= 200 && res.status < 300 && (res.json?.ok !== false),
+    isSuccess: (res) => res?.status >= 200 && res.status < 300 && (res.json?.ok === true),
   },
 
   sms: {
@@ -184,29 +187,32 @@ export const ADAPTERS = {
       const sig = header(headers, 'x-twilio-signature');
       if (!sig || !config?.authToken) return false;
       // Twilio signs the full URL followed by the alphabetically sorted POST params.
-      const params = typeof rawBody === 'string'
-        ? Object.fromEntries(new URLSearchParams(rawBody).entries())
-        : Object.fromEntries(Object.entries(rawBody || {}).map(([k, v]) => [k, String(v)]));
-      const url = config.webhookUrl || '';
-      const data = Object.keys(params).sort().reduce((acc, k) => acc + k + params[k], url);
+      if (!config.webhookUrl) return false;
+      const params = typeof rawBody === 'string' ? new URLSearchParams(rawBody) : new URLSearchParams(Object.entries(rawBody || {}).map(([k, v]) => [k, String(v)]));
+      const keys = [...new Set(params.keys())].sort();
+      const data = keys.reduce((acc, key) => acc + [...new Set(params.getAll(key))].sort().map((value) => key + value).join(''), config.webhookUrl);
       const digest = await hmac('SHA-1', config.authToken, data);
-      return safeEqual(sig, await toHex(digest));
+      const bytes = new Uint8Array(digest);
+      const encoded = typeof btoa === 'function' ? btoa(String.fromCharCode(...bytes)) : Buffer.from(bytes).toString('base64');
+      return safeEqual(sig, encoded);
     },
     buildSend(config, msg) {
       if (!config?.accountSid || !config?.authToken || !config?.from || !config?.to) {
         return { error: 'accountSid, authToken, from and to are required' };
       }
       const base = (config.baseUrl || 'https://api.twilio.com').replace(/\/$/, '');
+      if (base !== 'https://api.twilio.com') return { error: 'Only https://api.twilio.com is supported; OpenSMS and custom endpoints are not implemented.' };
       const auth = typeof btoa === 'function'
         ? btoa(`${config.accountSid}:${config.authToken}`)
         : Buffer.from(`${config.accountSid}:${config.authToken}`).toString('base64');
       return {
-        url: `${base}/2010-04-01/Accounts/${config.accountSid}/Messages.json`,
+        url: `${base}/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Messages.json`,
         method: 'POST',
         headers: { authorization: `Basic ${auth}`, 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ To: config.to, From: config.from, Body: msg.text }).toString(),
       };
     },
+    isSuccess: ({ status, json }) => status >= 200 && status < 300 && Boolean(json?.sid),
     parseInbound(body) {
       if (!body?.Body) return null;
       return { text: body.Body, from: body.From, chatId: body.From };
@@ -268,26 +274,22 @@ export async function deliver(channelId, config, message, { fetchImpl = globalTh
       headers: request.headers,
       body: request.body && typeof request.body === 'string' ? request.body : request.body ? JSON.stringify(request.body) : undefined,
       signal: controller?.signal,
+      redirect: 'error',
     });
+    let json = null;
+    try { json = await res.json(); } catch (err) { if (err?.name === 'AbortError') throw err; }
+    const status = res.status;
+    const accepted = adapter.isSuccess ? adapter.isSuccess({ status, json }) : status >= 200 && status < 300;
+    if (!accepted) {
+      return { ok: false, reason: 'rejected', status, error: (json && (json.description || json.error?.message || json.message || json.error)) || `Provider returned ${status} or an invalid response.` };
+    }
+    return { ok: true, status, json, deliveredAt: Date.now(), detail: `Provider accepted the message (HTTP ${status}); final delivery is not confirmed.` };
   } catch (err) {
-    return { ok: false, reason: err.name === 'AbortError' ? 'timeout' : 'network', error: `Request failed: ${err.message}` };
+    return { ok: false, reason: err.name === 'AbortError' ? 'timeout' : 'network', error: err.name === 'AbortError' ? 'Provider request timed out.' : 'Provider request failed (network or redirect refused).' };
   } finally {
     if (timer) clearTimeout(timer);
   }
 
-  let json = null;
-  try { json = await res.json(); } catch { json = null; }
-  const status = res.status;
-  const accepted = adapter.isSuccess ? adapter.isSuccess({ status, json }) : status >= 200 && status < 300;
-  if (!accepted) {
-    return {
-      ok: false,
-      reason: 'rejected',
-      status,
-      error: (json && (json.description || json.error?.message || json.message || json.error)) || `Provider returned ${status}.`,
-    };
-  }
-  return { ok: true, status, json, deliveredAt: Date.now(), detail: `Provider accepted the message (HTTP ${status}).` };
 }
 
 /** Whether the adapter can verify inbound calls for this channel (browser cannot/should not). */

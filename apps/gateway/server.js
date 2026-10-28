@@ -138,10 +138,22 @@ function subscriptionFilter(topic, principal) {
   return can(principal, 'read');
 }
 
+function currentSocketPrincipal(client) {
+  let principal = null;
+  try { principal = auth.revalidateContext(client.principal); } catch { /* fail closed */ }
+  if (!principal) {
+    client.ws.close(4401, 'session expired or revoked');
+    return null;
+  }
+  client.principal = principal;
+  return principal;
+}
+
 function broadcast(topic, payload) {
   const msg = JSON.stringify({ topic, ...payload, ts: Date.now() });
   for (const c of clients) {
     if (c.ws.readyState !== 1) continue;
+    if (!currentSocketPrincipal(c)) continue;
     if (!c.topics.has(topic) && !c.topics.has('*')) continue;
     if (!subscriptionFilter(topic, c.principal)) continue;
     try {
@@ -755,6 +767,20 @@ export function createGateway() {
     const url = new URL(req.url, 'http://x');
     if (url.pathname !== '/ws') return socket.destroy();
 
+    // Browsers send Origin on WebSocket handshakes; CORS does not protect WS upgrades.
+    const origin = req.headers.origin;
+    if (origin) {
+      let sameOrigin = false;
+      try {
+        const parsed = new URL(origin);
+        sameOrigin = ['http:', 'https:'].includes(parsed.protocol) && parsed.host === req.headers.host && parsed.origin === origin;
+      } catch { /* invalid origins are rejected */ }
+      if (!sameOrigin && !ALLOWED_ORIGINS.includes(origin)) {
+        socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+        return socket.destroy();
+      }
+    }
+
     const queryToken = url.searchParams.get('token');
     const synthetic = {
       headers: {
@@ -775,6 +801,7 @@ export function createGateway() {
       ws.on('close', () => clients.delete(client));
       ws.on('error', () => clients.delete(client));
       ws.on('message', (raw) => {
+        if (!currentSocketPrincipal(client)) return;
         const now = Date.now();
         client.msgWindow = client.msgWindow.filter((t) => now - t < 60000);
         client.msgWindow.push(now);

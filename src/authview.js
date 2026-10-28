@@ -157,7 +157,7 @@ function accountCard(auth) {
     <div class="card">
       <div class="row between">
         <div class="row">
-          <div class="avatar" style="background:var(--brand);color:#0b0f17">${esc((p.name || '?').slice(0, 2).toUpperCase())}</div>
+          <div class="avatar" style="background:var(--accent-hover);color:var(--text-on-accent)">${esc((p.name || '?').slice(0, 2).toUpperCase())}</div>
           <div>
             <div class="strong small">${esc(p.name || 'Unknown')}</div>
             <div class="tiny muted">${esc(p.email || p.id)} · ${esc(p.type || 'user')}</div>
@@ -256,11 +256,11 @@ document.addEventListener('click', async (e) => {
   if (act === 'auth-logout') {
     confirmModal({
       title: 'Sign out?',
-      body: 'Your session cookie is revoked on the gateway. Unsaved Copilot drafts stay in this browser.',
+      body: 'The app will clear local session data and attempt to revoke your gateway session. Unsaved Copilot drafts stay in this browser.',
       confirmText: 'Sign out',
       onConfirm: async () => {
-        await logout();
-        toast('Signed out', 'ok');
+        const result = await logout();
+        toast(result.logoutConfirmed ? 'Signed out' : 'Local session cleared, but gateway logout could not be confirmed. The server session may still be active.', result.logoutConfirmed ? 'ok' : 'bad');
         const { navigate } = await import('./main.js');
         navigate('login');
       },

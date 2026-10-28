@@ -1,0 +1,119 @@
+/* RELAY theme contracts. Only token sets contain literal colours; components use tokens. */
+:root, [data-theme='dark'] {
+  color-scheme: dark;
+  --bg-base: #0B0F17;
+  --bg-surface: #111827;
+  --bg-elevated: #1F2937;
+  --text-primary: #F9FAFB;
+  --text-muted: #9CA3AF;
+  --accent-primary: #3B82F6;
+  --accent-hover: #2563EB;
+  --accent-pressed: #1D4ED8;
+  --text-on-accent: #FFFFFF;
+  --border-default: #374151;
+  --border-subtle: #1F2937;
+  --state-success: #10B981;
+  --state-warning: #F59E0B;
+  --state-error: #EF4444;
+  --state-error-strong: #B91C1C;
+  --accent-secondary: #60A5FA;
+  --accent-tertiary: #C4B5FD;
+  --avatar-1: #1D4ED8;
+  --avatar-2: #0E7490;
+  --avatar-3: #9D174D;
+  --avatar-4: #92400E;
+  --avatar-5: #047857;
+  --avatar-6: #6D28D9;
+  --avatar-7: #B91C1C;
+  --avatar-8: #075985;
+  --font-sans: 'Inter', 'Geist Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --shadow: 0 12px 32px rgb(0 0 0 / 45%);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --bg-base: #F3F6FA;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #E7EDF5;
+  --text-primary: #111827;
+  --text-muted: #475569;
+  --accent-primary: #1D4ED8;
+  --accent-hover: #1D4ED8;
+  --accent-pressed: #1E40AF;
+  --text-on-accent: #FFFFFF;
+  --border-default: #94A3B8;
+  --border-subtle: #CBD5E1;
+  --state-success: #047857;
+  --state-warning: #92400E;
+  --state-error: #B91C1C;
+  --state-error-strong: #B91C1C;
+  --accent-secondary: #1D4ED8;
+  --accent-tertiary: #6D28D9;
+  --shadow: 0 12px 32px rgb(15 23 42 / 14%);
+}
+
+[data-theme='oled'] {
+  color-scheme: dark;
+  --bg-base: #000000;
+  --bg-surface: #000000;
+  --bg-elevated: #171717;
+  --border-default: #525252;
+  --border-subtle: #303030;
+}
+
+[data-theme='high-contrast'] {
+  color-scheme: dark;
+  --bg-base: #000000;
+  --bg-surface: #101010;
+  --bg-elevated: #202020;
+  --text-primary: #FFFFFF;
+  --text-muted: #E5E7EB;
+  --accent-primary: #93C5FD;
+  --accent-hover: #1D4ED8;
+  --accent-pressed: #1E40AF;
+  --text-on-accent: #FFFFFF;
+  --border-default: #D1D5DB;
+  --border-subtle: #9CA3AF;
+  --state-success: #6EE7B7;
+  --state-warning: #FCD34D;
+  --state-error: #FCA5A5;
+  --state-error-strong: #B91C1C;
+  --accent-secondary: #93C5FD;
+  --accent-tertiary: #DDD6FE;
+}
+
+:root {
+  /* Compatibility aliases for existing modules. New code uses the semantic RELAY tokens. */
+  --bg: var(--bg-base);
+  --bg-2: var(--bg-base);
+  --surface: var(--bg-surface);
+  --elevated: var(--bg-elevated);
+  --border: var(--border-default);
+  --border-soft: var(--border-subtle);
+  --text: var(--text-primary);
+  --text-2: var(--text-muted);
+  --text-3: var(--text-muted);
+  --brand: var(--accent-primary);
+  --brand-2: var(--accent-secondary);
+  --accent-2: var(--accent-tertiary);
+  --accent-grad: linear-gradient(135deg, var(--accent-hover), var(--accent-primary));
+  --success: var(--state-success);
+  --warning: var(--state-warning);
+  --danger: var(--state-error);
+  --running: var(--accent-secondary);
+  --trust-a: var(--state-success);
+  --trust-b: var(--state-warning);
+  --trust-c: var(--state-error);
+  --radius-xs: 4px;
+  --radius-s: 6px;
+  --radius: 12px;
+  --radius-l: 16px;
+  --radius-xl: 16px;
+  --tabbar-h: 64px;
+  --top-h: 56px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --font: var(--font-sans);
+  --mono: var(--font-mono);
+}
+[data-density='compact'] { --tabbar-h: 58px; --top-h: 52px; }
