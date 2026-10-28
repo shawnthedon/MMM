@@ -64,13 +64,33 @@ text label (`running`, `paused`, `demo`, `approved`, …); colour is never the o
 - **Focus and motion:** a 2 px `:focus-visible` ring is global; animation is disabled under
   `prefers-reduced-motion: reduce`.
 
+## Scrolling and scroll continuity
+
+The shell re-renders `#view` whenever state changes — the live simulation tick (every 4.2 s), gateway
+syncs, and most actions. Rendering must never move the reader, so `src/main.js` separates navigation
+from updates:
+
+- **Navigation resets:** `navigate()`, a route change via the hash, and a new record (`route/id`) all
+  start at the top. The router tracks the rendered view key, so a re-render triggered by anything
+  else is treated as an update.
+- **Updates preserve:** every other render captures the window scroll, `#view.scrollTop`, the kanban
+  board (`#kb-viewport.scrollLeft`), each kanban column (`.kanban-cards[data-drop]`) and sheet bodies
+  before replacing the DOM, then restores them.
+- **Gestures are not interrupted:** while a scroll is in progress (or within 450 ms of the last
+  scroll event) a render is deferred, so replacing the DOM cannot kill touch momentum. The deferral
+  is capped at 2.5 s so live data never starves.
+- Content padding always clears the fixed bottom navigation, so the final element is reachable and
+  not hidden behind the tab bar.
+
 ## Verification
 
 | Command | Scope |
 | --- | --- |
 | `npm run test:design` | Token completeness, palette values, WCAG pairs, 5% tints, no stray hex colours, accent-fill rule, Tailwind mapping, 44 px targets, switch semantics, responsive shell. |
 | `npm run test:responsive` | Authored-CSS mobile-first rules, viewport zoom, 320 px layout constraints, existing Comms regressions. |
+| `npm run test:scroll` | Scroll continuity contract in happy-dom: re-renders and the simulation tick preserve the position, navigation resets, inner scrollers and gesture deferral. |
 | `npm test` | Full application, gateway, Comms, session and service-worker suites. |
+| `npm run test:scroll:browser` | Optional real Chromium: bottom reachable on every long route (390 px and 320 px), no snap-back across ticks, live updates still render, navigation resets, kanban horizontal position kept, desktop parity. |
 | `npm run test:relay:browser` | Optional real Chromium: 320/390/1440 px layout, 44 px header targets, four-column module sheet, four theme modes and persistence, desktop Copilot placement, no page errors. Requires `npm install --no-save @sparticuz/chromium puppeteer-core`. |
 
 ## Deliberate deviations and gaps

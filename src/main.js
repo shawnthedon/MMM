@@ -22,6 +22,82 @@ import { refreshComms, releaseComms, canReadGatewayComms } from './commsGateway.
 
 let currentRoute = 'home';
 let currentParams = {};
+/** Identity of the view currently in the DOM, so a re-render can tell navigation from an update. */
+let renderedKey = null;
+
+/* ---------- scroll continuity ----------
+ * State changes (the 4.2s simulation tick, gateway syncs, toasts that update data) re-render the
+ * whole view. Rendering must never move the reader: a re-render keeps the page and every inner
+ * scroller where they were, and only a real navigation returns to the top. */
+const SCROLL_IDLE_MS = 450;
+const MAX_RENDER_DEFERRAL_MS = 2500;
+let lastScrollAt = 0;
+let deferTimer = null;
+let deferStartedAt = 0;
+
+/** Inner scrollers worth preserving by name, in addition to the window and #view. */
+const SCROLLERS = [
+  { selector: '#kb-viewport', property: 'scrollLeft' },
+  { selector: '.kanban-cards', property: 'scrollTop', keyAttr: 'data-drop' },
+  { selector: '.sheet-body', property: 'scrollTop' },
+];
+
+export function routeKey(route = currentRoute, params = currentParams) {
+  return params && params.id ? `${route}/${params.id}` : route;
+}
+
+function captureScroll(viewEl) {
+  const containers = [];
+  for (const { selector, property, keyAttr } of SCROLLERS) {
+    document.querySelectorAll(selector).forEach((el, index) => {
+      const offset = el[property] || 0;
+      if (!offset) return;
+      containers.push({ property, value: offset, selector, keyAttr, key: keyAttr ? el.getAttribute(keyAttr) : null, index });
+    });
+  }
+  return { page: window.scrollY || 0, view: viewEl.scrollTop || 0, containers };
+}
+
+function restoreScroll(saved, viewEl) {
+  for (const item of saved.containers) {
+    const candidates = [...document.querySelectorAll(item.selector)];
+    const el = item.keyAttr ? candidates.find((node) => node.getAttribute(item.keyAttr) === item.key) : candidates[item.index];
+    if (el) el[item.property] = item.value;
+  }
+  if (viewEl.scrollTop !== saved.view) viewEl.scrollTop = saved.view;
+  if ((window.scrollY || 0) !== saved.page) window.scrollTo(0, saved.page);
+}
+
+function isScrolling() {
+  return lastScrollAt > 0 && Date.now() - lastScrollAt < SCROLL_IDLE_MS;
+}
+
+/** Coalesce a render until the reader stops scrolling, with a bounded wait so data never starves. */
+function renderWhenIdle() {
+  const startedAt = Date.now();
+  if (!deferStartedAt) deferStartedAt = startedAt;
+  if (startedAt - deferStartedAt >= MAX_RENDER_DEFERRAL_MS) {
+    deferStartedAt = 0;
+    if (deferTimer) clearTimeout(deferTimer);
+    deferTimer = null;
+    rerender();
+    return;
+  }
+  if (deferTimer) return;
+  deferTimer = setTimeout(() => {
+    deferTimer = null;
+    if (isScrolling()) { renderWhenIdle(); return; }
+    deferStartedAt = 0;
+    rerender();
+  }, SCROLL_IDLE_MS);
+}
+
+function noteScroll() {
+  lastScrollAt = Date.now();
+}
+
+window.addEventListener('scroll', noteScroll, { passive: true });
+document.addEventListener('scroll', noteScroll, { passive: true, capture: true });
 
 export function navigate(path) {
   const [route, id] = String(path).split('/');
@@ -29,20 +105,33 @@ export function navigate(path) {
   const hash = `#/${target}${id ? '/' + id : ''}`;
   if (location.hash !== hash) location.hash = hash;
   parseHash();
-  rerender();
+  rerender({ resetScroll: true });
   closeAllSheets();
 }
 
-export function rerender() {
+/**
+ * Re-render the current view.
+ * `resetScroll` is for navigation only; every other re-render preserves the reader's position.
+ */
+export function rerender({ resetScroll = false } = {}) {
   const viewEl = document.getElementById('view');
   if (!viewEl) return;
   const v = views[currentRoute] || views.home;
+  const key = routeKey();
+  // A different view is navigation even when something else triggered it (hashchange, deep link).
+  const navigating = resetScroll || key !== renderedKey;
+  const saved = navigating ? null : captureScroll(viewEl);
   viewEl.innerHTML = v.render(currentParams);
   enhanceSwitches(viewEl);
   v.mount && v.mount(currentParams);
   refreshChrome(currentRoute);
-  if (!v.persistent) viewEl.scrollTop = 0;
-  window.scrollTo(0, 0);
+  renderedKey = key;
+  if (navigating) {
+    viewEl.scrollTop = 0;
+    window.scrollTo(0, 0);
+  } else if (saved) {
+    restoreScroll(saved, viewEl);
+  }
 }
 
 function parseHash() {
@@ -57,7 +146,7 @@ window.addEventListener('hashchange', () => {
   rerender();
 });
 
-/* re-render on state change — never clobber focused inputs, terminal, or live drags */
+/* re-render on state change — never clobber focused inputs, terminal, live drags, or scroll */
 subscribe((state, label) => {
   const v = views[currentRoute];
   if (v?.persistent && label?.startsWith('term')) return; // terminal updates imperatively
@@ -67,6 +156,9 @@ subscribe((state, label) => {
     const ae = document.activeElement;
     if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName)) return;
   }
+  // Replacing the view mid-gesture kills momentum scrolling on touch devices. Wait for the reader
+  // to stop; `renderWhenIdle` flushes after SCROLL_IDLE_MS or MAX_RENDER_DEFERRAL_MS.
+  if (isScrolling()) { renderWhenIdle(); return; }
   rerender();
 });
 

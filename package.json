@@ -40,7 +40,7 @@
     "audit:verify": "node -e \"import('./apps/gateway/src/db.js').then(m=>console.log(m.verifyAuditChain()))\"",
     "icons": "node scripts/gen-icons.mjs",
     "smoke": "node --import ./scripts/register-css-stub.mjs scripts/smoke.mjs",
-    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:design && npm run test:responsive && npm run test:local && npm run test:local-runtime && npm run test:isolation && npm run test:kanban && npm run test:comms-gateway && npm run test:gateway && npm run test:session-safety && npm run test:sw-safety && npm run test:provider-safety && npm run test:comms-persistence && npm run test:training-jsonl",
+    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:design && npm run test:responsive && npm run test:local && npm run test:local-runtime && npm run test:isolation && npm run test:kanban && npm run test:scroll && npm run test:comms-gateway && npm run test:gateway && npm run test:session-safety && npm run test:sw-safety && npm run test:provider-safety && npm run test:comms-persistence && npm run test:training-jsonl",
     "test:copilot": "node --import ./scripts/register-css-stub.mjs scripts/copilot-tour.mjs",
     "test:auth": "node --import ./scripts/register-css-stub.mjs scripts/auth-ui-test.mjs",
     "test:gateway": "node --no-warnings scripts/gateway-auth-test.mjs",
@@ -63,7 +63,9 @@
     "test:sw-safety:browser": "node scripts/service-worker-browser-test.mjs",
     "test:training-jsonl": "node scripts/training-jsonl-test.mjs",
     "test:relay:browser": "node scripts/relay-browser-test.mjs",
-    "test:design": "node scripts/design-system-test.mjs"
+    "test:design": "node scripts/design-system-test.mjs",
+    "test:scroll": "node --import ./scripts/register-css-stub.mjs scripts/scroll-test.mjs",
+    "test:scroll:browser": "node scripts/scroll-browser-test.mjs"
   },
   "devDependencies": {
     "autoprefixer": "^10.6.2",
