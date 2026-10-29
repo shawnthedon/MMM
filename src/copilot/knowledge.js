@@ -474,20 +474,43 @@ export const KNOWLEDGE = [
   },
   {
     id: 'browser.control',
-    title: 'Browser control is not enabled',
-    type: 'limitation',
+    title: 'Autonomous browsing runs on the gateway, with limits',
+    type: 'concept',
     module: 'browser',
-    tags: ['browser', 'stealth', 'automation', 'playwright', 'policy'],
+    tags: ['browser', 'stealth', 'automation', 'playwright', 'puppeteer', 'policy', 'evidence'],
     status: 'verified',
     version: PACK.version,
-    updated: '2026-10-26',
+    updated: '2026-10-29',
     sensitivity: 'internal',
     body:
-      'No browser-control adapter exists in this repository. The spec’s “stealth mode” requires evaluating two candidate projects on licence, activity, security, mobileness and testability before integration behind a feature flag.\n' +
-      'Policy: authorised automation only. “Stealth” is never authorisation to defeat anti-bot, authentication, paywall or access-control mechanisms. Nothing is enabled by default.',
+      'The Agent Browser exists and runs in the gateway: the gateway owns the task, one action runs per tick, and a deadline, action/evidence budgets, a stall watchdog, loop detection, a bounded recovery ladder and checkpoints keep it bounded. "Completed" requires every success criterion to be verified; a CAPTCHA, 403, paywall or other refusal ends the task as blocked, and a login wall asks the operator to sign in.\n' +
+      'The Chromium driver is optional: until puppeteer-core and a Chromium binary exist on the host the panel reports unconfigured and offers no start button. The scripted test driver is refused unless MMM_BROWSER_ALLOW_SIM=1 and every task it runs is labelled Simulated.\n' +
+      'Policy: authorised automation only. There is no CAPTCHA solving, fingerprint or user-agent spoofing, credential extraction or access-control bypass, and no claim to be undetectable.',
     sources: [
-      { label: 'Master spec §10', ref: 'Copilot_Master_MMM_V2.md §10' },
+      { label: 'docs/browser/AGENT_BROWSER.md', ref: 'docs/browser/AGENT_BROWSER.md' },
+      { label: 'apps/gateway/src/browser/ — policy, watchdog, loops, runner', ref: 'apps/gateway/src/browser/' },
       { label: 'src/copilot/capabilities.js — browser capability', ref: 'src/copilot/capabilities.js' },
+    ],
+  },
+  {
+    id: 'evolution.selfmod',
+    title: 'Self-modification is a capability, not a command',
+    type: 'concept',
+    module: 'evolution',
+    tags: ['self-improvement', 'self-modification', 'evolution', 'autonomy', 'sandbox', 'rollback', 'audit', 'review'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-10-29',
+    sensitivity: 'internal',
+    body:
+      'Every agent can inspect code it is authorised to read, diagnose a defect and propose the smallest change. What it may do is decided by the gateway from data the agent cannot write: a policy row with one of five autonomy levels (default L1 recommend), an authorised file scope, quotas and a health command.\n' +
+      'The cycle is ten stages: observe, diagnose, plan, isolated copy, rewrite, test, peer review, compare, promote, monitor. A candidate lives under DATA_DIR/experiments/<id>/ — the gateway never writes the repository — and is tested in a sandbox with a rebuilt environment (no secrets), a command allowlist, a timeout and capped output. A different agent must review it; self-review and self-approval are refused; approving never deploys.\n' +
+      'Permissions, authentication, RBAC, the audit layer, migrations, CI, package files, secrets and the safeguards themselves are protected: an agent may recommend a change there, never make one, at any level. Versions live under DATA_DIR/runtime/<agent>/<version>/, the last known-good version survives the experiment, and a rollback keeps the audit trail — it cannot reverse migrations or external side effects.\n' +
+      'Honest limits: the sandbox is process isolation (no kernel network isolation) and says so; there is no model-driven patch author; reproduction is files plus manifest, not an image digest.',
+    sources: [
+      { label: 'docs/evolution/SELF_MODIFICATION.md', ref: 'docs/evolution/SELF_MODIFICATION.md' },
+      { label: 'apps/gateway/src/evolution/policy.js — levels and protected paths', ref: 'apps/gateway/src/evolution/policy.js' },
+      { label: 'docs/FEATURE_COMPLETION_ROADMAP.md — M23', ref: 'docs/FEATURE_COMPLETION_ROADMAP.md' },
     ],
   },
   {

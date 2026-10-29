@@ -351,7 +351,7 @@ when the health check fails, quotas that stop runaway loops, and a ten-stage aud
   `policy` Owner.
 - Evidence: `npm run test:evolution` — **20 passed** (`SELF-MODIFICATION ACCEPTANCE`), AC1–AC18, against a
   real gateway on a temporary `DATA_DIR` with real sandboxed `node` runs;
-  `npm run test:evolution:ui` — **9 passed**.
+  `npm run test:evolution:ui` — **10 passed**.
 - Honest limits: the sandbox is **process isolation, not a container** (no network isolation) and the API
   and screen both say so; there is no model-driven patch author yet; reproduction is files + manifest,
   not an image digest. Full list: [`evolution/SELF_MODIFICATION.md`](evolution/SELF_MODIFICATION.md) §10.
