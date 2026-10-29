@@ -133,17 +133,19 @@ function panelHTML() {
       </header>
 
       <div class="cp-voice-dock" id="cp-voice-dock">
-        <button class="cp-mic" data-cp="voice" data-holo="mic" aria-pressed="false"
-                aria-label="${voiceSupported ? 'Speak to Copilot' : 'Voice capture is unavailable in this browser'}">
-          <span class="cp-mic-halo" aria-hidden="true"></span>
-          <span class="cp-mic-ico" aria-hidden="true">${icon('mic', 30)}</span>
-          <span class="cp-mic-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-        </button>
         <div class="cp-stage-caption" data-holo="caption">
           <strong>${session.voiceStatus ? 'Voice input' : 'Tap and speak'}</strong>
           <span id="cp-voice-status" role="status" aria-live="polite">${esc(session.voiceStatus || voiceStatusText())}</span>
         </div>
-        <button class="cp-stage-link" data-cp="toggle-advanced">Or type instead ${icon('right', 14)}</button>
+        <div class="cp-voice-row">
+          <button class="cp-mic" data-cp="voice" data-holo="mic" aria-pressed="false"
+                  aria-label="${voiceSupported ? 'Speak to Copilot' : 'Voice capture is unavailable in this browser'}">
+            <span class="cp-mic-halo" aria-hidden="true"></span>
+            <span class="cp-mic-ico" aria-hidden="true">${icon('mic', 20)}</span>
+            <span class="cp-mic-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          </button>
+          <button class="cp-stage-link" data-cp="toggle-advanced">Or type instead ${icon('right', 14)}</button>
+        </div>
       </div>
 
       <div class="cp-body" id="cp-body">

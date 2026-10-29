@@ -156,6 +156,10 @@ Details that matter:
 - **pointer swipe** runs `ag-researcher` and a second swipe stops it
 - 320 px: no page overflow, swipe layers contained, card ≥44 px
 - 320 px: the immersive stage fits, mic and "type instead" link stay ≥44 px and inside the viewport
+- 320 / 390 / 1440 px: the mic is **58 px** (68 px ≥720 px), sits on the same row as "type instead"
+  (centres within 8 px, mic strictly left of the link) and the dock bottom stays inside the viewport.
+  It used to be a 104 px disc centred over the hologram; it now anchors the stage bottom so the image
+  is unobstructed.
 - `prefers-reduced-motion` disables animation and applies the end state immediately
 - no page errors
 
@@ -167,7 +171,7 @@ full-screen overlay and re-passed.
 
 | Screen | File |
 | --- | --- |
-| Immersive stage: hologram, rings, central mic, consent/mic caption | `docs/design/copilot-stage-390.png` |
+| Immersive stage: hologram, rings, low mic beside the “type instead” link, caption above | `docs/design/copilot-stage-390.png` |
 | Advanced surface: modes, answer card with sources, composer | `docs/design/copilot-advanced-390.png` |
 
 The stage screenshot is the blank → hologram resolved state at 390 px; the advanced shot is after

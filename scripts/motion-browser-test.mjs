@@ -231,8 +231,15 @@ try {
       scroll: document.documentElement.scrollWidth,
       width: document.documentElement.clientWidth,
       micLeft: mic.left, micRight: mic.right, micSize: Math.round(mic.width),
+      micCenterY: mic.top + mic.height / 2, micTop: mic.top,
       captionLeft: caption.left, captionRight: caption.right,
       link: panel.querySelector('.cp-stage-link').getBoundingClientRect().height,
+      linkBox: (() => {
+        const r = panel.querySelector('.cp-stage-link').getBoundingClientRect();
+        return { top: r.top, left: r.left, height: r.height, width: r.width };
+      })(),
+      holoBottom: panel.querySelector('.cp-holo').getBoundingClientRect().bottom,
+      viewportHeight: window.innerHeight,
     };
   });
   assert.ok(stage320.scroll <= stage320.width, `the overlay overflowed at 320px (${stage320.scroll} > ${stage320.width})`);
@@ -240,6 +247,11 @@ try {
   assert.ok(stage320.micSize >= 44, `the mic must be a real target, got ${stage320.micSize}px`);
   assert.ok(stage320.captionLeft >= 8 && stage320.captionRight <= stage320.width - 8, 'the caption must be inset from the edges');
   assert.ok(stage320.link >= 44, 'the “type instead” link must be a 44px target');
+  assert.ok(stage320.micSize <= 64, `the mic must stay small on the stage, got ${stage320.micSize}px`);
+  const linkCenterY = stage320.linkBox.top + stage320.linkBox.height / 2;
+  assert.ok(Math.abs(stage320.micCenterY - linkCenterY) <= 8,
+    `the mic must sit beside the “type instead” link, not above it (${Math.round(stage320.micCenterY)} vs ${Math.round(linkCenterY)})`);
+  assert.ok(stage320.micRight <= stage320.linkBox.left + 1, 'the mic must be side by side with the link, not on top of it');
   await page.evaluate(() => document.querySelector('[data-cp="close"]').click());
   await sleep(400);
   results.push('PASS 320px: immersive stage fits, mic and link stay ≥44px and inside the viewport');

@@ -293,6 +293,11 @@ await check('the Copilot opens full screen on a blank stage', async () => {
   eq(title.textContent.includes('Advanced Copilot'), true, 'the title must read Advanced Copilot');
   assert(panel.querySelector('#cp-body') === null || panel.querySelector('.cp-body'), 'controls must exist in the DOM to animate in');
   assert(panel.querySelector('.cp-mic'), 'the stage needs a central microphone');
+  const row = panel.querySelector('.cp-voice-row');
+  assert(row, 'the mic must share a bottom row with the type-instead link');
+  assert(row.contains(panel.querySelector('.cp-mic')), 'the mic left the bottom row');
+  assert(row.contains(panel.querySelector('.cp-stage-link')), 'the type-instead link left the mic row');
+  assert(!row.contains(panel.querySelector('.cp-stage-caption')), 'the caption stays above the row, not inside it');
   assert(panel.querySelector('img.cp-holo-image'), 'the hologram image must be present');
   const src = panel.querySelector('img.cp-holo-image').getAttribute('src');
   eq(src, './media/hologram.jpg', 'the uploaded image is the hologram backdrop');

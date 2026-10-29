@@ -224,43 +224,69 @@
 .cp-panel[data-view='advanced'] .cp-holo-image { opacity: 0.32; }
 .cp-panel[data-view='advanced'] .cp-holo-ring { opacity: 0.28; }
 
-/* ---------- voice dock: the mic, on the stage ---------- */
+/* ---------- voice dock: the mic, set low so it never covers the hologram ----------
+ * The mic used to sit centred over the image at 104 px. It now anchors the bottom of the stage at
+ * 58 px and shares a row with the "Or type instead" link, so the hologram stays unobstructed. */
 .cp-voice-dock {
   position: absolute;
   z-index: 3;
   left: 0; right: 0;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 34px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   padding: 0 20px;
   pointer-events: none;
 }
+.cp-voice-dock > * { position: relative; }
 .cp-voice-dock > * { pointer-events: auto; }
+/* Soft scrim so the caption keeps AA contrast where the hologram is brightest, without boxing the
+ * stage in. It lives inside the dock's stacking context, so it never covers the controls. */
+.cp-voice-dock::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -18px; top: -84px;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--bg-base) 62%, transparent) 42%,
+    color-mix(in srgb, var(--bg-base) 88%, transparent) 78%,
+    color-mix(in srgb, var(--bg-base) 94%, transparent) 100%
+  );
+}
+.cp-voice-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
 .cp-panel[data-view='advanced'] .cp-voice-dock { display: none; }
 
 .cp-mic {
   position: relative;
-  width: 104px; height: 104px;
+  width: 58px; height: 58px;
+  flex: none;
   border-radius: 50%;
   display: grid;
   place-items: center;
   color: var(--text-on-accent);
   background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--accent-hover) 92%, var(--text-primary)), var(--accent-hover));
   border: 1px solid color-mix(in srgb, var(--accent-hover) 70%, var(--text-primary));
-  box-shadow: 0 18px 48px color-mix(in srgb, var(--accent-primary) 55%, transparent),
-              0 0 0 10px color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--accent-primary) 42%, transparent),
+              0 0 0 6px color-mix(in srgb, var(--accent-primary) 10%, transparent);
   touch-action: manipulation;
 }
 .cp-mic-ico { position: relative; z-index: 2; display: grid; place-items: center; }
 .cp-mic-halo {
-  position: absolute; inset: -14px; border-radius: 50%;
+  position: absolute; inset: -7px; border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--accent-secondary) 60%, transparent);
   animation: cp-halo 3.2s ease-out infinite;
 }
 .cp-mic-halo::after {
-  content: ''; position: absolute; inset: -18px; border-radius: 50%;
+  content: ''; position: absolute; inset: -9px; border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--accent-secondary) 34%, transparent);
 }
 @keyframes cp-halo {
@@ -268,20 +294,20 @@
   70% { transform: scale(1.08); opacity: 0.25; }
   100% { transform: scale(1.08); opacity: 0.25; }
 }
-.cp-mic-wave { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; gap: 4px; z-index: 2; }
-.cp-mic-wave i { width: 3px; height: 12px; border-radius: 2px; background: var(--text-on-accent); animation: cp-wave 0.9s ease-in-out infinite; }
+.cp-mic-wave { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; gap: 3px; z-index: 2; }
+.cp-mic-wave i { width: 2.5px; height: 9px; border-radius: 2px; background: var(--text-on-accent); animation: cp-wave 0.9s ease-in-out infinite; }
 .cp-mic-wave i:nth-child(2) { animation-delay: 0.1s; }
 .cp-mic-wave i:nth-child(3) { animation-delay: 0.2s; }
 .cp-mic-wave i:nth-child(4) { animation-delay: 0.3s; }
 .cp-mic-wave i:nth-child(5) { animation-delay: 0.4s; }
-@keyframes cp-wave { 0%, 100% { height: 8px; } 50% { height: 26px; } }
-.cp-mic[data-state='listening'] { box-shadow: 0 18px 52px color-mix(in srgb, var(--state-error) 55%, transparent), 0 0 0 12px color-mix(in srgb, var(--state-error) 16%, transparent); }
+@keyframes cp-wave { 0%, 100% { height: 6px; } 50% { height: 18px; } }
+.cp-mic[data-state='listening'] { box-shadow: 0 10px 30px color-mix(in srgb, var(--state-error) 55%, transparent), 0 0 0 8px color-mix(in srgb, var(--state-error) 16%, transparent); }
 .cp-mic[data-state='listening'] .cp-mic-ico { opacity: 0; }
 .cp-mic[data-state='listening'] .cp-mic-wave { display: flex; }
 
-.cp-stage-caption { text-align: center; max-width: 34ch; display: grid; gap: 4px; }
-.cp-stage-caption strong { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
-.cp-stage-caption span { font-size: 11.5px; line-height: 1.5; color: var(--text-2); }
+.cp-stage-caption { text-align: center; max-width: 34ch; display: grid; gap: 2px; }
+.cp-stage-caption strong { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
+.cp-stage-caption span { font-size: 11px; line-height: 1.45; color: var(--text-2); }
 .cp-stage-link {
   display: inline-flex; align-items: center; gap: 5px;
   min-height: 44px; padding: 0 14px; border-radius: 999px;
@@ -552,6 +578,6 @@ button.cp-chip:active { background: var(--elevated); }
  * Still full screen (immersive), just with a wider reading column and a larger stage. */
 @media (min-width: 720px) {
   .cp-body { padding-left: max(0px, calc((100vw - 760px) / 2)); padding-right: max(0px, calc((100vw - 760px) / 2)); }
-  .cp-stage-caption strong { font-size: 17px; }
-  .cp-mic { width: 120px; height: 120px; }
+  .cp-stage-caption strong { font-size: 14px; }
+  .cp-mic { width: 68px; height: 68px; }
 }
