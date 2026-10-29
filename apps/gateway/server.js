@@ -404,6 +404,83 @@ route('DELETE', /^\/api\/v1\/tokens\/([\w-]+)$/, { permission: 'token:issue', mu
   return { code: 200, body: { ok: true, id: row.id } };
 });
 
+/* ---------- real model gateway (OpenAI-compatible chat completions) ---------- */
+route('POST', /^\\/api\\/v1\\/chat\\/completions$/, { permission: 'agent:write', mutating: true }, async (ctx) => {
+  const messages = ctx.body?.messages;
+  if (!Array.isArray(messages) || messages.length < 1 || messages.length > 20) {
+    return { code: 400, body: { error: 'messages must contain between 1 and 20 items' } };
+  }
+  const normalized = [];
+  for (const message of messages) {
+    if (!message || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string' ||
+        !message.content.trim() || message.content.length > 12000) {
+      return { code: 400, body: { error: 'each message must have a user/assistant role and 1–12000 characters of content' } };
+    }
+    normalized.push({ role: message.role, content: message.content });
+  }
+
+  const apiKey = String(process.env.MMM_LLM_API_KEY || '').trim();
+  const model = String(process.env.MMM_LLM_MODEL || '').trim();
+  const configuredBase = String(process.env.MMM_LLM_BASE_URL || '').trim();
+  if (!apiKey || !model || !configuredBase) {
+    audit(ctx.principal.id, ctx.principal.via, 'model.chat', { messageCount: normalized.length }, 'deny', 'unconfigured');
+    return { code: 503, body: { error: 'Model gateway is not configured. Set MMM_LLM_BASE_URL, MMM_LLM_API_KEY and MMM_LLM_MODEL on the server.' } };
+  }
+
+  let endpoint;
+  try {
+    const base = new URL(configuredBase);
+    const localHost = ['localhost', '127.0.0.1', '::1'].includes(base.hostname);
+    if (!['https:', 'http:'].includes(base.protocol) || (base.protocol !== 'https:' && !localHost) ||
+        base.username || base.password || base.search || base.hash) throw new Error('unsafe model base URL');
+    endpoint = new URL(base.toString().replace(/\\/+$/, '') + '/chat/completions');
+  } catch {
+    audit(ctx.principal.id, ctx.principal.via, 'model.chat', { messageCount: normalized.length }, 'deny', 'invalid-config');
+    return { code: 503, body: { error: 'MMM_LLM_BASE_URL must be a valid HTTPS endpoint (HTTP is allowed only for localhost local-model servers).' } };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 85000);
+  let response;
+  try {
+    response = await gatewayFetch(endpoint, {
+      method: 'POST',
+      redirect: 'error',
+      signal: controller.signal,
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}`, accept: 'application/json' },
+      body: JSON.stringify({ model, messages: normalized, stream: false }),
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    audit(ctx.principal.id, ctx.principal.via, 'model.chat', { model, messageCount: normalized.length }, 'allow', error?.name === 'AbortError' ? 'timeout' : 'provider-unreachable');
+    return { code: error?.name === 'AbortError' ? 504 : 502, body: { error: error?.name === 'AbortError' ? 'Model provider timed out.' : 'Model provider could not be reached.' } };
+  }
+  clearTimeout(timeout);
+
+  if (!response.ok) {
+    const status = response.status === 401 || response.status === 403 ? 502 : response.status === 429 ? 429 : 502;
+    audit(ctx.principal.id, ctx.principal.via, 'model.chat', { model, providerStatus: response.status, messageCount: normalized.length }, 'allow', 'provider-error');
+    return { code: status, body: { error: response.status === 429 ? 'Model provider rate limit reached.' : response.status === 401 || response.status === 403 ? 'Model provider rejected server credentials.' : `Model provider request failed (HTTP ${response.status}).` } };
+  }
+
+  let payload;
+  try { payload = await response.json(); } catch {
+    audit(ctx.principal.id, ctx.principal.via, 'model.chat', { model, messageCount: normalized.length }, 'allow', 'invalid-provider-response');
+    return { code: 502, body: { error: 'Model provider returned invalid JSON.' } };
+  }
+  const message = payload?.choices?.[0]?.message?.content;
+  if (typeof message !== 'string' || !message.trim()) {
+    audit(ctx.principal.id, ctx.principal.via, 'model.chat', { model, messageCount: normalized.length }, 'allow', 'empty-provider-response');
+    return { code: 502, body: { error: 'Model provider returned no text response.' } };
+  }
+  const usage = payload?.usage && typeof payload.usage === 'object' ? {
+    promptTokens: Number.isFinite(payload.usage.prompt_tokens) ? payload.usage.prompt_tokens : null,
+    completionTokens: Number.isFinite(payload.usage.completion_tokens) ? payload.usage.completion_tokens : null,
+  } : null;
+  audit(ctx.principal.id, ctx.principal.via, 'model.chat', { model, messageCount: normalized.length, usage }, 'allow', 'ok');
+  return { code: 200, body: { message, model, usage } };
+});
+
 /* =========================================================================================
  * Read / operate surface
  * =======================================================================================*/
