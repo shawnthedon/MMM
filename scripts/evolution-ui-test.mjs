@@ -292,6 +292,10 @@ await check('the module never claims an unrun test or a self-granted permission'
   assert(!/setState\([^)]*status:\s*'deployed'/.test(js), 'the panel never sets a status locally');
   assert(/canPolicy\(\)/.test(js) && /canApprove\(\)/.test(js) && /canDeploy\(\)/.test(js), 'controls are gated on real permissions');
   assert(/The repository is never modified by the gateway/.test(js), 'the write boundary is stated where a user writes a change');
+  const datastore = readFileSync(join(root, 'src/datastore.js'), 'utf8');
+  assert(/topics: \['agents', 'tasks', 'approvals', 'system', 'evolution'\]/.test(datastore), 'the socket subscribes to the evolution topic');
+  assert(/subscribeEvolution/.test(js), 'the panel refreshes from that topic instead of only polling');
+  assert(/if \(msg\?\.topic === 'evolution'\)/.test(datastore), 'evolution events are routed to their listeners, not the app-wide refresh');
 });
 
 /* ---------- report ---------- */

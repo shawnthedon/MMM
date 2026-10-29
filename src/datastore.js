@@ -18,6 +18,13 @@ export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events'];
 export const LOCAL_SLICES = ['swarms', 'teams', 'usage'];
 
 const listeners = new Set();
+/* Panels that want their own live refresh (the Self-Improvement cycle) subscribe here instead of
+ * polling every second. They still poll slowly as a fallback for when the socket is down. */
+const evolutionListeners = new Set();
+export function subscribeEvolution(fn) {
+  evolutionListeners.add(fn);
+  return () => evolutionListeners.delete(fn);
+}
 
 const sync = {
   status: 'idle', // idle | loading | live | degraded | demo | error
@@ -373,7 +380,7 @@ export function connectLive() {
     reconnectAttempt = 0;
     setWs('open');
     try {
-      ws.send(JSON.stringify({ type: 'subscribe', topics: ['agents', 'tasks', 'approvals', 'system'] }));
+      ws.send(JSON.stringify({ type: 'subscribe', topics: ['agents', 'tasks', 'approvals', 'system', 'evolution'] }));
     } catch {
       /* ignore: the server will just use its default subscription */
     }
@@ -401,6 +408,10 @@ export function connectLive() {
         Object.assign(sync, { error: `Some live topics were refused: ${msg.refused.join(', ')}` });
         emit();
       }
+      return;
+    }
+    if (msg?.topic === 'evolution') {
+      evolutionListeners.forEach((fn) => { try { fn(msg); } catch { /* a panel must not break the socket */ } });
       return;
     }
     if (['agents', 'tasks', 'approvals', 'system'].includes(msg?.topic)) scheduleRefresh();

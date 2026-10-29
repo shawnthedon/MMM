@@ -16,6 +16,7 @@ import { api, ApiError, isApiMode } from './api.js';
 import { esc, icon } from './core.js';
 import { can, isAuthenticated } from './auth.js';
 import { toast, on } from './shell.js';
+import { subscribeEvolution } from './datastore.js';
 import { views } from './views1.js';
 import './evolution.css';
 
@@ -518,6 +519,13 @@ views.evolution = {
     const { rerender } = await import('./main.js');
     rerender();
     startPolling();
+    /* Live updates from the gateway's `evolution` topic; the poll below is the fallback for when the
+     * socket is down, not the primary path. */
+    stopLive();
+    unsubscribeLive = subscribeEvolution(() => {
+      if (!document.getElementById('evo-status')) { stopLive(); return; }
+      refresh({ quiet: true }).then(paint).catch(() => {});
+    });
   },
 };
 
@@ -535,6 +543,11 @@ function startPolling() {
 function stopPolling() {
   if (timer) clearInterval(timer);
   timer = null;
+}
+let unsubscribeLive = null;
+function stopLive() {
+  if (unsubscribeLive) unsubscribeLive();
+  unsubscribeLive = null;
 }
 
 /** Repaint only the data regions, so an open form is never wiped while it is being typed into. */
