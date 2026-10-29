@@ -566,11 +566,13 @@ async function step(id, name, body = {}) {
 on('evo-refresh', async () => { await refresh({ quiet: true }); await rerender(); });
 
 on('evo-agent', async (el, ds) => {
-  cache.agentId = ds.id;
+  if (ds.id === cache.agentId) return;
   cache.selectedId = '';
   cache.detail = null;
-  await refresh({ quiet: true });
-  await rerender();
+  /* Navigate rather than repaint, so the agent is in the URL: the panel is deep-linkable
+   * (`#/evolution/demo-writer`) and the agent page can link straight to it. */
+  const { navigate } = await import('./main.js');
+  navigate(`evolution/${ds.id}`);
 });
 
 on('evo-select', async (el, ds) => {

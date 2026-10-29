@@ -247,6 +247,57 @@ const CAPS = {
       };
     },
   },
+  evolution: {
+    id: 'evolution',
+    label: 'Self-modification',
+    status: 'available',
+    summary: 'Every agent can inspect, diagnose and propose a code change. What it may actually do is decided by the gateway.',
+    detail:
+      'A per-agent policy holds one of five autonomy levels (default L1 recommend), an authorised file scope, quotas and a health command. A candidate lives in an isolated workspace — the repository is never written by the gateway — and is tested in a sandbox with a rebuilt environment and a command allowlist. A different agent must review it, approval is separate from deployment, and promotion publishes a version, so a rollback is a pointer move that keeps the audit trail. Permissions, auth, the audit layer, migrations, CI, secrets and the safeguards themselves are protected: an agent may recommend a change there, never make one. The sandbox is process isolation, not a container — the API and the screen both state that, along with the checks it does not enforce.',
+    requirements: [
+      'A gateway with migration 005 applied and a signed-in principal',
+      'evolution:policy (Owner) to raise a level above the default',
+      'Container isolation for defence in depth (today: process, stated as such)',
+      'A model-driven patch author is not included — an operator supplies the edit and every gate still applies',
+    ],
+    evidence: () => {
+      if (!isApiMode()) return 'no gateway configured — the evolution cycle runs on the gateway';
+      const auth = getAuth();
+      return auth.status === 'authenticated'
+        ? 'signed in · policy, evidence and versions are read live on the Self-Improvement screen'
+        : 'gateway configured but not signed in';
+    },
+    dynamic() {
+      const auth = getAuth();
+      if (!isApiMode()) {
+        return {
+          status: 'unverified',
+          summary: 'Self-improvement runs on the gateway; nothing here writes code.',
+          detail:
+            'The cycle (isolated workspace, sandbox, real tests, peer review, approval, versioned promotion, rollback) lives in apps/gateway/src/evolution and is proven by scripts/evolution-test.mjs (AC1–AC18) and scripts/evolution-ui-test.mjs. Connect a gateway to inspect an agent’s policy.',
+          requirements: ['Set a gateway URL and sign in'],
+          evidence: 'no gateway configured',
+        };
+      }
+      if (auth.status !== 'authenticated') {
+        return {
+          status: 'unconfigured',
+          summary: 'Sign in to read an agent’s autonomy level and experiments.',
+          detail: 'Policies, diffs, test evidence and versions are only readable with evolution:read.',
+          requirements: ['Sign in with evolution:read to inspect; evolution:run to open an experiment'],
+          evidence: 'no session',
+        };
+      }
+      return {
+        status: 'available',
+        summary: 'The gateway enforces the level shown on the Self-Improvement screen — this card does not.',
+        detail:
+          'The screen reports each agent’s real level, scope, quotas, versions and the ten-stage state of every experiment. Controls appear only for a principal that holds the matching permission, and a failed read clears the rows instead of leaving stale ones looking current.',
+        requirements: ['Open the Self-Improvement screen for the agent you care about'],
+        evidence: 'signed in · policy and evidence are live',
+      };
+    },
+  },
   llm: {
     id: 'llm',
     label: 'LLM answer generation',

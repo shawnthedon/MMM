@@ -131,7 +131,9 @@ globalThis.fetch = async (input, init = {}) => {
   }
   if (mode === 'anon') return json({ error: 'not signed in' }, 401);
   if (url.endsWith('/api/v1/evolution/capabilities')) return json(capability);
-  if (url.endsWith('/api/v1/evolution/agents')) return json({ agents: [agent()] });
+  if (url.endsWith('/api/v1/evolution/agents')) {
+    return json({ agents: [agent(), agent({ id: 'demo-reviewer', name: 'Demo Reviewer', policy: { ...agent().policy, agentId: 'demo-reviewer', level: 1, levelLabel: 'Recommend', levelSummary: 'Inspect and propose only.' } })] });
+  }
   if (/\/agents\/[^/]+\/policy$/.test(url)) return json(agent().policy);
   if (/\/agents\/[^/]+\/versions$/.test(url)) {
     return json({ versions: [{ id: 'v-1', status: 'deployed', created_at: Date.now() - 3600_000, files: { 'agents/demo-writer/greet.mjs': 'sha' }, evidence: { tests: 'node greet.test.mjs → passed' }, health: { ok: true, summary: 'node agents/demo-writer/health.mjs → passed' } }], active: { versionId: 'v-1' } });
@@ -269,7 +271,22 @@ await check('a deployed candidate shows its version, health and rollback, and ne
   assert(/does not reverse database migrations/i.test(versions), 'the rollback limits are stated');
 });
 
-/* ---------- 9. static honesty of the module ---------- */
+/* ---------- 9. deep links ---------- */
+await check('an agent can be deep-linked, and the tab follows the URL', async () => {
+  nav.navigate('evolution/demo-reviewer');
+  await sleep(220);
+  const on = q('.evo-agent.on', q('#view'));
+  assert(on, 'an agent tab is selected');
+  assert(/Demo Reviewer/.test(text(on)), 'the deep-linked agent is the selected one');
+  assert(/Recommend/.test(text(on)), 'its real level is shown');
+  const tile = q('.evo-agent[data-id="demo-writer"]');
+  tile.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await sleep(220);
+  assert(/#\/evolution\/demo-writer$/.test(win.location.hash), 'choosing an agent changes the URL');
+  assert(/Demo Writer/.test(text(q('.evo-agent.on', q('#view')))), 'and the panel follows it');
+});
+
+/* ---------- 10. static honesty of the module ---------- */
 await check('the module never claims an unrun test or a self-granted permission', () => {
   assert(!/Math\.random\(\).*passed/.test(js), 'no fabricated pass');
   assert(!/setState\([^)]*status:\s*'deployed'/.test(js), 'the panel never sets a status locally');

@@ -10,7 +10,7 @@ cannot write: a policy row, a permission check, a review verdict, an approval, a
 audit log. The agent's instructions only describe the workflow. The platform enforces it.
 
 - Screen: **Self-Improvement** (`#/evolution`, or *Policy, experiments & rollback* on an agent's page).
-- Tests: `npm run test:evolution` (20 backend checks) and `npm run test:evolution:ui` (9 panel checks).
+- Tests: `npm run test:evolution` (20 backend checks) and `npm run test:evolution:ui` (10 panel checks).
 - Code: `apps/gateway/src/evolution/`, `apps/gateway/migrations/005_evolution.sql`, `src/evolution.js`.
 
 ---

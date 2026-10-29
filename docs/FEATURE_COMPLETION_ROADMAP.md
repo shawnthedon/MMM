@@ -1362,7 +1362,7 @@ is held by the gateway, never by the agent's instructions.
 
 **Acceptance tests (spec AC1–AC18)** — `npm run test:evolution` (20 checks; a real gateway on a temporary
 `DATA_DIR` and real sandboxed `node` runs against `agents/demo-writer/`, whose suite genuinely fails until
-the defect is fixed). Screen: `npm run test:evolution:ui` (9 checks).
+the defect is fixed). Screen: `npm run test:evolution:ui` (10 checks).
 
 **The gap.** The sandbox is process isolation, not a container or microVM; there is no model-driven patch
 author (a human or an agent operator supplies the edit and the platform validates it); reproduction is
