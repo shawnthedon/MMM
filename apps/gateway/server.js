@@ -405,7 +405,7 @@ route('DELETE', /^\/api\/v1\/tokens\/([\w-]+)$/, { permission: 'token:issue', mu
 });
 
 /* ---------- real model gateway (OpenAI-compatible chat completions) ---------- */
-route('POST', /^\\/api\\/v1\\/chat\\/completions$/, { permission: 'agent:write', mutating: true }, async (ctx) => {
+route('POST', /^\/api\/v1\/chat\/completions$/, { permission: 'agent:write', mutating: true }, async (ctx) => {
   const messages = ctx.body?.messages;
   if (!Array.isArray(messages) || messages.length < 1 || messages.length > 20) {
     return { code: 400, body: { error: 'messages must contain between 1 and 20 items' } };
@@ -433,7 +433,7 @@ route('POST', /^\\/api\\/v1\\/chat\\/completions$/, { permission: 'agent:write',
     const localHost = ['localhost', '127.0.0.1', '::1'].includes(base.hostname);
     if (!['https:', 'http:'].includes(base.protocol) || (base.protocol !== 'https:' && !localHost) ||
         base.username || base.password || base.search || base.hash) throw new Error('unsafe model base URL');
-    endpoint = new URL(base.toString().replace(/\\/+$/, '') + '/chat/completions');
+        endpoint = new URL(base.toString().replace(/\/+$/, '') + '/chat/completions');
   } catch {
     audit(ctx.principal.id, ctx.principal.via, 'model.chat', { messageCount: normalized.length }, 'deny', 'invalid-config');
     return { code: 503, body: { error: 'MMM_LLM_BASE_URL must be a valid HTTPS endpoint (HTTP is allowed only for localhost local-model servers).' } };
