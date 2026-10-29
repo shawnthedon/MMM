@@ -416,7 +416,9 @@ export function sessionCookie(token, { secure = false, maxAgeMs = SESSION_TTL_MS
     `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Strict',
+    // The PWA and gateway are hosted on different sites in production.
+    // Cross-site session cookies require SameSite=None and Secure.
+    secure ? 'SameSite=None' : 'SameSite=Strict',
     `Max-Age=${Math.floor(maxAgeMs / 1000)}`,
   ];
   if (secure) parts.push('Secure');
