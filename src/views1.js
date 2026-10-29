@@ -206,7 +206,8 @@ function agentDetail(id) {
       <div class="field"><label>System prompt (v7 · human-edited)</label>
         <textarea class="input" data-model="_agentprompt">${esc(a.prompt)}</textarea>
       </div>
-      <div class="kv"><span class="k">Autonomy level</span><span class="strong">L${a.autonomy} ${['ask-always', 'guided', 'supervised', 'guarded-auto', 'full-auto'][a.autonomy]}</span></div>
+      <div class="kv"><span class="k">Behaviour autonomy</span><span class="strong">L${a.autonomy} ${['ask-always', 'guided', 'supervised', 'guarded-auto', 'full-auto'][a.autonomy] || ''}</span></div>
+      <div class="tiny muted">Recorded on the definition. It is not enforced by any runtime, and it does not authorise code changes — that is the separate self-modification policy below.</div>
       <div class="kv"><span class="k">Self-improvement</span>
         <button class="btn sm" data-act="nav" data-to="evolution/${a.id}">${icon('spark', 15)} Policy, experiments &amp; rollback</button>
       </div>
