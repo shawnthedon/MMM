@@ -204,6 +204,7 @@ export const api = {
   revokeToken: (id) => request(`/api/v1/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   summary: () => request('/api/v1/summary'),
+  chatCompletion: (messages, opts = {}) => request('/api/v1/chat/completions', { method: 'POST', body: { messages }, timeoutMs: 90000, ...opts }),
   agents: () => request('/api/v1/agents'),
   createAgent: (body) => request('/api/v1/agents', { method: 'POST', body }),
   updateAgent: (id, body) => request(`/api/v1/agents/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
