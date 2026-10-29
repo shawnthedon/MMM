@@ -224,6 +224,7 @@ npm run lint        # code style (after Phase-1 tooling)
 | Document | What's inside |
 | --- | --- |
 | 📐 [Design Spec](docs/DESIGN_SPEC.md) | Full 12-module spec, governance, data model, providers |
+| 🌐 [Agent Browser](docs/browser/AGENT_BROWSER.md) | Autonomous browsing with watchdog, bounded recovery, checkpoints and evidence — plus exactly what it will not do |
 | ✅ [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) | Functional build: 19 phases, seed data & restore guide |
 | 🏷 [Rename: SwarmOS → MMM](docs/ops/RENAME_MMM.md) | Every identifier that changed, and the one-time upgrade steps |
 | 🧩 [Feature Completion Roadmap](docs/FEATURE_COMPLETION_ROADMAP.md) | **What to build next, screen by screen.** Every simulated/demo/missing part with file references, beginner steps, code, tests and 95 links |

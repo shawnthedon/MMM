@@ -16,6 +16,7 @@ import { WebSocketServer } from 'ws';
 import { db, migrate, logEvent, audit, verifyAuditChain, DATA_DIR, DB_DRIVER } from './src/db.js';
 import { seed } from './src/seed.js';
 import * as comms from './src/comms.js';
+import { runner as browserRunner, browserCapability, setBrowserBroadcast } from './src/browser/index.js';
 import * as auth from './src/auth.js';
 import {
   can,
@@ -134,6 +135,7 @@ const clients = new Set();
 
 function subscriptionFilter(topic, principal) {
   if (topic === 'approvals') return can(principal, 'approval:read');
+  if (topic === 'browser') return can(principal, 'browser:read');
   if (topic === 'audit') return can(principal, 'audit:read');
   return can(principal, 'read');
 }
@@ -653,6 +655,61 @@ route('GET', /^\/api\/v1\/audit$/, { permission: 'audit:read' }, (ctx) => {
   };
 });
 
+/* =========================================================================================
+ * Agent Browser — long-running autonomous browsing with a watchdog and evidence
+ * =======================================================================================*/
+route('GET', /^\/api\/v1\/browser\/capabilities$/, { permission: 'browser:read' }, async () => ({
+  code: 200,
+  body: await browserCapability(),
+}));
+
+route('GET', /^\/api\/v1\/browser\/tasks$/, { permission: 'browser:read' }, (ctx) => ({
+  code: 200,
+  body: { tasks: browserRunner.listTasks(Number(ctx.query.limit) || 50) },
+}));
+
+route('POST', /^\/api\/v1\/browser\/tasks$/, { permission: 'browser:run', mutating: true }, async (ctx) => {
+  const limit = auth.rateLimit(`browser:create:${ctx.principal.id}`, { limit: 20, windowMs: 60 * 1000 });
+  if (!limit.allowed) return { code: 429, body: { error: 'too many tasks created; wait a moment' }, headers: { 'Retry-After': String(limit.retryAfter) } };
+  try {
+    const task = await browserRunner.createTask({
+      ownerId: ctx.principal.id,
+      objective: ctx.body?.objective,
+      criteria: ctx.body?.successCriteria,
+      plan: ctx.body?.plan,
+      entryUrl: ctx.body?.entryUrl,
+      sim: ctx.body?.sim,
+      driver: ctx.body?.driver,
+      deadlineMs: ctx.body?.deadlineMs,
+    });
+    audit(ctx.principal.id, ctx.principal.via, 'browser.task.create', { taskId: task.id, steps: task.plan.length }, 'allow', 'ok');
+    return { code: 201, body: { task } };
+  } catch (error) {
+    if (error.code === 'no-engine') return { code: 409, body: { error: error.message, hint: 'Install a browser engine on the gateway host — see GET /api/v1/browser/capabilities' } };
+    return { code: 400, body: { error: String(error.message || error) } };
+  }
+});
+
+route('GET', /^\/api\/v1\/browser\/tasks\/([\w-]+)$/, { permission: 'browser:read' }, (ctx) => {
+  const detail = browserRunner.getTaskDetail(ctx.match[1]);
+  if (!detail) return { code: 404, body: { error: 'task not found' } };
+  return { code: 200, body: detail };
+});
+
+route('POST', /^\/api\/v1\/browser\/tasks\/([\w-]+)\/(pause|resume|stop|assist)$/, { permission: 'browser:run', mutating: true }, (ctx) => {
+  const out = browserRunner.control(ctx.match[1], ctx.match[2], ctx.principal.id);
+  if (out.error) return { code: out.code, body: { error: out.error } };
+  audit(ctx.principal.id, ctx.principal.via, `browser.task.${ctx.match[2]}`, { taskId: ctx.match[1] }, 'allow', 'ok');
+  broadcast('browser', { type: `task.${ctx.match[2]}`, taskId: ctx.match[1] });
+  return { code: 200, body: { task: out.task } };
+});
+
+route('GET', /^\/api\/v1\/browser\/tasks\/([\w-]+)\/evidence\/([\w-]+)$/, { permission: 'browser:read' }, (ctx) => {
+  const row = browserRunner.getEvidence(ctx.match[1], ctx.match[2]);
+  if (!row) return { code: 404, body: { error: 'evidence not found' } };
+  return { code: 200, body: row };
+});
+
 route('POST', /^\/api\/v1\/dev\/seed$/, { permission: 'dev:seed', mutating: true }, (ctx) => {
   if (process.env.NODE_ENV === 'production' && process.env.MMM_ALLOW_SEED !== '1') {
     return { code: 403, body: { error: 'seeding is disabled in production (set MMM_ALLOW_SEED=1 to override)' } };
@@ -820,7 +877,7 @@ export function createGateway() {
           return;
         }
         if (msg?.type === 'subscribe' && Array.isArray(msg.topics)) {
-          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'system', 'audit', '*'].includes(t));
+          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'system', 'audit', '*'].includes(t));
           const refused = wanted.filter((t) => t !== '*' && !subscriptionFilter(t, client.principal));
           client.topics = new Set(wanted.filter((t) => !refused.includes(t)));
           ws.send(JSON.stringify({ topic: 'system', type: 'subscribed', topics: [...client.topics], refused, ts: Date.now() }));
@@ -840,6 +897,14 @@ export function createGateway() {
   // process open — `processQueue` is driven explicitly instead.
   const queueTicker = comms.startQueueTicker();
 
+  // Browser tasks: the fan-out first, then the ticker that advances them, then re-attach whatever was
+  // running when the process last stopped (it resumes from its checkpoint, after inspecting the page).
+  setBrowserBroadcast(broadcast);
+  const browserTicker = browserRunner.startTicker();
+  if (process.env.MMM_BROWSER_RESUME !== '0') {
+    browserRunner.resumeInterrupted().catch(() => {});
+  }
+
   return {
     server,
     wss,
@@ -847,6 +912,7 @@ export function createGateway() {
     authMode: mode.mode,
     authWarning: mode.warning,
     queueTicker,
+    browserTicker,
     /** Test seam: route provider calls to a local mock instead of the network. */
     setFetch(fn) { gatewayFetch = fn; comms.setServiceFetch(fn); },
   };
@@ -872,6 +938,12 @@ export async function startGateway({ port = PORT } = {}) {
 
 const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invokedDirectly) {
+  const stop = () => {
+    try { browserRunner.shutdown(); } catch { /* nothing left to close */ }
+    process.exit(0);
+  };
+  process.on('SIGTERM', stop);
+  process.on('SIGINT', stop);
   startGateway().catch((err) => {
     console.error(`gateway failed to start: ${err.message}`);
     process.exit(1);

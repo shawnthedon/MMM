@@ -19,6 +19,7 @@ export const routes = [
   { id: 'models', label: 'Models', icon: 'model', title: 'Model Gateway' },
   { id: 'plugins', label: 'Plugins', icon: 'plug', title: 'Plugin Marketplace' },
   { id: 'comms', label: 'Comms', icon: 'broadcast', title: 'Comms' },
+  { id: 'browser', label: 'Agent Browser', icon: 'globe', title: 'Agent Browser' },
   { id: 'local', label: 'Local', icon: 'cpu', title: 'Local AI' },
   { id: 'voice', label: 'Voice Studio', icon: 'mic', title: 'Voice Studio' },
   // Kept as routes for titles/highlighting, but not shown in the All-modules grid (see HIDDEN).
@@ -243,7 +244,10 @@ function moreSheet(navigate) {
   const items = routes.filter((r) => !HIDDEN.includes(r.id));
   // 'Local' is the entry point for the on-device AI work (spec §12 phase 1: audit/preflight only).
   // It is flagged so nobody mistakes it for a finished runtime.
-  const isNew = (id) => id === 'local';
+  // 'Local' is preflight-only and 'Agent Browser' needs an engine installed on the gateway host;
+  // both are flagged so nobody mistakes them for something that works out of the box.
+  const isNew = (id) => id === 'local' || id === 'browser';
+  const newNote = (id) => (id === 'browser' ? ' — new, needs a browser engine on the gateway' : ' — new, preflight only');
   openSheet({
     title: 'All modules',
     body: `<div class="row" style="gap:8px;margin-bottom:12px">
@@ -253,7 +257,7 @@ function moreSheet(navigate) {
     <div class="mod-grid" role="list">
       ${items.map((r) => `
         <button class="mod-tile" role="listitem" data-act="nav" data-to="${r.id}"
-                aria-label="${esc(r.label)}${isNew(r.id) ? ' — new, preflight only' : ''}">
+                aria-label="${esc(r.label)}${isNew(r.id) ? newNote(r.id) : ''}">
           <span class="mod-ico" aria-hidden="true">${icon(r.icon, 20)}</span>
           <span class="mod-label">${esc(r.label)}</span>
           ${isNew(r.id) ? '<span class="mod-badge">new</span>' : ''}

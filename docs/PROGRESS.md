@@ -87,6 +87,20 @@
   observed HTTP(S) requests. Mobile airplane mode remains unverified.
 - ⬜ Phases 3–6 (model manager, offline text product, image feasibility/feature) — not started.
 
+### Agent Browser — autonomous browsing that stops when it should — ✅ module, ⬜ engine on host
+- ✅ `apps/gateway/src/browser/` — policy + states, stall watchdog, loop detection, bounded recovery
+  ladder, checkpoints, evidence, one action per tick, `resumeInterrupted()` on boot
+- ✅ `apps/gateway/migrations/004_browser.sql` — `browser_tasks` / `browser_steps` / `browser_evidence`
+- ✅ API + RBAC (`browser:read` Observer, `browser:run` Operator) + `browser` WebSocket topic
+- ✅ `src/browser.js` + `src/browser.css` — mobile-first panel: objective, site, last verified
+  milestone, time since progress, recovery counters, blocker, timeline, evidence viewer,
+  pause / resume / stop / assist; no fabricated activity, no inert controls
+- ✅ Tests: `npm run test:browser` (22, AT-15…AT-26), `npm run test:browser:engine` (7, real Chromium),
+  `npm run test:browser-ui` (8, screen)
+- ⬜ Install Chromium on the deployment host and record one real task before calling the capability
+  `available`; ⬜ per-principal domain allowlist; ⬜ evidence in object storage; ⬜ downloads
+- Doc: [`browser/AGENT_BROWSER.md`](browser/AGENT_BROWSER.md)
+
 ### Comms — server-side credentials + routes — ✅
 - ✅ **Migration 003** — `comms_channels` (encrypted config, routing, verification), `comms_messages`
   (one row per attempt, dedupe key, retry cursor), `comms_settings` (quiet hours, rate limit, retries).
