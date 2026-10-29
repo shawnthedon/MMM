@@ -13,7 +13,7 @@
 | --- | --- |
 | Framework | Plain ES modules + Vite 6, no UI framework. `src/*.js` modules, hash router in `src/main.js`, views registered on a `views` object. |
 | Platform targets | Installable **PWA** (manifest + service worker), mobile-first web. No native shell: no Capacitor, Cordova, React Native, Flutter or Electron in the dependency tree. |
-| Persistence | `localStorage` workspace store (`swarmos-state-v1`) for UI state; the gateway has SQLite (`better-sqlite3` → `node:sqlite` fallback) behind REST + WebSocket. **No IndexedDB and no OPFS usage yet.** |
+| Persistence | `localStorage` workspace store (`mmm-state-v1`) for UI state; the gateway has SQLite (`better-sqlite3` → `node:sqlite` fallback) behind REST + WebSocket. **No IndexedDB and no OPFS usage yet.** |
 | Native extensions | None. Server side is a Node gateway (`apps/gateway`); nothing runs on-device outside the browser sandbox. |
 | Build / tests | `npm run build` (Vite), `npm test` → smoke, copilot, auth, read-sync, designer, skills, comms, responsive, local, gateway. happy-dom harnesses with a CSS stub (`scripts/register-css-stub.mjs`). |
 | Design system | `src/styles.css` tokens + mobile-first rules in [`../ui/responsive.md`](../ui/responsive.md); no component library. |

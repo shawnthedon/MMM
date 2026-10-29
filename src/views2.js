@@ -641,7 +641,7 @@ views.telegram = {
     return `
       <div class="page-head">
         <h1>Telegram Bridge</h1>
-        <div class="sub">OpenClaw command layer — control SwarmOS from anywhere</div>
+        <div class="sub">OpenClaw command layer — control MMM from anywhere</div>
       </div>
       <div class="card">
         <div class="row between">
@@ -664,7 +664,7 @@ views.telegram = {
       <div class="phone">
         <div class="p-head">
           <div class="avatar sm" style="background:var(--brand)">S</div>
-          <div class="grow"><div class="strong small">SwarmOS Control</div><div class="tiny" style="opacity:.7">bot · always on</div></div>
+          <div class="grow"><div class="strong small">MMM Control</div><div class="tiny" style="opacity:.7">bot · always on</div></div>
         </div>
         <div class="p-body" id="tg-body">
           ${tg.messages.map((m) => `<div class="tg-msg ${m.from}">${esc(m.text).replace(/\n/g, '<br>')}</div>`).join('')}
@@ -702,7 +702,7 @@ on('tg-link', () => {
 });
 on('tg-test', () => {
   setState((s) => {
-    s.telegram.messages.push({ from: 'bot', ts: now(), text: '✅ Test notification from SwarmOS\ngateway healthy · approvals route here' });
+    s.telegram.messages.push({ from: 'bot', ts: now(), text: '✅ Test notification from MMM\ngateway healthy · approvals route here' });
     logEvent('telegram', 'Test notification sent');
   }, 'tg-test');
   import('./main.js').then((m) => m.rerender());
@@ -997,7 +997,7 @@ views.settings = {
 
       <div class="section-title">About</div>
       <div class="card tiny muted" style="line-height:1.8">
-        SwarmOS PWA prototype · v0.1.0<br>
+        MMM PWA prototype · v0.1.0<br>
         Self-hosted gateway · zero external dependencies<br>
         PWA: installable · offline shell · background queue
         <button class="btn block sm" data-act="install-pwa" style="margin-top:10px">${icon('download', 14)} Install app</button>

@@ -65,7 +65,7 @@ export const SKILLS = [
   },
   {
     id: 'sk-6', name: 'core.citations', version: '1.0.2', origin: 'marketplace', status: 'active', installed: true,
-    category: 'Governance', author: 'SwarmLab core', license: 'MIT', compat: ['LangGraph', 'CrewAI', 'OpenAI Swarm', 'Swarmzero'],
+    category: 'Governance', author: 'MMM HQ core', license: 'MIT', compat: ['LangGraph', 'CrewAI', 'OpenAI Swarm', 'Swarmzero'],
     perms: [], tools: [], success: 0.99, invokes: 1204,
     desc: 'Citation formatting & dedupe.', inputs: ['claims'], outputs: ['sources.json'],
     updated: '2026-08-30', changelog: ['1.0.2 — stable ordering'],
@@ -123,14 +123,14 @@ export const SKILLS = [
   },
   {
     id: 'sk-14', name: 'gov.approval-request', version: '1.1.0', origin: 'marketplace', status: 'active',
-    category: 'Governance', author: 'SwarmLab core', license: 'MIT', compat: ['LangGraph', 'CrewAI', 'OpenAI Swarm'],
+    category: 'Governance', author: 'MMM HQ core', license: 'MIT', compat: ['LangGraph', 'CrewAI', 'OpenAI Swarm'],
     perms: ['approval.request'], tools: [], success: 0.98, invokes: 640,
     desc: 'Raise a scoped approval gate with evidence and rollback notes.', inputs: ['action', 'evidence'], outputs: ['gate'],
     updated: '2026-10-16', changelog: ['1.1.0 — require rollback text'],
   },
   {
     id: 'sk-15', name: 'gov.secret-redaction', version: '2.0.0', origin: 'marketplace', status: 'active',
-    category: 'Governance', author: 'SwarmLab core', license: 'MIT', compat: ['LangGraph', 'CrewAI', 'OpenAI Swarm', 'Swarmzero'],
+    category: 'Governance', author: 'MMM HQ core', license: 'MIT', compat: ['LangGraph', 'CrewAI', 'OpenAI Swarm', 'Swarmzero'],
     perms: [], tools: [], success: 0.99, invokes: 1520,
     desc: 'Strip keys, tokens and PII from logs before they are stored.', inputs: ['text'], outputs: ['redacted'],
     updated: '2026-10-20', changelog: ['2.0.0 — pattern set v2, no silent drop'],
@@ -160,7 +160,7 @@ export const SKILLS = [
   },
   {
     id: 'sk-19', name: 'ops.budget-guard', version: '1.2.0', origin: 'marketplace', status: 'active',
-    category: 'Operations', author: 'SwarmLab core', license: 'MIT', compat: ['LangGraph', 'CrewAI'],
+    category: 'Operations', author: 'MMM HQ core', license: 'MIT', compat: ['LangGraph', 'CrewAI'],
     perms: [], tools: [], success: 0.95, invokes: 388,
     desc: 'Estimate spend before a run and stop at the cap.',
     inputs: ['plan'], outputs: ['verdict'],
@@ -183,7 +183,7 @@ export const SKILLS = [
   },
   {
     id: 'sk-22', name: 'agent.handoff-a2a', version: '0.2.0', origin: 'marketplace', status: 'active',
-    category: 'Interoperability', author: 'SwarmLab core', license: 'MIT', compat: [],
+    category: 'Interoperability', author: 'MMM HQ core', license: 'MIT', compat: [],
     perms: ['agent.comm'], tools: [], success: 0.6, invokes: 4,
     desc: 'Describe a task hand-off envelope between two agents.',
     inputs: ['task'], outputs: ['envelope'],
@@ -192,7 +192,7 @@ export const SKILLS = [
   },
   {
     id: 'sk-23', name: 'mcp.tool-discovery', version: '0.3.0', origin: 'marketplace', status: 'active',
-    category: 'Interoperability', author: 'SwarmLab core', license: 'MIT', compat: [],
+    category: 'Interoperability', author: 'MMM HQ core', license: 'MIT', compat: [],
     perms: [], tools: [], success: 0.5, invokes: 3,
     desc: 'List tools advertised by registered MCP servers.',
     inputs: [], outputs: ['tools.json'],
@@ -201,7 +201,7 @@ export const SKILLS = [
   },
   {
     id: 'sk-24', name: 'eval.regression-suite', version: '1.0.3', origin: 'marketplace', status: 'active',
-    category: 'Quality', author: 'SwarmLab core', license: 'MIT', compat: ['LangGraph', 'CrewAI', 'OpenAI Swarm'],
+    category: 'Quality', author: 'MMM HQ core', license: 'MIT', compat: ['LangGraph', 'CrewAI', 'OpenAI Swarm'],
     perms: ['artifacts.write'], tools: [], success: 0.97, invokes: 320,
     desc: 'Replay a fixed eval set and diff the outcome.', inputs: ['evals.yaml'], outputs: ['report.md'],
     updated: '2026-10-17', changelog: ['1.0.3 — fail on missing baseline'],

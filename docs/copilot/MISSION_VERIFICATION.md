@@ -23,13 +23,13 @@ this checkout. `docs/DESIGN_SPEC.md` exists but does not replace the missing mas
 
 ## Security and compatibility notes
 
-* SW `swarmos-v3` deletes older `swarmos-*` caches on activation; the old worker can still serve its
+* SW `mmm-v3` deletes older `mmm-*` caches on activation; the old worker can still serve its
   old cache until a client updates and activates the new worker. Client requests bypass CacheStorage;
   browser tests use a real same-origin mock gateway. This is not a cross-browser acceptance test.
 * A failed logout clears the local session and warns that server revocation was not confirmed;
   the server cookie may still be valid. No client can guarantee revocation during a network outage.
 * WebSocket origin checks permit the explicit CORS allowlist and same-host browser origins. A
-  reverse proxy must preserve the external Host or configure `SWARMOS_CORS_ORIGIN`. No-Origin
+  reverse proxy must preserve the external Host or configure `MMM_CORS_ORIGIN`. No-Origin
   non-browser clients remain supported. Revoked credentials are rejected at the next inbound
   message or outbound broadcast, not by a periodic disconnect timer.
 * SMS `baseUrl` is restricted to `https://api.twilio.com`, with redirects refused. Existing custom

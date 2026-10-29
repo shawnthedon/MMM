@@ -20,13 +20,13 @@ try {
   // Simulate the previous worker's cached, unisolated document before the new worker installs.
   await page.goto(`${base}/manifest.webmanifest`);
   await page.evaluate(async () => {
-    const old = await caches.open('swarmos-v1');
+    const old = await caches.open('mmm-v1');
     await old.put('./index.html', new Response('<html>old shell</html>', { headers: { 'content-type': 'text/html' } }));
   });
   await page.goto(url, { waitUntil: 'networkidle0' });
   await page.waitForSelector('#local-caps .local-row');
   await page.evaluate(() => navigator.serviceWorker.ready);
-  assert.equal(await page.evaluate(async () => (await caches.keys()).includes('swarmos-v1')), false, 'old unisolated cache is removed');
+  assert.equal(await page.evaluate(async () => (await caches.keys()).includes('mmm-v1')), false, 'old unisolated cache is removed');
   console.log('PASS activation removes the pre-isolation shell cache');
   // Reload to make the registered service worker control the document and cache built assets.
   await page.reload({ waitUntil: 'networkidle0' });

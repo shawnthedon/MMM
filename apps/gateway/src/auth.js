@@ -1,10 +1,10 @@
-/* ============ SwarmOS auth — passwords, sessions, scoped tokens, lockout ============
+/* ============ MMM auth — passwords, sessions, scoped tokens, lockout ============
  * Deliberately dependency-free (node:crypto only):
  *   • Passwords: scrypt (memory-hard, built into Node) with per-user salt and stored parameters.
  *     argon2id would be preferable but would add a native dependency; see docs for the trade-off.
  *   • Sessions: random 256-bit bearer secrets; only their SHA-256 is stored. HttpOnly cookie for
  *     the PWA, plus a CSRF token derived with HMAC for cookie-authenticated mutations.
- *   • API tokens: `swk_…`, hashed at rest, scoped to a subset of the holder's permissions.
+ *   • API tokens: `mmm_…`, hashed at rest, scoped to a subset of the holder's permissions.
  *   • Lockout: failed logins are recorded in `auth_attempts`; the window is enforced in-process
  *     and survives restarts because the attempts are persisted.
  */
@@ -12,20 +12,20 @@ import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from
 import { db } from './db.js';
 import { PERMISSIONS, ROLE_PERMISSIONS, can, permissionsFor, isRole } from './rbac.js';
 
-export const SESSION_COOKIE = 'swarmos_session';
-export const CSRF_HEADER = 'x-swarmos-csrf';
+export const SESSION_COOKIE = 'mmm_session';
+export const CSRF_HEADER = 'x-mmm-csrf';
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 };
-const SESSION_TTL_MS = Number(process.env.SWARMOS_SESSION_TTL_MS || 12 * 60 * 60 * 1000);
-const LOGIN_WINDOW_MS = Number(process.env.SWARMOS_LOGIN_WINDOW_MS || 5 * 60 * 1000);
-const LOGIN_MAX_FAILURES = Number(process.env.SWARMOS_LOGIN_MAX_FAILURES || 5);
-const LOCKOUT_MS = Number(process.env.SWARMOS_LOCKOUT_MS || 15 * 60 * 1000);
-const MIN_PASSWORD_LENGTH = Number(process.env.SWARMOS_MIN_PASSWORD || 12);
+const SESSION_TTL_MS = Number(process.env.MMM_SESSION_TTL_MS || 12 * 60 * 60 * 1000);
+const LOGIN_WINDOW_MS = Number(process.env.MMM_LOGIN_WINDOW_MS || 5 * 60 * 1000);
+const LOGIN_MAX_FAILURES = Number(process.env.MMM_LOGIN_MAX_FAILURES || 5);
+const LOCKOUT_MS = Number(process.env.MMM_LOCKOUT_MS || 15 * 60 * 1000);
+const MIN_PASSWORD_LENGTH = Number(process.env.MMM_MIN_PASSWORD || 12);
 
 /* ---------- server secret (session pepper + CSRF) ---------- */
 let cachedSecret = null;
 function serverSecret() {
   if (cachedSecret) return cachedSecret;
-  const env = process.env.SWARMOS_AUTH_SECRET;
+  const env = process.env.MMM_AUTH_SECRET;
   if (env && env.length >= 32) {
     cachedSecret = env;
     return cachedSecret;
@@ -222,7 +222,7 @@ export function createApiToken({ principalId, name = '', scopes = [], expiresInD
   const illegal = requested.filter((s) => s !== '*' && !held.includes(s));
   if (illegal.length) throw new Error(`scopes above the principal's role: ${illegal.join(', ')}`);
 
-  const token = newSecret('swk_');
+  const token = newSecret('mmm_');
   const id = `tok-${randomBytes(6).toString('hex')}`;
   const now = Date.now();
   const expiresAt = expiresInDays ? now + Number(expiresInDays) * 86400000 : null;
@@ -318,13 +318,13 @@ export function revalidateContext(context) {
 
 /* ---------- request authentication ---------- */
 export function authMode() {
-  const configured = String(process.env.SWARMOS_AUTH || 'required').toLowerCase();
+  const configured = String(process.env.MMM_AUTH || 'required').toLowerCase();
   const production = process.env.NODE_ENV === 'production';
   if (configured === 'dev-open' && production) {
-    return { mode: 'required', warning: 'SWARMOS_AUTH=dev-open refused in production; running in required mode' };
+    return { mode: 'required', warning: 'MMM_AUTH=dev-open refused in production; running in required mode' };
   }
   if (['required', 'dev-open'].includes(configured)) return { mode: configured };
-  return { mode: 'required', warning: `unknown SWARMOS_AUTH="${configured}", defaulting to required` };
+  return { mode: 'required', warning: `unknown MMM_AUTH="${configured}", defaulting to required` };
 }
 
 export function parseCookies(header = '') {
@@ -355,7 +355,7 @@ export function authenticate(req) {
   const ip = clientIp(req);
   const bearer = bearerFrom(req);
   if (bearer) {
-    if (bearer.startsWith('swk_')) {
+    if (bearer.startsWith('mmm_')) {
       const out = resolveBearer(bearer, ip);
       if (out.error) return { error: out.error, status: out.status || 401 };
       return { principal: out.principal };
@@ -378,7 +378,7 @@ export function authenticate(req) {
 
   const { mode } = authMode();
   if (mode === 'dev-open') {
-    const role = isRole(process.env.SWARMOS_DEV_ROLE) ? process.env.SWARMOS_DEV_ROLE : 'Operator';
+    const role = isRole(process.env.MMM_DEV_ROLE) ? process.env.MMM_DEV_ROLE : 'Operator';
     return {
       principal: {
         id: 'anonymous',
@@ -426,7 +426,7 @@ export function sessionCookie(token, { secure = false, maxAgeMs = SESSION_TTL_MS
 export const clearSessionCookie = () => `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
 
 export const wantsSecureCookie = (req) =>
-  process.env.SWARMOS_SECURE_COOKIES === '1' ||
+  process.env.MMM_SECURE_COOKIES === '1' ||
   process.env.NODE_ENV === 'production' ||
   String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
 
@@ -462,7 +462,7 @@ function randomPassword() {
 /**
  * Ensure at least one Owner exists. Order of preference:
  *   1. existing Owner (nothing to do)
- *   2. SWARMOS_BOOTSTRAP_EMAIL + SWARMOS_BOOTSTRAP_PASSWORD (or BOOTSTRAP_ADMIN_*)
+ *   2. MMM_BOOTSTRAP_EMAIL + MMM_BOOTSTRAP_PASSWORD (or BOOTSTRAP_ADMIN_*)
  *   3. development: generate a password and print it once, flagged must_change_password
  * Production without bootstrap credentials refuses to start: no silent default admin.
  */
@@ -470,14 +470,14 @@ export function bootstrapOwner({ quiet = false } = {}) {
   const existing = db.prepare("SELECT id, email FROM principals WHERE role = 'Owner' AND status = 'active'").all();
   if (existing.length) return { created: false, owners: existing.length };
 
-  const email = validateEmail(process.env.SWARMOS_BOOTSTRAP_EMAIL || process.env.BOOTSTRAP_ADMIN_EMAIL || '');
-  let password = process.env.SWARMOS_BOOTSTRAP_PASSWORD || process.env.BOOTSTRAP_ADMIN_PASSWORD || '';
+  const email = validateEmail(process.env.MMM_BOOTSTRAP_EMAIL || process.env.BOOTSTRAP_ADMIN_EMAIL || '');
+  let password = process.env.MMM_BOOTSTRAP_PASSWORD || process.env.BOOTSTRAP_ADMIN_PASSWORD || '';
   const production = process.env.NODE_ENV === 'production';
 
   if (!email || !password) {
     if (production) {
       throw new Error(
-        'No Owner principal exists. Set SWARMOS_BOOTSTRAP_EMAIL and SWARMOS_BOOTSTRAP_PASSWORD ' +
+        'No Owner principal exists. Set MMM_BOOTSTRAP_EMAIL and MMM_BOOTSTRAP_PASSWORD ' +
           'for the first start (or seed an owner deliberately). Refusing to run without an owner.'
       );
     }
@@ -491,11 +491,11 @@ export function bootstrapOwner({ quiet = false } = {}) {
         [
           '',
           '──────────────────────────────────────────────────────────────',
-          ' SwarmOS bootstrap owner created',
+          ' MMM bootstrap owner created',
           '   email:    owner@localhost',
           `   password: ${generated}`,
           '   (printed once — change it after login; store it in a password manager)',
-          ' Set SWARMOS_BOOTSTRAP_EMAIL / SWARMOS_BOOTSTRAP_PASSWORD to choose your own.',
+          ' Set MMM_BOOTSTRAP_EMAIL / MMM_BOOTSTRAP_PASSWORD to choose your own.',
           '──────────────────────────────────────────────────────────────',
           '',
         ].join('\n')
@@ -505,7 +505,7 @@ export function bootstrapOwner({ quiet = false } = {}) {
   }
 
   const problem = passwordProblem(password);
-  if (problem) throw new Error(`SWARMOS_BOOTSTRAP_PASSWORD rejected: ${problem}`);
+  if (problem) throw new Error(`MMM_BOOTSTRAP_PASSWORD rejected: ${problem}`);
   const id = `user-${email.split('@')[0].replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
   db.prepare(`INSERT OR REPLACE INTO principals (id, type, name, role, trust, created_at, email, password_hash, status, must_change_password, created_by)
               VALUES (?,?,?,?,?,?,?,?,?,?,?)`)

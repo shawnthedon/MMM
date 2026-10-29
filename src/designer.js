@@ -25,7 +25,7 @@ import { views } from './views1.js';
 import './designer.css';
 import { setDesignerSummary } from './designerSummary.js';
 
-const DRAFT_KEY = 'swarmos.agentDraft.v1';
+const DRAFT_KEY = 'mmm.agentDraft.v1';
 
 /* =========================================================================================
  * Catalogues — everything here is read from the app's own data, never invented.

@@ -1,4 +1,4 @@
-/* ============ SwarmOS API client ============
+/* ============ MMM API client ============
  * Transport for the gateway. Two modes:
  *   demo — no gateway configured; the app runs on local seeded state (nothing is enforced).
  *   api  — a gateway URL is configured; the app authenticates and enforces through it.
@@ -8,8 +8,8 @@
  * exposes via /api/v1/auth/session. No credential is ever kept in localStorage.
  */
 
-const CONFIG_KEY = 'swarmos.gateway';
-const CSRF_HEADER = 'x-swarmos-csrf';
+const CONFIG_KEY = 'mmm.gateway';
+const CSRF_HEADER = 'x-mmm-csrf';
 
 function envUrl() {
   try {
@@ -139,7 +139,7 @@ async function request(path, { method = 'GET', body, headers = {}, timeoutMs = 8
     );
   }
 
-  const requestId = res.headers.get('x-swarmos-request-id');
+  const requestId = res.headers.get('x-mmm-request-id');
   let text;
   try { text = await res.text(); } catch (err) {
     cleanup();
@@ -159,7 +159,7 @@ async function request(path, { method = 'GET', body, headers = {}, timeoutMs = 8
 
   if (!res.ok) {
     if (res.status === 401 && !['/api/v1/auth/login', '/api/v1/auth/session'].includes(path) && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('swarmos:unauthenticated', { detail: { path } }));
+      window.dispatchEvent(new CustomEvent('mmm:unauthenticated', { detail: { path } }));
     }
     const message =
       payload?.error ||

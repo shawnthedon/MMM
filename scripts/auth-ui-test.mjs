@@ -53,7 +53,7 @@ const SESSION_BODY = {
 function reply({ status, body }) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', 'x-swarmos-request-id': 'req-stub' },
+    headers: { 'content-type': 'application/json', 'x-mmm-request-id': 'req-stub' },
   });
 }
 
@@ -193,7 +193,7 @@ await check('agent creation goes through the gateway with CSRF and reports the g
   const post = calls.find((c) => c.path === '/api/v1/agents' && c.method === 'POST');
   assert(post, 'no POST /api/v1/agents request');
   eq(post.credentials, 'include', 'credentials mode');
-  eq(post.headers['x-swarmos-csrf'], 'csrf-token-abc', 'CSRF header must be sent');
+  eq(post.headers['x-mmm-csrf'], 'csrf-token-abc', 'CSRF header must be sent');
   const text = panel().querySelector('#copilot-work').textContent;
   assert(/created on the gateway/i.test(text), `result should cite the gateway (got: ${text.slice(-300)})`);
   assert(/ag-api-1/.test(text), 'should include the gateway record id');
@@ -289,11 +289,11 @@ await check('a 401 during work drops the app back to sign-in', async () => {
 
 /* ---------- 8. gateway URL persistence + logout ---------- */
 await check('gateway URL persists locally but credentials never do', async () => {
-  const raw = win.localStorage.getItem('swarmos.gateway');
+  const raw = win.localStorage.getItem('mmm.gateway');
   eq(raw, 'http://gateway.test', 'gateway url stored');
   const dump = JSON.stringify({ ...win.localStorage });
   assert(!/OwnerPassw0rd/.test(dump), 'password must never be persisted');
-  assert(!/swarmos_session/i.test(dump), 'session cookie must never be persisted by the client');
+  assert(!/mmm_session/i.test(dump), 'session cookie must never be persisted by the client');
 });
 
 await check('signing out clears the session state', async () => {

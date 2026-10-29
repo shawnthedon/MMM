@@ -1,4 +1,4 @@
-# 🚀 SwarmOS — Production Roadmap: Out of Demo Mode, Into Live Operation
+# 🚀 MMM — Production Roadmap: Out of Demo Mode, Into Live Operation
 
 **Status:** authoritative execution plan
 **Written:** 2026-10-28 · **Baseline commit:** `743e45f` (`main`)
@@ -88,7 +88,7 @@ commands below, not by trusting the README.
 | Area | State | Proof |
 | --- | --- | --- |
 | Gateway HTTP + WebSocket server (zero-dep + `ws`) | ✅ | `npm run test:gateway` (28), `npm run test:comms-gateway` (27) |
-| Auth: session cookie, CSRF, `swk_` scoped bearer tokens, lockout, RBAC (Observer→Owner), hash-chained audit log | ✅ | `npm run test:gateway`, `npm run test:session-safety` |
+| Auth: session cookie, CSRF, `mmm_` scoped bearer tokens, lockout, RBAC (Observer→Owner), hash-chained audit log | ✅ | `npm run test:gateway`, `npm run test:session-safety` |
 | SQLite persistence (WAL) + migrations 001–003 | ✅ | `npm run migrate`; `apps/gateway/migrations/` |
 | Server-side Comms adapters (Telegram, WhatsApp, Discord, Slack, Twilio) with AES-256-GCM channel secrets, retry queue, signed inbound webhooks | ⚠️ | Code + mock-server tests pass (`npm run test:comms`, `27`); **no live provider has ever been verified** |
 | PWA: manifest, installable, versioned service worker, offline shell | ✅ | `public/sw.js`, `public/manifest.webmanifest`, `npm run test:sw-safety` |
@@ -103,10 +103,10 @@ commands below, not by trusting the README.
 | 1 | **No CI.** Tests are run by a human, on a laptop. Nothing blocks a broken merge. | no `.github/` directory at all |
 | 2 | **No supply chain / container target.** No `Dockerfile`, no `docker-compose.yml`, no SBOM, no image scanning. | root listing |
 | 3 | **No linter/formatter config.** README documents `npm run lint`; the script does not exist. | `package.json` scripts vs `README.md` “Quality checks” |
-| 4 | **A populated runtime database is committed to Git.** `data/swarmos.sqlite` + `-shm` + `-wal`, 675 KB, containing 1 principal, 26 providers, 9 tasks, 3 teams, 1 swarm. Schema is at migration 001 while the code is at 003. | `git ls-files data`; `.gitignore` has no `data/` |
+| 4 | **A populated runtime database is committed to Git.** `data/mmm.sqlite` + `-shm` + `-wal`, 675 KB, containing 1 principal, 26 providers, 9 tasks, 3 teams, 1 swarm. Schema is at migration 001 while the code is at 003. | `git ls-files data`; `.gitignore` has no `data/` |
 | 5 | **No observability.** Health endpoint only; no metrics, no structured logs, no traces, no error tracking, no uptime monitor, no alerting, no SLOs. | `apps/gateway/server.js` routes (`/healthz` is the only ops route) |
 | 6 | **No backup or restore path.** A single SQLite file in `./data`, no snapshot job, no tested restore. | no backup script; `DATA_DIR` unused beyond `db.js` |
-| 7 | **No rate limiting per principal** — one global `SWARMOS_RATE_LIMIT` (600) for the process. No per-token quotas, no spend caps enforced server-side. | `server.js` |
+| 7 | **No rate limiting per principal** — one global `MMM_RATE_LIMIT` (600) for the process. No per-token quotas, no spend caps enforced server-side. | `server.js` |
 | 8 | **Browser test suites are not in `npm test`.** `test:motion:browser`, `test:scroll:browser`, `test:voice:browser`, `test:relay:browser`, `test:isolation:browser`, `test:local-spike:browser`, `test:sw-safety:browser` must be run by hand. | `package.json` |
 | 9 | **7 API contracts are declared but do not exist**: swarm deploy/pause/resume/cancel, skills activate, chat messages, files, copilot messages, analytics series. | `packages/shared/api-routes.json` → `"planned"` |
 | 10 | **The product still runs a browser simulation ticker** that advances swarms and spend with `Math.random()`. | `src/main.js` `tick()` |
@@ -155,12 +155,12 @@ Read this before touching any code. It is the actual backlog of dishonesty.
 | **D16** 🟨 | **Training** | capability `training: blocked` | View exists; no backend | Keep blocked. Implement only with a real job runner (`jobs` table exists) — never a progress bar without a job. | job row + logs + artefact |
 | **D17** ⚠️ | **Comms delivery** | gateway routes `/api/v1/comms/*` | Real adapter code, real encryption, mock-tested only | L7: verify one provider end-to-end with a real bot in a private channel; record the message id. | provider-side message id in `comms_messages` |
 | **D18** 🟥 | **“Reset demo data”** | `src/views2.js` ~L995 + handler ~L1044; `src/core.js` `resetDemo()` | Destroys local state with a single confirm | L8: delete. Replace with an Owner-only **server-side** workspace reset (`POST /api/v1/admin/reset`) that is audited, typed-confirmed, and disabled in production by default. | button gone; route requires Owner + `audit_log` row |
-| **D19** 🟥 | **Dev seed route** | `POST /api/v1/dev/seed` (Owner-only, blocked in prod unless `SWARMOS_ALLOW_SEED=1`) | Restores the demo | L8: keep for local dev; ensure production `NODE_ENV=production` blocks it and add a startup assertion that prints a warning if `SWARMOS_ALLOW_SEED` is set. | gateway test asserts 403 in production mode |
-| **D20** 🟥 | **`fixtures/` + committed `data/`** | `fixtures/*.json`, `data/swarmos.sqlite*` | Demo seed ships in the repo and produces builds that can look populated | L8: `fixtures/` becomes test-only (loaded by tests, not by the SPA); `data/` moves to `.gitignore` and is purged from history; production DB is created by migrations + bootstrap only. | `git ls-files data` → empty; `fixtures` unreferenced by `src/` |
+| **D19** 🟥 | **Dev seed route** | `POST /api/v1/dev/seed` (Owner-only, blocked in prod unless `MMM_ALLOW_SEED=1`) | Restores the demo | L8: keep for local dev; ensure production `NODE_ENV=production` blocks it and add a startup assertion that prints a warning if `MMM_ALLOW_SEED` is set. | gateway test asserts 403 in production mode |
+| **D20** 🟥 | **`fixtures/` + committed `data/`** | `fixtures/*.json`, `data/mmm.sqlite*` | Demo seed ships in the repo and produces builds that can look populated | L8: `fixtures/` becomes test-only (loaded by tests, not by the SPA); `data/` moves to `.gitignore` and is purged from history; production DB is created by migrations + bootstrap only. | `git ls-files data` → empty; `fixtures` unreferenced by `src/` |
 | **D21** 🟨 | **Settings claims** | `src/views2.js` ~L985–988 | “4 templates active”, “AEAD-sealed vault”, “default-deny · proxy” as static text | L4/L8: compute each from real state (approval templates table, vault key presence, egress policy rows) or delete the row. | values derived, not typed |
 | **D22** 🟨 | **“Live simulation feed” toggle** | `src/views2.js` ~L951, `toggle-sim` ~L1033 | A user-facing switch that turns fabrication on/off | L3: delete with the ticker. Fire the migration that removes `settings.simulate` from persisted state. | `rg "simulate" src` → only legitimate uses |
 | **D23** 🟨 | **Provider/plugin usage counters** (`callsToday`, `latency`) | seeded fixtures; `views2.js` L405, L747, L797 | Counts that no meter produced | L5/L7: derive from `usage`/`audit_log`, or remove the field from the UI and the fixture. | counter equals `SELECT count(*)` |
-| **D24** 🟧 | **Demo Owner identity** (`user-maya`, trust 100) seeded in the committed DB and fixtures | `apps/gateway/src/seed.js`, `data/swarmos.sqlite` | A real-looking Owner that never authenticated | L1: bootstrap the first Owner from env (`SWARMOS_BOOTSTRAP_EMAIL/PASSWORD`) or print a one-time generated password; never seed a principal with a known role in production. | fresh DB → login works; `SELECT count(*) FROM principals` = 1 with hash set |
+| **D24** 🟧 | **Demo Owner identity** (`user-maya`, trust 100) seeded in the committed DB and fixtures | `apps/gateway/src/seed.js`, `data/mmm.sqlite` | A real-looking Owner that never authenticated | L1: bootstrap the first Owner from env (`MMM_BOOTSTRAP_EMAIL/PASSWORD`) or print a one-time generated password; never seed a principal with a known role in production. | fresh DB → login works; `SELECT count(*) FROM principals` = 1 with hash set |
 
 ### 2.3 The de-demo rule of thumb
 
@@ -261,18 +261,18 @@ ambiguous.
 1. Copy the environment template and generate a real secret:
    ```bash
    cp .env.example .env
-   openssl rand -base64 48      # paste into SWARMOS_AUTH_SECRET
+   openssl rand -base64 48      # paste into MMM_AUTH_SECRET
    ```
    Edit `.env`:
    ```
    PORT=8787
    DATA_DIR=./data
    NODE_ENV=development
-   SWARMOS_AUTH=required
-   SWARMOS_AUTH_SECRET=<the 48-byte value>
-   SWARMOS_BOOTSTRAP_EMAIL=owner@example.com
-   SWARMOS_BOOTSTRAP_PASSWORD=<a 20+ character passphrase>
-   SWARMOS_CORS_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
+   MMM_AUTH=required
+   MMM_AUTH_SECRET=<the 48-byte value>
+   MMM_BOOTSTRAP_EMAIL=owner@example.com
+   MMM_BOOTSTRAP_PASSWORD=<a 20+ character passphrase>
+   MMM_CORS_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
    ```
    > `.env` is already gitignored. Never paste the values into a chat, a screenshot, or a commit.
 2. Create the schema and start the server:
@@ -281,7 +281,7 @@ ambiguous.
    npm run migrate
    npm run dev:gateway
    ```
-   Expected: `SwarmOS gateway → http://localhost:8787  (ws: /ws, data: …, sqlite: …, auth: required)`
+   Expected: `MMM gateway → http://localhost:8787  (ws: /ws, data: …, sqlite: …, auth: required)`
    and no “No Owner principal exists” error.
 3. Prove it from the shell — health, login, authenticated read, CSRF-protected write:
    ```bash
@@ -295,7 +295,7 @@ ambiguous.
 
    CSRF=$(node -e "console.log(require('./login.json').csrfToken)")
    curl -s -b cookies.txt localhost:8787/api/v1/summary
-   curl -s -b cookies.txt -H "x-swarmos-csrf: $CSRF" \
+   curl -s -b cookies.txt -H "x-mmm-csrf: $CSRF" \
      -H 'content-type: application/json' -X POST localhost:8787/api/v1/tasks \
      -d '{"title":"first real task","agentId":"<an id from GET /api/v1/agents>"}'
    ```
@@ -306,7 +306,7 @@ ambiguous.
    ```
    Understand what this does: it writes demo rows into your own database. That is acceptable in
    development and forbidden in production (`NODE_ENV=production` blocks it unless
-   `SWARMOS_ALLOW_SEED=1`).
+   `MMM_ALLOW_SEED=1`).
 5. Verify the audit chain still holds after your writes:
    ```bash
    curl -s -b cookies.txt localhost:8787/api/v1/audit/verify
@@ -317,8 +317,8 @@ ambiguous.
 
 - [ ] `GET /healthz` returns `ok: true` and `auth.mode: "required"`.
 - [ ] Login returns a session cookie (`HttpOnly`, `SameSite=Strict`) and a `csrfToken`.
-- [ ] A POST without `x-swarmos-csrf` is refused with 403.
-- [ ] `swarmos.sqlite*` files appear in `data/` and are **not** in `git status`.
+- [ ] A POST without `x-mmm-csrf` is refused with 403.
+- [ ] `mmm.sqlite*` files appear in `data/` and are **not** in `git status`.
 - [ ] `npm run audit:verify` reports an intact chain.
 
 **Pitfalls**
@@ -326,7 +326,7 @@ ambiguous.
 - `npm install` may fail building `better-sqlite3` without Python/build tools. Use
   `npm install --ignore-scripts`; the gateway falls back to `node:sqlite` (experimental warning is
   expected). On a server, install build tools so you get the stable driver.
-- If `SWARMOS_AUTH=dev-open` is set locally, remember that production **refuses to start** with it.
+- If `MMM_AUTH=dev-open` is set locally, remember that production **refuses to start** with it.
   Do not build habits around it.
 - Port 8787 already in use → `lsof -i :8787`.
 
@@ -359,7 +359,7 @@ change in the entire roadmap.
    The header chip must now read `live gateway`, and the source note under a screen must say
    “refreshed <time>”.
 4. Make a change in the UI that the server owns (create a task), then reload. If it survives, the
-   read path is live. `PATCH`/`POST` paths must send `x-swarmos-csrf`; the API client already does.
+   read path is live. `PATCH`/`POST` paths must send `x-mmm-csrf`; the API client already does.
 5. Make **production builds require a gateway**. Add a guard so a release build cannot silently ship
    in demo mode:
    ```js
@@ -578,7 +578,7 @@ real export.
 
 **Steps**
 
-1. `GET/POST /api/v1/files`: content-type allowlist, hard size cap (`SWARMOS_BODY_LIMIT` is 256 KB —
+1. `GET/POST /api/v1/files`: content-type allowlist, hard size cap (`MMM_BODY_LIMIT` is 256 KB —
    raise deliberately or stream uploads), owner scoping, checksum, and a `files` row. Store bytes
    outside SQLite (filesystem under `DATA_DIR/files`, or object storage) with the DB holding metadata.
 2. `GET /api/v1/analytics/series/:metric?window=24h&bucket=1h` implemented as SQL aggregates over
@@ -648,7 +648,7 @@ early leaves you unable to test.
 3. Remove the `settings.simulate`, `gateway.sqlite … localStorage-backed demo`, and
    `Swarms and usage remain demo data` strings. Replace with live status or nothing.
 4. Make `POST /api/v1/dev/seed` absent (not merely refused) when `NODE_ENV=production`, and log a
-   startup warning if `SWARMOS_ALLOW_SEED` is set in production.
+   startup warning if `MMM_ALLOW_SEED` is set in production.
 5. Keep the provenance chip. It is now always `live gateway` in production — which is exactly the
    signal you want if it ever regresses.
 6. Sweep:
@@ -679,12 +679,12 @@ document for the *why* and the tutorial depth; use this for the *order* and the 
 
 | ID | Requirement | Evidence of completion | Prio · Gate |
 | --- | --- | --- | --- |
-| **SEC-01** | No secret in the client bundle, repo history, logs, URLs, or error messages. Only `VITE_*` public config is client-side. | `npm run scan:secrets` (gitleaks) clean; `grep -rE "sk-[A-Za-z0-9]{16,}\|whsec_\|xoxb-" dist/` empty; `.env` untracked; `git log -p -S "SWARMOS_BOOTSTRAP_PASSWORD"` shows only placeholders | P0 · G1 |
+| **SEC-01** | No secret in the client bundle, repo history, logs, URLs, or error messages. Only `VITE_*` public config is client-side. | `npm run scan:secrets` (gitleaks) clean; `grep -rE "sk-[A-Za-z0-9]{16,}\|whsec_\|xoxb-" dist/` empty; `.env` untracked; `git log -p -S "MMM_BOOTSTRAP_PASSWORD"` shows only placeholders | P0 · G1 |
 | **SEC-02** | Every data route authenticates and every route declares a permission; denials are audited. | `npm run test:gateway` includes a route × role matrix; a grep of `route(` shows no route without `{ permission }` except the documented public ones | P0 · G1 |
 | **SEC-03** | TLS everywhere; HTTP redirects to HTTPS; HSTS with a sane max-age; no mixed content. | `curl -sI https://host` shows `strict-transport-security`; browser console shows zero mixed-content warnings; `testssl.sh` grade ≥ A | P0 · G1 |
 | **SEC-04** | Security headers on every response, including the static app: CSP (no `unsafe-eval`), `X-Content-Type-Options`, `Referrer-Policy`, frame-ancestors, COOP/COEP (already required for on-device AI). | `npm run test:headers` hits dev, preview and prod URLs and asserts each header; securityheaders.com grade ≥ A | P0 · G1 |
 | **SEC-05** | Dependencies are pinned, audited, and updated deliberately; no high/critical advisories in the shipped graph. | `npm audit --omit=dev --audit-level=high` exits 0; Dependabot PRs enabled; lockfile committed; SBOM generated per release (DEP-06) | P0 · G1 |
-| **SEC-06** | All input validated server-side: body size, content type, string lengths, enum values, id shapes, JSON depth. | Contract tests per route with oversized/invalid bodies return 400/413; `SWARMOS_BODY_LIMIT` exercised | P0 · G1 |
+| **SEC-06** | All input validated server-side: body size, content type, string lengths, enum values, id shapes, JSON depth. | Contract tests per route with oversized/invalid bodies return 400/413; `MMM_BODY_LIMIT` exercised | P0 · G1 |
 | **SEC-07** | Sessions: `HttpOnly`, `SameSite=Strict`, `Secure` behind TLS, rotating secret, absolute + idle expiry, revocation on password change, fixation prevented. | `npm run test:session-safety`; a manual cookie inspection in DevTools shows all flags; revoking a session 401s immediately | P0 · G2 |
 | **SEC-08** | Rate limits and quotas exist per IP **and** per principal/token; login is limited harder than reads; a 429 includes `Retry-After`. | `npm run test:limits` (new): 100 parallel logins → 429; 20 parallel completions → 429; headers asserted | P0 · G2 |
 | **SEC-09** | Audit log covers every mutation and every denial, with actor, action, target, outcome, request id and IP; the hash chain verifies and a tampered row is detected. | `npm run test:gateway` includes a tamper test; `npm run audit:verify` in CI; a documented "who changed what" query | P0 · G2 |
@@ -698,7 +698,7 @@ document for the *why* and the tutorial depth; use this for the *order* and the 
 
 **Notes.** Two of these are already stronger than most production apps: the audit hash chain and the
 server-side secret vault. Do not weaken them to ship faster. The weakest link today is SEC-01 —
-`data/swarmos.sqlite` is committed, and any future migration that adds a password column would turn
+`data/mmm.sqlite` is committed, and any future migration that adds a password column would turn
 that into a live credential leak.
 
 ---
@@ -750,7 +750,7 @@ that into a live credential leak.
 | ID | Requirement | Evidence of completion | Prio · Gate |
 | --- | --- | --- | --- |
 | **OBS-01** | Structured JSON logs with level, timestamp, request id, principal id, route, status, duration. No `console.log` of objects. | A sample log file committed in `docs/ops/`; `rg "console.log" apps/gateway` justified per hit | P0 · G2 |
-| **OBS-02** | One request id flows browser → gateway → audit → provider call, and is returned in `x-swarmos-request-id` (already implemented) and shown in error UIs. | Trace one failing request end-to-end by id; the id appears in the UI error and the log line | P0 · G2 |
+| **OBS-02** | One request id flows browser → gateway → audit → provider call, and is returned in `x-mmm-request-id` (already implemented) and shown in error UIs. | Trace one failing request end-to-end by id; the id appears in the UI error and the log line | P0 · G2 |
 | **OBS-03** | `/metrics` (Prometheus) exposes request counts/latency histograms, error rate, WS connections, queue depth, DB size, model spend. Protected or bound to localhost. | `curl /metrics` parses; a Grafana dashboard screenshot is archived | P0 · G2 |
 | **OBS-04** | Dashboards for the four golden signals + business metrics (swarms running, spend today, approvals pending). | Dashboard JSON committed; link in `docs/ops/runbook.md` | P1 · G3 |
 | **OBS-05** | Alerts that page a human: 5xx rate, p95 latency, disk < 15 %, failed backups, audit chain failure, spend > 80 % of cap, cert expiry < 14 days. Each with a runbook link. | Alert rules committed; a fired test alert acknowledged in the on-call channel | P0 · G3 |
@@ -775,7 +775,7 @@ without OBS-01/03/05 you will discover outages from users.
 | **DEP-06** | One-command release with rollback: build → migrate → deploy → smoke → tag. Previous artefact retained and restorable in < 10 min. | Release runbook executed twice; a rollback performed on staging with timings | P0 · G3 |
 | **DEP-07** | Migrations are forward-only, idempotent, backed up before running, and reversible in practice by restore. Deploy order documented (migrate then start). | `npm run migrate` twice is a no-op; pre-migration backup file present | P0 · G3 |
 | **DEP-08** | Static asset caching and service-worker versioning correct: new `CACHE` name per release, no stale authenticated data. | `SW` cache version bumped in the release checklist; `npm run test:sw-safety` green | P1 · G3 |
-| **DEP-09** | Configuration is validated at boot with a single schema; missing/invalid values fail fast with a readable message. | Invalid `SWARMOS_*` values produce a specific exit message; test asserts it | P1 · G3 |
+| **DEP-09** | Configuration is validated at boot with a single schema; missing/invalid values fail fast with a readable message. | Invalid `MMM_*` values produce a specific exit message; test asserts it | P1 · G3 |
 
 ---
 
@@ -950,8 +950,8 @@ COPY package*.json ./
 COPY apps ./apps
 COPY src ./src
 COPY packages ./packages
-RUN useradd -r -u 10001 swarmos && mkdir -p /data && chown -R swarmos /data
-USER swarmos
+RUN useradd -r -u 10001 mmm && mkdir -p /data && chown -R mmm /data
+USER mmm
 VOLUME ["/data"]
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
@@ -960,8 +960,8 @@ CMD ["node","apps/gateway/server.js"]
 ```
 Build and run:
 ```bash
-docker build -t swarmos-gateway:$(git rev-parse --short HEAD) .
-docker run --rm -p 8787:8787 --env-file .env -v "$PWD/data:/data" swarmos-gateway:latest
+docker build -t mmm-gateway:$(git rev-parse --short HEAD) .
+docker run --rm -p 8787:8787 --env-file .env -v "$PWD/data:/data" mmm-gateway:latest
 curl -s localhost:8787/healthz
 ```
 **Note:** set `DATA_DIR=/data` in the container environment so the volume is actually used.
@@ -973,7 +973,7 @@ nine lines.
 
 `Caddyfile`:
 ```
-swarmos.example.com {
+mmm.example.com {
   encode zstd gzip
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -985,14 +985,14 @@ swarmos.example.com {
   handle /api/* { reverse_proxy 127.0.0.1:8787 }
   handle /healthz { reverse_proxy 127.0.0.1:8787 }
   handle /ws* { reverse_proxy 127.0.0.1:8787 }
-  handle { root * /srv/swarmos/dist
+  handle { root * /srv/mmm/dist
            try_files {path} /index.html
            file_server }
 }
 ```
 ```bash
 sudo systemctl reload caddy     # or: caddy run --config Caddyfile
-curl -sI https://swarmos.example.com | grep -i strict-transport
+curl -sI https://mmm.example.com | grep -i strict-transport
 ```
 Now set in the build environment:
 ```
@@ -1004,17 +1004,17 @@ security regression, not a fix.
 
 ### 5.5 Recipe: backups you have actually restored (DATA-01, DATA-02, REL-07)
 
-Never copy `swarmos.sqlite` while the process runs — a WAL copy can be torn. Use SQLite's own
+Never copy `mmm.sqlite` while the process runs — a WAL copy can be torn. Use SQLite's own
 mechanism:
 ```bash
 mkdir -p backups
-sqlite3 data/swarmos.sqlite ".backup 'backups/swarmos-$(date +%F-%H%M).sqlite'"
+sqlite3 data/mmm.sqlite ".backup 'backups/mmm-$(date +%F-%H%M).sqlite'"
 # verify immediately
-sqlite3 backups/swarmos-*.sqlite "PRAGMA integrity_check;"
+sqlite3 backups/mmm-*.sqlite "PRAGMA integrity_check;"
 ```
 Automate with a systemd timer or cron:
 ```cron
-15 2 * * * cd /srv/swarmos && ./scripts/backup.sh >> /var/log/swarmos-backup.log 2>&1
+15 2 * * * cd /srv/mmm && ./scripts/backup.sh >> /var/log/mmm-backup.log 2>&1
 ```
 `scripts/backup.sh` should: take the backup → integrity check → encrypt
 (`age -r <pubkey>` or `gpg -c`) → copy off-host (`rclone copy`, S3, or R2) → prune older than N days
@@ -1022,7 +1022,7 @@ Automate with a systemd timer or cron:
 
 The drill (do this once now, then quarterly):
 ```bash
-age -d -i key.txt backups/swarmos-2026-10-28-0215.sqlite.age > /tmp/restore.sqlite
+age -d -i key.txt backups/mmm-2026-10-28-0215.sqlite.age > /tmp/restore.sqlite
 sqlite3 /tmp/restore.sqlite "PRAGMA integrity_check; SELECT count(*) FROM tasks;"
 DATA_DIR=/tmp/restoreenv npm run dev:gateway    # point the gateway at the restored copy
 ```
@@ -1052,16 +1052,16 @@ your RTO/RPO evidence.
 3. Prometheus scrape config:
    ```yaml
    scrape_configs:
-     - job_name: swarmos
+     - job_name: mmm
        static_configs: [{ targets: ['127.0.0.1:8787'] }]
    ```
 4. Alerts (Prometheus rules or your host's alerting):
    - `rate(http_requests_total{status=~"5.."}[5m]) > 0.05` for 10 m
    - `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1`
    - `node_filesystem_avail_bytes / node_filesystem_size_bytes < 0.15`
-   - `swarmos_backup_age_hours > 36`
-   - `swarmos_audit_chain_ok == 0`
-   - `swarmos_model_spend_cents_today > 0.8 * cap`
+   - `mmm_backup_age_hours > 36`
+   - `mmm_audit_chain_ok == 0`
+   - `mmm_model_spend_cents_today > 0.8 * cap`
 5. Route every alert to one channel with a link to the runbook section that fixes it. An alert with no
    runbook link is a future 3 a.m. argument.
 
@@ -1145,7 +1145,7 @@ export default function () {
 }
 ```
 ```bash
-BASE=https://staging.example.com COOKIE="swarmos_session=…" k6 run load.js
+BASE=https://staging.example.com COOKIE="mmm_session=…" k6 run load.js
 ```
 Seed 10 000 tasks first, or the numbers mean nothing. Record p95, error rate, RSS, and DB size
 alongside the run.
@@ -1176,13 +1176,13 @@ Write it down as a numbered list and follow it twice:
 ```bash
 # 1. freeze: green CI on main
 # 2. back up before migrating
-sqlite3 data/swarmos.sqlite ".backup 'backups/pre-$(git rev-parse --short HEAD).sqlite'"
+sqlite3 data/mmm.sqlite ".backup 'backups/pre-$(git rev-parse --short HEAD).sqlite'"
 # 3. migrate
 npm run migrate
 # 4. build
 npm run build
 # 5. deploy artefact (immutable, tagged)
-docker build -t swarmos-gateway:$(git rev-parse --short HEAD) .
+docker build -t mmm-gateway:$(git rev-parse --short HEAD) .
 # 6. smoke
 npm run smoke && curl -fsS https://host/healthz && curl -fsS https://host/api/v1/summary -b cookie.txt
 # 7. tag
@@ -1217,7 +1217,7 @@ gate is green.
 
 ### Track B · Real gateway, real reads (L1–L2)
 
-- [ ] **B01** — `.env` with a generated `SWARMOS_AUTH_SECRET`, bootstrap Owner, exact CORS origins
+- [ ] **B01** — `.env` with a generated `MMM_AUTH_SECRET`, bootstrap Owner, exact CORS origins
 - [ ] **B02** — `npm run migrate` on a fresh DB; confirm migrations 001–003 apply in order
 - [ ] **B03** — Prove login + CSRF + authenticated read from `curl`; delete the cookie files
 - [ ] **B04** — Seed once; verify audit chain before and after
@@ -1290,7 +1290,7 @@ gate is green.
 - [ ] **H01** — `fixtures/` becomes test-only; the SPA never imports it
 - [ ] **H02** — Remove `resetDemo()`, `reset-demo` button/handler/hint
 - [ ] **H03** — Add Owner-only audited `POST /api/v1/admin/reset` (typed confirmation, prod-off by default)
-- [ ] **H04** — `dev/seed` absent in production builds; startup warning if `SWARMOS_ALLOW_SEED=1`
+- [ ] **H04** — `dev/seed` absent in production builds; startup warning if `MMM_ALLOW_SEED=1`
 - [ ] **H05** — Remove `localStorage-backed demo` and remaining demo strings
 - [ ] **H06** — Full sweep: every `demo|simulate|mock|fake|sample` hit justified or deleted
 - [ ] **H07** — Fresh-clone test: empty DB, production build, honest empty state, working sign-in
@@ -1652,7 +1652,7 @@ are for the exact mistakes this codebase is most likely to make.
 ```bash
 # ---------- setup ----------
 cp .env.example .env                     # then fill secrets by hand
-openssl rand -base64 48                  # SWARMOS_AUTH_SECRET
+openssl rand -base64 48                  # MMM_AUTH_SECRET
 npm ci --ignore-scripts                  # node_modules without native builds
 npm run migrate                          # apply 001..003 (+004 when written)
 npm run seed -- --reset                  # DEVELOPMENT ONLY: demo rows
@@ -1680,10 +1680,10 @@ npm run test:comms-gateway               # server-side credentials + delivery
 npm run audit:verify                     # hash-chain integrity
 
 # ---------- production (target state) ----------
-docker build -t swarmos-gateway:$(git rev-parse --short HEAD) .
-docker run -d --name swarmos --env-file .env -v /srv/swarmos/data:/data -p 8787:8787 swarmos-gateway:local
+docker build -t mmm-gateway:$(git rev-parse --short HEAD) .
+docker run -d --name mmm --env-file .env -v /srv/mmm/data:/data -p 8787:8787 mmm-gateway:local
 caddy run --config Caddyfile             # HTTPS + single origin
-sqlite3 data/swarmos.sqlite ".backup 'backups/pre-$(date +%F).sqlite'"
+sqlite3 data/mmm.sqlite ".backup 'backups/pre-$(date +%F).sqlite'"
 k6 run load.js                           # p95 + error rate
 npx lhci autorun                         # performance budget
 npx playwright test tests/a11y.spec.js   # accessibility gate
@@ -1705,17 +1705,17 @@ export LD_LIBRARY_PATH=/tmp/chromium-libs/lib:$LD_LIBRARY_PATH
 | `NODE_ENV` | ✅ | Enables production guards | `production` refuses `dev-open` auth and seeding |
 | `PORT` | ✅ | Gateway listen port | Put behind the proxy; do not expose publicly |
 | `DATA_DIR` | ✅ | SQLite + uploads location | Must be a persistent volume, not the image |
-| `SWARMOS_AUTH` | ✅ | `required` | Never `dev-open` in production |
-| `SWARMOS_AUTH_SECRET` | ✅ | Derives CSRF/HMAC | Generate once, store in a secret manager, rotate deliberately |
-| `SWARMOS_BOOTSTRAP_EMAIL` | ✅ (first boot) | First Owner | Remove or rotate after setup |
-| `SWARMOS_BOOTSTRAP_PASSWORD` | ✅ (first boot) | First Owner password | ≥ 12 chars; rotate after first login |
-| `SWARMOS_SECURE_COOKIES` | ✅ | Marks the session cookie `Secure` | Set when TLS terminates at the proxy |
-| `SWARMOS_CORS_ORIGIN` | ⚠️ | Exact origins, comma-separated | Unnecessary once you serve one origin (DEP-04) |
-| `SWARMOS_BODY_LIMIT` | ➖ | Default 262144 (256 KB) | Raise deliberately; stream uploads instead |
-| `SWARMOS_RATE_LIMIT` | ➖ | Global requests/window | Add per-principal limits (SEC-08) |
-| `SWARMOS_SESSION_TTL_MS` | ➖ | Default 12 h | Shorter for admins is reasonable |
-| `SWARMOS_LOGIN_MAX_FAILURES` / `SWARMOS_LOCKOUT_MS` | ➖ | Lockout policy | Keep ≥ 5 / 15 min |
-| `SWARMOS_ALLOW_SEED` | ❌ | Must stay unset in prod | Startup warning if set |
+| `MMM_AUTH` | ✅ | `required` | Never `dev-open` in production |
+| `MMM_AUTH_SECRET` | ✅ | Derives CSRF/HMAC | Generate once, store in a secret manager, rotate deliberately |
+| `MMM_BOOTSTRAP_EMAIL` | ✅ (first boot) | First Owner | Remove or rotate after setup |
+| `MMM_BOOTSTRAP_PASSWORD` | ✅ (first boot) | First Owner password | ≥ 12 chars; rotate after first login |
+| `MMM_SECURE_COOKIES` | ✅ | Marks the session cookie `Secure` | Set when TLS terminates at the proxy |
+| `MMM_CORS_ORIGIN` | ⚠️ | Exact origins, comma-separated | Unnecessary once you serve one origin (DEP-04) |
+| `MMM_BODY_LIMIT` | ➖ | Default 262144 (256 KB) | Raise deliberately; stream uploads instead |
+| `MMM_RATE_LIMIT` | ➖ | Global requests/window | Add per-principal limits (SEC-08) |
+| `MMM_SESSION_TTL_MS` | ➖ | Default 12 h | Shorter for admins is reasonable |
+| `MMM_LOGIN_MAX_FAILURES` / `MMM_LOCKOUT_MS` | ➖ | Lockout policy | Keep ≥ 5 / 15 min |
+| `MMM_ALLOW_SEED` | ❌ | Must stay unset in prod | Startup warning if set |
 | `VITE_GATEWAY_URL` | ✅ | Build-time API base | Use `/` for same-origin |
 | `SENTRY_DSN` | ➖ | Error tracking | Client-safe DSN; never a token |
 | `LOG_LEVEL` | ➖ | `info` in prod | `debug` only while diagnosing |

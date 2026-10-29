@@ -7,12 +7,12 @@ Nothing here is needed to use the panel: an unconfigured channel simply reports
 ## Where the values go
 
 * **Signed in to a gateway with `comms:write`** — the values are POSTed once, encrypted with
-  AES-256-GCM under a key derived from `SWARMOS_SECRET`, and stored in `comms_channels`. The browser
+  AES-256-GCM under a key derived from `MMM_SECRET`, and stored in `comms_channels`. The browser
   only ever receives `••••last4`. Delivery, retries and webhooks run on the gateway
   ([details](server-side.md)).
 * **No gateway session** — they stay in this browser's store, and the panel says so.
 
-Set `SWARMOS_SECRET` on the gateway before production: without it the gateway generates
+Set `MMM_SECRET` on the gateway before production: without it the gateway generates
 `data/.comms-key` and warns that the key is local to that machine.
 
 ## Redirect URLs to register with each provider
@@ -103,6 +103,6 @@ The in-app inbox works with no configuration at all.
 2. The panel masks stored secrets (`••••last4`) and never echoes the value back.
 3. Any credential change clears the verification badge until a new live test passes.
 4. Current build: credentials are stored in the browser's local store for the signed-in workspace.
-   The planned `comms_channels` table stores them server-side encrypted with `SWARMOS_SECRET`, and
+   The planned `comms_channels` table stores them server-side encrypted with `MMM_SECRET`, and
    then the browser copy is deleted — see the roadmap in [`channels.md`](channels.md).
 5. Rotate a token → save the new value → run **Send test** before re-enabling the channel.

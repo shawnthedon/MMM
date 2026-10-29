@@ -13,7 +13,7 @@ import { getDesignerSummary } from '../designerSummary.js';
 export const PACK = {
   version: 'repo:66b1bd3',
   built: '2026-10-26',
-  scope: 'MMM V2 / SwarmOS repository as cloned for Phase 0 discovery',
+  scope: 'MMM V2 / MMM repository as cloned for Phase 0 discovery',
 };
 
 /** @typedef {{id:string,title:string,type:string,module:string,tags:string[],status:'verified'|'observed'|'inferred'|'unknown',body:string,sources:{label:string,ref:string}[],updated:string,version:string,sensitivity:'internal'|'public'}} Entry */
@@ -22,16 +22,16 @@ export const PACK = {
 export const KNOWLEDGE = [
   {
     id: 'app.overview',
-    title: 'What SwarmOS (MMM V2) is',
+    title: 'What MMM (MMM V2) is',
     type: 'concept',
     module: 'product',
-    tags: ['overview', 'product', 'swarmos', 'mmm', 'scope', 'what'],
+    tags: ['overview', 'product', 'mmm', 'mmm', 'scope', 'what'],
     status: 'verified',
     version: PACK.version,
     updated: '2026-10-26',
     sensitivity: 'public',
     body:
-      'SwarmOS is a mobile-first control plane for AI agent operations: agent profiles, teams, swarms, tasks, skills, MCP plugins, a model-routing catalogue, trust/governance, artifacts and an embedded Copilot.\n' +
+      'MMM is a mobile-first control plane for AI agent operations: agent profiles, teams, swarms, tasks, skills, MCP plugins, a model-routing catalogue, trust/governance, artifacts and an embedded Copilot.\n' +
       'It ships as an installable PWA (Vite build) and is designed to run against one self-hosted gateway process (Node HTTP + WebSocket) with SQLite storage and a filesystem artifact directory.\n' +
       'Today the PWA renders seeded demo state from the browser; the gateway exists but the front end does not call it yet.',
     sources: [
@@ -132,7 +132,7 @@ export const KNOWLEDGE = [
     updated: '2026-10-26',
     sensitivity: 'internal',
     body:
-      'The PWA keeps one mutable state object in memory and mirrors it to localStorage under the key swarmos-state-v1, debounced ~250 ms.\n' +
+      'The PWA keeps one mutable state object in memory and mirrors it to localStorage under the key mmm-state-v1, debounced ~250 ms.\n' +
       'It holds settings, gateway info, agents, teams, swarms, tasks, approvals, threads, files, events, usage, telegram and terminal lines. Terminal history is capped at 200 lines and events at 80.\n' +
       'The server-side source of truth is SQLite (WAL) via the gateway, but the browser store is not synchronised with it yet. Clearing site data resets the app to seeded fixtures.',
     sources: [
@@ -191,11 +191,11 @@ export const KNOWLEDGE = [
     sensitivity: 'internal',
     body:
       'Every data route now requires a credential; GET /healthz, POST /api/v1/auth/login and provider webhook/verification routes are public (webhooks require their configured signature). Health reports nothing operational to an anonymous caller.\n' +
-      'Sessions: POST /api/v1/auth/login with email + password (override with --user/-u and --data for curl). The reply sets an HttpOnly, SameSite=Strict cookie (Secure behind TLS) and returns the principal, its permission list and an HMAC CSRF token. Mutations made with the cookie must send x-swarmos-csrf.\n' +
+      'Sessions: POST /api/v1/auth/login with email + password (override with --user/-u and --data for curl). The reply sets an HttpOnly, SameSite=Strict cookie (Secure behind TLS) and returns the principal, its permission list and an HMAC CSRF token. Mutations made with the cookie must send x-mmm-csrf.\n' +
       'Passwords are stored as scrypt hashes with a per-user salt (N=16384, r=8, p=1) in the principals table. Argon2id would be stronger but needs a native dependency; that trade-off is documented rather than hidden.\n' +
-      'API tokens: POST /api/v1/tokens issues swk_… secrets that are hashed at rest, carry explicit scopes (a subset of the holder’s permissions) and optional expiry. Bearer callers skip CSRF. Revocation is immediate.\n' +
+      'API tokens: POST /api/v1/tokens issues mmm_… secrets that are hashed at rest, carry explicit scopes (a subset of the holder’s permissions) and optional expiry. Bearer callers skip CSRF. Revocation is immediate.\n' +
       'Lockout: 5 failed logins within 5 minutes lock that email for 15 minutes; 20 attempts per address per 5 minutes are throttled. Attempts are persisted in auth_attempts and audited.\n' +
-      'Bootstrap: the first start creates an Owner from SWARMOS_BOOTSTRAP_EMAIL / SWARMOS_BOOTSTRAP_PASSWORD, or (in development) prints a generated password once. Production refuses to start without an owner.\n' +
+      'Bootstrap: the first start creates an Owner from MMM_BOOTSTRAP_EMAIL / MMM_BOOTSTRAP_PASSWORD, or (in development) prints a generated password once. Production refuses to start without an owner.\n' +
       'Not implemented: 2FA, SSO/OIDC, email password reset, per-object ACLs, and multi-node rate limiting.',
     sources: [
       { label: 'apps/gateway/src/auth.js', ref: 'apps/gateway/src/auth.js' },
@@ -348,7 +348,7 @@ export const KNOWLEDGE = [
     body:
       'Copilot runs real checks, never canned success:\n' +
       '• Browser connectivity — navigator.onLine.\n' +
-      '• App store — presence, revision and size of swarmos-state-v1 (missing key means fixtures are in use).\n' +
+      '• App store — presence, revision and size of mmm-state-v1 (missing key means fixtures are in use).\n' +
       '• Gateway — fetch <gateway>/healthz with a 1.5 s abort; reports reachable, unreachable or unknown.\n' +
       '• Pending approvals — counted from live store state.\n' +
       '• Service worker — checks registration where the browser exposes getRegistration.\n' +
@@ -602,7 +602,7 @@ export const KNOWLEDGE = [
     sensitivity: 'public',
     body:
       'Skills Hub → Import (next to New) accepts: SKILL.md with YAML frontmatter, skill.json manifests, registry JSON ' +
-      '(array or {"skills":[...]}), skill.yaml, SwarmOS portable packages (schema swarmos.skill.package.v1) and .zip/.skill ' +
+      '(array or {"skills":[...]}), skill.yaml, MMM portable packages (schema mmm.skill.package.v1) and .zip/.skill ' +
       'bundles that may contain several skills.\n' +
       'Every package goes through: parse → schema check → quarantine → scan → dependency resolution → permission review → ' +
       'preview → install or reject → audit log. The scan blocks embedded API keys, private keys, instruction-injection text, ' +

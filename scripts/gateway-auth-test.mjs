@@ -1,6 +1,6 @@
 /* Gateway identity & access tests — real HTTP/WebSocket against a real gateway process.
  * Run: npm run test:gateway
- * Uses a throwaway DATA_DIR; never touches data/swarmos.sqlite.
+ * Uses a throwaway DATA_DIR; never touches data/mmm.sqlite.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,11 +8,11 @@ import { join } from 'node:path';
 import net from 'node:net';
 import WebSocket from 'ws';
 
-const DATA_DIR = mkdtempSync(join(tmpdir(), 'swarmos-auth-'));
+const DATA_DIR = mkdtempSync(join(tmpdir(), 'mmm-auth-'));
 process.env.DATA_DIR = DATA_DIR;
-process.env.SWARMOS_QUIET = '1';
-process.env.SWARMOS_BOOTSTRAP_EMAIL = 'owner@test.local';
-process.env.SWARMOS_BOOTSTRAP_PASSWORD = 'OwnerPassw0rd!2026';
+process.env.MMM_QUIET = '1';
+process.env.MMM_BOOTSTRAP_EMAIL = 'owner@test.local';
+process.env.MMM_BOOTSTRAP_PASSWORD = 'OwnerPassw0rd!2026';
 delete process.env.NODE_ENV; // development semantics, minus the generated-password branch
 process.env.NODE_ENV = 'test';
 
@@ -102,7 +102,7 @@ await check('health is public and hides operational paths from anonymous callers
   eq(res.body.ok, true, 'health ok flag');
   assert(res.body.auth.mode === 'required', 'auth mode should be required');
   assert(!('dataDir' in res.body), 'anonymous health must not leak dataDir');
-  assert(res.headers.get('x-swarmos-request-id'), 'request id header missing');
+  assert(res.headers.get('x-mmm-request-id'), 'request id header missing');
 });
 
 await check('every data route rejects anonymous callers with 401', async () => {
@@ -303,7 +303,7 @@ await check('scoped API tokens narrow permissions and cannot exceed the role', a
   const res = await operator.request('/api/v1/tokens', { method: 'POST', csrf: true, body: { name: 'reader', scopes: ['read'] } });
   eq(res.status, 201, 'operator issues read token');
   readOnlyToken = res.body.token;
-  assert(readOnlyToken.startsWith('swk_'), 'token prefix');
+  assert(readOnlyToken.startsWith('mmm_'), 'token prefix');
   assert(res.body.token !== res.body.id, 'token id and secret must differ');
 
   const bearer = client('10.2.0.1');
@@ -337,7 +337,7 @@ await check('bearer calls skip CSRF but respect revocation and expiry', async ()
   const expiredUse = await bearer.request('/api/v1/agents', { headers: { authorization: `Bearer ${expired.body.token}` } });
   eq(expiredUse.status, 401, 'expired token must fail');
 
-  const junk = await bearer.request('/api/v1/agents', { headers: { authorization: 'Bearer swk_not-a-real-token' } });
+  const junk = await bearer.request('/api/v1/agents', { headers: { authorization: 'Bearer mmm_not-a-real-token' } });
   eq(junk.status, 401, 'unknown token must fail');
 });
 

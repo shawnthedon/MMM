@@ -1,10 +1,10 @@
-/* SwarmOS Gateway — HTTP API + WebSocket event stream (zero external deps)
+/* MMM Gateway — HTTP API + WebSocket event stream (zero external deps)
  * Run:  node apps/gateway/server.js        →  http://localhost:8787
  * Test: npm run test:gateway
  *
  * Identity & access (design spec Layer 1):
  *   • session cookie login (scrypt password hashes, HttpOnly + SameSite=Strict, HMAC CSRF)
- *   • scoped bearer tokens (`swk_…`, hash-at-rest) for CLI / bots / integrations
+ *   • scoped bearer tokens (`mmm_…`, hash-at-rest) for CLI / bots / integrations
  *   • RBAC: Owner > Admin > Operator > Reviewer > Observer, enforced per route
  *   • every mutation and every denial is written to the hash-chained audit log
  *   • WebSocket upgrades require credentials and are topic-filtered by role
@@ -29,14 +29,14 @@ import {
 } from './src/rbac.js';
 
 const PORT = Number(process.env.PORT || 8787);
-const BODY_LIMIT = Number(process.env.SWARMOS_BODY_LIMIT || 256 * 1024);
-const API_RATE_LIMIT = Number(process.env.SWARMOS_RATE_LIMIT || 600);
+const BODY_LIMIT = Number(process.env.MMM_BODY_LIMIT || 256 * 1024);
+const API_RATE_LIMIT = Number(process.env.MMM_RATE_LIMIT || 600);
 
 /* ---------- CORS ---------- */
 /* Cookies are only sent cross-origin when the response names an explicit origin, so the
  * allowlist must be explicit. Wildcards are intentionally not supported together with credentials. */
 const ALLOWED_ORIGINS = String(
-  process.env.SWARMOS_CORS_ORIGIN ||
+  process.env.MMM_CORS_ORIGIN ||
     'http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173'
 )
   .split(',')
@@ -54,15 +54,15 @@ function corsHeaders(req) {
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Headers': `Content-Type, Idempotency-Key, Authorization, ${auth.CSRF_HEADER}`,
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
-    'Access-Control-Expose-Headers': 'x-swarmos-request-id, x-swarmos-auth, Retry-After',
+    'Access-Control-Expose-Headers': 'x-mmm-request-id, x-mmm-auth, Retry-After',
     Vary: 'Origin',
   };
 }
 
 function baseHeaders(res, req) {
-  const rid = res.getHeader('x-swarmos-request-id') || `req-${randomUUID()}`;
-  res.setHeader('x-swarmos-request-id', rid);
-  res.setHeader('x-swarmos-auth', auth.authMode().mode);
+  const rid = res.getHeader('x-mmm-request-id') || `req-${randomUUID()}`;
+  res.setHeader('x-mmm-request-id', rid);
+  res.setHeader('x-mmm-auth', auth.authMode().mode);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Cache-Control', 'no-store');
@@ -594,7 +594,7 @@ route('POST', /^\/api\/v1\/comms\/([\w-]+)\/send$/, { permission: 'comms:write',
   if (!text.trim()) return { code: 400, body: { error: 'text is required' } };
   const out = await comms.sendChannelMessage(ctx.match[1], {
     text,
-    title: typeof b.title === 'string' ? b.title : 'SwarmOS',
+    title: typeof b.title === 'string' ? b.title : 'MMM',
     actor: ctx.principal.name,
     dedupeKey: typeof b.dedupeKey === 'string' ? b.dedupeKey.slice(0, 120) : null,
     fetchImpl: gatewayFetch,
@@ -628,7 +628,7 @@ route('POST', /^\/api\/v1\/comms\/([\w-]+)\/inbound$/, { public: true, mutating:
     headers: headerObj,
     rawBody: ctx.rawBody,
     json: Object.keys(ctx.body || {}).length ? ctx.body : null,
-    dedupeKey: typeof headerObj['x-swarmos-delivery'] === 'string' ? headerObj['x-swarmos-delivery'] : null,
+    dedupeKey: typeof headerObj['x-mmm-delivery'] === 'string' ? headerObj['x-mmm-delivery'] : null,
   });
   if (!out.ok) return { code: out.code || 400, body: { error: out.error } };
   return { code: 200, body: { ok: true, duplicate: Boolean(out.duplicate), reply: out.reply, delivered: out.delivered, deliveryError: out.deliveryError ?? null } };
@@ -654,8 +654,8 @@ route('GET', /^\/api\/v1\/audit$/, { permission: 'audit:read' }, (ctx) => {
 });
 
 route('POST', /^\/api\/v1\/dev\/seed$/, { permission: 'dev:seed', mutating: true }, (ctx) => {
-  if (process.env.NODE_ENV === 'production' && process.env.SWARMOS_ALLOW_SEED !== '1') {
-    return { code: 403, body: { error: 'seeding is disabled in production (set SWARMOS_ALLOW_SEED=1 to override)' } };
+  if (process.env.NODE_ENV === 'production' && process.env.MMM_ALLOW_SEED !== '1') {
+    return { code: 403, body: { error: 'seeding is disabled in production (set MMM_ALLOW_SEED=1 to override)' } };
   }
   const counts = seed({ reset: Boolean(ctx.body?.reset || ctx.query.reset === '1') });
   audit(ctx.principal.id, ctx.principal.via, 'dev.seed', { reset: Boolean(ctx.body?.reset) }, 'allow', 'ok');
@@ -689,7 +689,7 @@ async function handleRequest(req, res) {
   let rawBody = '';
   if (['POST', 'PATCH', 'PUT'].includes(req.method)) {
     const parsed = await readBody(req, { allowRaw: routeMatch.meta.rawBody === true });
-    if (!parsed.ok) return fail(res, parsed.status, parsed.error, { 'x-swarmos-request-id': rid });
+    if (!parsed.ok) return fail(res, parsed.status, parsed.error, { 'x-mmm-request-id': rid });
     body = parsed.body;
     rawBody = parsed.raw || '';
   }
@@ -701,7 +701,7 @@ async function handleRequest(req, res) {
     if (!resolved.principal) {
       audit('anonymous', 'api', `${req.method} ${requestedPath}`, { path: requestedPath }, 'deny', 'unauthenticated');
       return json(res, 401, { error: resolved.error || 'authentication required', requestId: rid }, {
-        'WWW-Authenticate': 'Bearer realm="swarmos"',
+        'WWW-Authenticate': 'Bearer realm="mmm"',
       });
     }
     principal = resolved.principal;
@@ -739,16 +739,16 @@ async function handleRequest(req, res) {
     if (out.text !== undefined) {
       res.writeHead(out.code ?? 200, {
         'Content-Type': 'text/plain; charset=utf-8',
-        'x-swarmos-request-id': rid,
+        'x-mmm-request-id': rid,
         ...(out.headers || {}),
       });
       res.end(String(out.text));
       return;
     }
-    json(res, out.code ?? 200, out.body ?? {}, { 'x-swarmos-request-id': rid, ...(out.headers || {}) });
+    json(res, out.code ?? 200, out.body ?? {}, { 'x-mmm-request-id': rid, ...(out.headers || {}) });
   } catch (err) {
     audit(principal?.id || 'anonymous', principal?.via || 'api', `${req.method} ${requestedPath}`, {}, 'allow', 'error');
-    json(res, 500, { error: 'internal error', requestId: rid, detail: process.env.SWARMOS_DEBUG === '1' ? err.message : undefined });
+    json(res, 500, { error: 'internal error', requestId: rid, detail: process.env.MMM_DEBUG === '1' ? err.message : undefined });
   }
 }
 
@@ -757,7 +757,7 @@ async function handleRequest(req, res) {
  * =======================================================================================*/
 export function createGateway() {
   migrate();
-  const bootstrap = auth.bootstrapOwner({ quiet: process.env.SWARMOS_QUIET === '1' });
+  const bootstrap = auth.bootstrapOwner({ quiet: process.env.MMM_QUIET === '1' });
   const mode = auth.authMode();
 
   const server = http.createServer(handleRequest);
@@ -792,7 +792,7 @@ export function createGateway() {
     };
     const resolved = auth.authenticate(synthetic);
     if (!resolved.principal) {
-      socket.write(`HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nWWW-Authenticate: Bearer realm="swarmos"\r\n\r\n${JSON.stringify({ error: 'authentication required for /ws' })}`);
+      socket.write(`HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nWWW-Authenticate: Bearer realm="mmm"\r\n\r\n${JSON.stringify({ error: 'authentication required for /ws' })}`);
       return socket.destroy();
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
@@ -836,7 +836,7 @@ export function createGateway() {
     });
   });
 
-  // The retry worker is off in tests (SWARMOS_COMMS_DISABLE=1) and unref'd, so it never holds a
+  // The retry worker is off in tests (MMM_COMMS_DISABLE=1) and unref'd, so it never holds a
   // process open — `processQueue` is driven explicitly instead.
   const queueTicker = comms.startQueueTicker();
 
@@ -860,12 +860,12 @@ export async function startGateway({ port = PORT } = {}) {
   });
   const address = gateway.server.address();
   console.log(
-    `SwarmOS gateway → http://localhost:${address.port}  (ws: /ws, data: ${DATA_DIR}, ` +
+    `MMM gateway → http://localhost:${address.port}  (ws: /ws, data: ${DATA_DIR}, ` +
       `sqlite: ${DB_DRIVER}, auth: ${gateway.authMode})`
   );
   if (gateway.authWarning) console.warn(`auth: ${gateway.authWarning}`);
   if (gateway.authMode === 'dev-open') {
-    console.warn('auth: dev-open — anonymous callers are accepted with the SWARMOS_DEV_ROLE role. Never expose this.');
+    console.warn('auth: dev-open — anonymous callers are accepted with the MMM_DEV_ROLE role. Never expose this.');
   }
   return gateway;
 }

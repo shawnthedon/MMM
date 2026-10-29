@@ -5,3 +5,10 @@ dist/
 .vercel
 .env
 .env.local
+
+# runtime data — never commit databases, WAL files or snapshots
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+backups/

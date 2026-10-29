@@ -1,4 +1,4 @@
-# 🗺 SwarmOS — Implementation Roadmap to Production
+# 🗺 MMM — Implementation Roadmap to Production
 ## Non-Functional Requirements Edition (Quality, Security, Reliability & Operations)
 
 > **Purpose:** the *remainder* of the development journey from working prototype to production-grade platform — focused on the **non-functional features and aspects** of the application: performance, security, privacy, reliability, scalability, accessibility, maintainability, testability, observability, deployability, and cost efficiency.
@@ -433,7 +433,7 @@ M9                                 ████
   2. On server: npm run backup        (always first!)
   3. git fetch && git checkout vX.Y.Z
   4. npm ci --omit=dev && npm run migrate && npm run build
-  5. docker compose up -d --no-deps swarmos
+  5. docker compose up -d --no-deps mmm
   6. curl -f https://your-domain/healthz && smoke the golden path
   7. Rollback if fail: git checkout prev-tag && npm run restore -- backups/<t> && compose up
   ```

@@ -1,4 +1,4 @@
--- SwarmOS gateway — 002: identity & access (RBAC, sessions, capability tokens)
+-- MMM gateway — 002: identity & access (RBAC, sessions, capability tokens)
 -- Adds credential columns to principals and the two auth tables. Existing rows keep working:
 -- principals without an email/password simply cannot log in until an Owner sets credentials.
 

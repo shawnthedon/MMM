@@ -114,7 +114,7 @@ await check('gateway comms records and recent messages are not persisted', async
   await comms.refreshComms();
   assert.equal(comms.commsIsGateway(), true);
   await delay(350);
-  const stored = win.localStorage.getItem('swarmos-state-v1');
+  const stored = win.localStorage.getItem('mmm-state-v1');
   assert(stored);
   assert(!stored.includes('private-server-message'));
   assert(!stored.includes('••••MASK'));

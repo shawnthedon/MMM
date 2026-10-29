@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Push SwarmOS to GitHub. Usage:
+# Push MMM to GitHub. Usage:
 #   ./scripts/push-to-github.sh <remote-url> [token]
 # Examples:
-#   ./scripts/push-to-github.sh https://github.com/you/swarmos.git
-#   ./scripts/push-to-github.sh https://github.com/you/swarmos.git ghp_xxxxxxxx
+#   ./scripts/push-to-github.sh https://github.com/you/mmm.git
+#   ./scripts/push-to-github.sh https://github.com/you/mmm.git ghp_xxxxxxxx
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

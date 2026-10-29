@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Spec | `Copilot_Master_MMM_V2.md` v1.0 (2026-10-25) |
-| Repository | `shawnthedon/MMM` (SwarmOS) |
+| Repository | `shawnthedon/MMM` (MMM) |
 | Baseline commit | `66b1bd3` on `main` |
 | Discovery date | 2026-10-26 |
 | Author | Coding agent |
@@ -22,7 +22,7 @@ only in a document, it is marked `documented` and **not** claimed as working.
 | Area | Current finding and evidence | Status |
 | --- | --- | --- |
 | Frontend ↔ gateway | `src/api.js`, `src/auth.js`, `src/datastore.js` and `src/commsGateway.js` use authenticated REST; agents, tasks, approvals, events and comms have gateway-backed reads. `scripts/readsync-test.mjs`, `scripts/session-safety-test.mjs` and `scripts/comms-test.mjs` exercise the client. Other slices remain demo. | Partial; not a full integration acceptance pass |
-| Sessions and caches | Request/session epochs, cancellation, 401 invalidation, filtered persistence and service-worker static-only caching address cross-session races and the prior API cache exposure. The worker version invalidates old SwarmOS caches on activation. | Regression tests added; existing deployed workers update only when clients install/activate the new worker |
+| Sessions and caches | Request/session epochs, cancellation, 401 invalidation, filtered persistence and service-worker static-only caching address cross-session races and the prior API cache exposure. The worker version invalidates old MMM caches on activation. | Regression tests added; existing deployed workers update only when clients install/activate the new worker |
 | Gateway auth | Cookie sessions, CSRF, scoped tokens, RBAC, WebSocket origin/revocation checks, separation of duties and audit exist in `apps/gateway/src/auth.js`, `rbac.js` and `server.js`; `npm run test:gateway` and `test:comms-gateway` exercise a local gateway. | Partial; not complete Copilot governance |
 | Copilot actions | Some agent/task/approval CRUD uses real gateway endpoints. Browser confirmation cards are not server-bound approvals; there is no operation/parameter binding, expiry/replay enforcement for execution, or budget enforcement. Gateway-mode Copilot channel actions are blocked rather than reported as governed. | Incomplete |
 | Comms | Gateway channel CRUD, encrypted credentials, signatures, queue and mocked provider requests exist. Twilio requests are restricted to the official HTTPS endpoint; OpenSMS is not a Twilio-compatible endpoint and is not implemented. Provider acceptance is not final delivery. | Partial, live providers unverified |
@@ -43,7 +43,7 @@ is available, but cannot establish all of the missing master-spec contracts. See
 | `src/copilot.js` | Copilot dock/sheet + rule-based intent engine + action cards | Present, 317 lines. Opened from the bottom **dock** strip and a `copilot-open` action. Original entry point is a dock, not a FAB in the bottom-nav centre. |
 | `src/shell.js` | App chrome: topbar, `<main id="view">`, floating `+` FAB (quick create), Copilot dock, 5-slot tab bar, generic `openSheet()` / `confirmModal()` / toast helpers, global `[data-act]` event delegation | Present. Tab bar slots: `home · agents · tasks · chat · more`. |
 | `src/main.js` | Hash router, re-render on store change, simulation ticker, PWA registration, offline banner, dock hint rotation | Present. |
-| `src/core.js` | Store (`localStorage` key `swarmos-state-v1`), seeded demo data, icons, formatting helpers | Present. |
+| `src/core.js` | Store (`localStorage` key `mmm-state-v1`), seeded demo data, icons, formatting helpers | Present. |
 | `src/terminal.js` | In-app terminal that can call `copilotSay()` and `window.__copilotChip()` | Present. |
 | `src/views1.js`, `src/views2.js` | 13 module views (home, agents, teams/swarms, tasks, chat, skills, models, plugins, telegram, analytics, artifacts, terminal, settings) | Present. |
 

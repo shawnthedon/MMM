@@ -194,7 +194,7 @@ export async function saveSettingsOnGateway(patch) {
 export function commsSourceLabel() {
   const gw = getState().commsGateway || {};
   if (isLive('comms')) {
-    const key = gw.encryption?.keySource === 'env' ? 'SWARMOS_SECRET' : gw.keySource === 'file' ? 'a local key file' : 'the server key';
+    const key = gw.encryption?.keySource === 'env' ? 'MMM_SECRET' : gw.keySource === 'file' ? 'a local key file' : 'the server key';
     return {
       kind: 'gateway',
       text: `Credentials are stored encrypted on the gateway (AES-256-GCM, key from ${key}) and never returned to this browser. Delivery and retries run server-side.`,

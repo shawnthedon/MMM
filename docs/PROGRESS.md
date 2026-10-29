@@ -1,4 +1,4 @@
-# 📍 SwarmOS — Development Progress Tracker
+# 📍 MMM — Development Progress Tracker
 
 > Live status of the build-out described in [`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md)
 > (functional) and [`IMPLEMENTATION_ROADMAP.md`](IMPLEMENTATION_ROADMAP.md) (non-functional).
@@ -90,7 +90,7 @@
 ### Comms — server-side credentials + routes — ✅
 - ✅ **Migration 003** — `comms_channels` (encrypted config, routing, verification), `comms_messages`
   (one row per attempt, dedupe key, retry cursor), `comms_settings` (quiet hours, rate limit, retries).
-- ✅ **Encryption at rest** — AES-256-GCM with a key derived from `SWARMOS_SECRET` (HKDF-SHA256); a
+- ✅ **Encryption at rest** — AES-256-GCM with a key derived from `MMM_SECRET` (HKDF-SHA256); a
   generated `data/.comms-key` with a warning only when the env var is absent. Tampered ciphertext
   decrypts to nothing instead of guessing. API returns `••••last4`; a masked value sent back is
   ignored, never stored over the real secret.
@@ -103,7 +103,7 @@
   `retryLimit`, per-channel rate limit defers, quiet hours hold (`202`), `dedupeKey` makes sends
   idempotent, bodies redacted (tokens, bearers, phone numbers).
 - ✅ **Inbound** — signature first over the raw body (Telegram secret token, Meta HMAC, Slack v0 with
-  a 5-minute replay window, Twilio form params), `x-swarmos-delivery` dedupe, deterministic commands
+  a 5-minute replay window, Twilio form params), `x-mmm-delivery` dedupe, deterministic commands
   from gateway rows, gated commands refused, replies delivered through the same path.
 - ✅ **Fan-out** — task-done and approval-needed enqueue to channels routed to that agent; delivery
   happens in the queue worker, so an outage delays instead of losing or faking.
@@ -151,7 +151,7 @@
 - ✅ **24-skill catalogue** — `src/skillsData.js`; 8 typed relationship types + 24 seeded edges;
   existing ids `sk-1…sk-6` preserved; `core.migrate()` merges the catalogue into saved workspaces.
 - ✅ **Advanced import** — `src/skillsImport.js` + `src/skillsImportView.js`: SKILL.md frontmatter,
-  skill.json, registry JSON, skill.yaml, SwarmOS portable packages and .zip/.skill bundles. Pipeline:
+  skill.json, registry JSON, skill.yaml, MMM portable packages and .zip/.skill bundles. Pipeline:
   parse → schema → quarantine → scan (secrets, instruction injection, unsafe paths, size) →
   dependency/version resolution → permission review → preview → install/reject → audit log.
   Imports land `pending` and never grant a tool or permission.
@@ -170,7 +170,7 @@
 - ✅ **3.5 (slice)** Job table schema ready (leasing fields)
 - ✅ Audit log v1 — hash-chained `audit_log` + `npm run audit:verify`
 - ✅ **3.4 Auth + RBAC** — scrypt passwords, HttpOnly SameSite=Strict session cookies, HMAC CSRF,
-  scoped `swk_` bearer tokens, 5-role matrix (Owner/Admin/Operator/Reviewer/Observer), lockout,
+  scoped `mmm_` bearer tokens, 5-role matrix (Owner/Admin/Operator/Reviewer/Observer), lockout,
   authenticated + topic-filtered WebSocket, deny-by-default route map, CORS allowlist, audit of every
   mutation *and* denial. Evidence: `npm run test:gateway` (28 checks). See
   [`copilot/copilot-governance-auth.md`](copilot/copilot-governance-auth.md).
@@ -248,7 +248,7 @@ POST /api/v1/auth/logout|password       → revoke session(s)
 GET  /api/v1/roles                      → RBAC matrix
 GET|POST /api/v1/principals             → Admin: list/create (role ceiling enforced)
 PATCH /api/v1/principals/:id            → Admin: role/status (no self-change, no equals)
-GET|POST|DELETE /api/v1/tokens          → scoped swk_ tokens (hash-at-rest)
+GET|POST|DELETE /api/v1/tokens          → scoped mmm_ tokens (hash-at-rest)
 GET  /healthz                           → { ok, db, driver, uptime, auth: { mode, roles } }
 GET  /api/v1/summary                   → entity counts
 GET  /api/v1/agents                    → all agents
@@ -287,3 +287,17 @@ curl localhost:8787/api/v1/summary
 
 ---
 *Last updated: 2026-10-27 — Gateway authentication + RBAC (3.4) and server-enforced Copilot actions.*
+
+---
+
+## 🏷 2026-10-29 — Renamed SwarmOS → MMM (clean break)
+
+The repository and the product now share one name. 363 identifiers across 68 files: brand strings
+(app title, manifest, boot splash, terminal banner, comms messages), 19 `SWARMOS_*` env vars → `MMM_*`,
+session cookie, CSRF/request-id/delivery headers, API token prefix `swk_` → `mmm_`, database file
+`swarmos.sqlite` → `mmm.sqlite`, `localStorage` keys, service-worker cache prefix (bumped to `mmm-v4`,
+which also purges the pre-rename shell), npm package name, docs and diagrams.
+
+Upgrade steps, the full before/after table and the rationale for a clean break rather than a
+compatibility shim: [`ops/RENAME_MMM.md`](ops/RENAME_MMM.md). `npm test` and `npm run build` green
+after the rename; `data/` is now gitignored and no longer tracked.

@@ -16,7 +16,7 @@
 
   <!-- gateway box -->
   <rect x="440" y="120" width="320" height="330" rx="18" fill="#121826" stroke="url(#g)" stroke-width="2.5"/>
-  <text x="600" y="152" text-anchor="middle" fill="#EAF0FA" font-size="17" font-weight="700">swarmos-gateway</text>
+  <text x="600" y="152" text-anchor="middle" fill="#EAF0FA" font-size="17" font-weight="700">mmm-gateway</text>
   <text x="600" y="172" text-anchor="middle" fill="#93A1BA" font-size="11">single process · docker or binary</text>
 
   <g font-size="11.5" font-weight="600">

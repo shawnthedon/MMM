@@ -169,7 +169,7 @@ export async function configureGateway(url) {
 
 /** Session cookie changes are visible to other tabs; re-check when the tab regains focus. */
 if (typeof window !== 'undefined') {
-  window.addEventListener('swarmos:unauthenticated', () => {
+  window.addEventListener('mmm:unauthenticated', () => {
     if (!isAuthenticated()) return;
     ++authTurn;
     invalidateApiSession();

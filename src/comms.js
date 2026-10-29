@@ -89,7 +89,7 @@ export function toggleChannel(id, enabled) {
 }
 
 /** Real delivery attempt used by the “Send test” button and by the Copilot. */
-export async function sendTest(id, { text = 'SwarmOS test message — gateway reachable.', fetchImpl } = {}) {
+export async function sendTest(id, { text = 'MMM test message — gateway reachable.', fetchImpl } = {}) {
   const channel = getChannel(id);
   if (!channel) return { ok: false, error: `Unknown channel “${id}”.` };
   if (isApiMode()) {
@@ -106,7 +106,7 @@ export async function sendTest(id, { text = 'SwarmOS test message — gateway re
         detail: delivered ? out.detail : (out.error || (out.queued ? 'Queued for retry.' : 'Delivery failed.')),
       }, ...(s.comms.log || [])].slice(0, 60);
       if (delivered && id === 'browser') {
-        s.comms.inbox = [{ id: uid('msg'), title: 'SwarmOS', text, ts: now(), channel: 'browser', from: 'system' }, ...(s.comms.inbox || [])].slice(0, 50);
+        s.comms.inbox = [{ id: uid('msg'), title: 'MMM', text, ts: now(), channel: 'browser', from: 'system' }, ...(s.comms.inbox || [])].slice(0, 50);
       }
     }, 'comms-test');
     return {
@@ -119,7 +119,7 @@ export async function sendTest(id, { text = 'SwarmOS test message — gateway re
     };
   }
   const rec = record(id);
-  const result = await deliver(id, rec.config, { text, title: 'SwarmOS' }, fetchImpl ? { fetchImpl } : undefined);
+  const result = await deliver(id, rec.config, { text, title: 'MMM' }, fetchImpl ? { fetchImpl } : undefined);
   setState((s) => {
     const r = s.comms.channels[id];
     r.lastTest = {
@@ -130,7 +130,7 @@ export async function sendTest(id, { text = 'SwarmOS test message — gateway re
     };
     if (result.ok) r.verifiedAt = now();
     if (result.ok && id === 'browser') {
-      s.comms.inbox = [{ id: uid('msg'), title: 'SwarmOS', text, ts: now(), channel: 'browser', from: 'system' }, ...(s.comms.inbox || [])].slice(0, 50);
+      s.comms.inbox = [{ id: uid('msg'), title: 'MMM', text, ts: now(), channel: 'browser', from: 'system' }, ...(s.comms.inbox || [])].slice(0, 50);
     }
     s.comms.log = [{ id: uid('cl'), at: now(), channel: id, direction: 'out', ok: Boolean(result.ok), text: String(text).slice(0, 160), detail: result.ok ? result.detail : result.error }, ...(s.comms.log || [])].slice(0, 60);
     logEvent('comms', `${channel.label} test ${result.ok ? 'delivered' : `failed (${result.reason})`}`);
@@ -146,7 +146,7 @@ export async function sendMessage(id, text, opts = {}) {
   }
   const rec = record(id);
   if (!rec.enabled) return { ok: false, reason: 'disabled', error: `${getChannel(id)?.label} is disabled.` };
-  const result = await deliver(id, rec.config, { text, title: opts.title || 'SwarmOS' }, opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : undefined);
+  const result = await deliver(id, rec.config, { text, title: opts.title || 'MMM' }, opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : undefined);
   setState((s) => {
     s.comms.log = [{ id: uid('cl'), at: now(), channel: id, direction: 'out', ok: Boolean(result.ok), text: String(text).slice(0, 160), detail: result.ok ? result.detail : result.error }, ...(s.comms.log || [])].slice(0, 60);
   }, 'comms-send');
@@ -235,7 +235,7 @@ export function runChannelCommand(text) {
     return { ok: false, reason: 'blocked', reply: `${cmd} is disabled for channels. Enable it in Comms → Command surface.` };
   }
   if (known.gate) {
-    return { ok: true, gated: true, reply: `${cmd} is gated: open SwarmOS to confirm — channel commands cannot perform gated actions (replay-protected signed buttons only).` };
+    return { ok: true, gated: true, reply: `${cmd} is gated: open MMM to confirm — channel commands cannot perform gated actions (replay-protected signed buttons only).` };
   }
   switch (cmd) {
     case '/status':
@@ -250,7 +250,7 @@ export function runChannelCommand(text) {
       return { ok: true, reply: `Board: ${['todo', 'doing', 'review', 'done'].map((c) => `${c} ${counts[c] || 0}`).join(' · ')}` };
     }
     case '/ask':
-      return { ok: true, reply: `Open SwarmOS for a full Copilot answer — channel replies are deterministic summaries only.` };
+      return { ok: true, reply: `Open MMM for a full Copilot answer — channel replies are deterministic summaries only.` };
     default:
       return { ok: true, reply: `${cmd} acknowledged.` };
   }
