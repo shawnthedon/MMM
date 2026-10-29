@@ -16,7 +16,7 @@
  * Compatibility and live availability are shown separately (§8.2): a model can be compatible with a
  * draft while no credentials exist.
  */
-import { getState, setState, esc, icon, uid, now, logEvent } from './core.js';
+import { getState, setState, esc, icon, uid, now, logEvent, teamsWithCounts } from './core.js';
 import { openSheet, toast, confirmModal, on, closeAllSheets } from './shell.js';
 import { isApiMode, gatewayUrl } from './api.js';
 import { can, isAuthenticated, getAuth } from './auth.js';
@@ -199,6 +199,8 @@ export function newDraft() {
     name: '',
     role: '',
     goal: '',
+    teamId: null,
+    teamSuggested: false,
     template: null,
     assumptions: [],
     framework: 'LangGraph',
@@ -219,6 +221,21 @@ export function newDraft() {
     storageRetention: '90d',
     validatedAt: null,
   };
+}
+
+/**
+ * Carry a team into the designer as a suggestion. It is stored on the draft (so it survives a
+ * re-render and a reload) and shown as an editable field — the agent is created with it only if the
+ * reader leaves it selected and saves.
+ */
+export function suggestTeam({ id = '', name = '' } = {}) {
+  ensureDraft();
+  if (!id) return;
+  draft.teamId = id;
+  draft.teamSuggested = true;
+  persistDraft();
+  emit();
+  return { id, name };
 }
 
 export function getDraft() {
@@ -605,6 +622,7 @@ export function toAgentRecord(d = getDraft()) {
     .join('\n');
   return {
     name: d.name.trim(),
+    teamId: d.teamId || null,
     role: role.slice(0, 120),
     framework: d.framework,
     model: d.model,
@@ -632,6 +650,9 @@ export function toAgentRecord(d = getDraft()) {
     },
   };
 }
+
+on('dsn-team-keep', () => patchDraft({ teamSuggested: false }, { repaint: true }));
+on('dsn-team-clear', () => patchDraft({ teamId: null, teamSuggested: false }, { repaint: true }));
 
 export async function saveDefinition() {
   ensureDraft();
@@ -706,6 +727,47 @@ function headerHTML() {
     </nav>`;
 }
 
+/** The team carried in from the "New agent in …" action: visible, editable, and only a suggestion. */
+function teamSuggestionHTML() {
+  const teams = teamsWithCounts();
+  if (!draft.teamId) {
+    return `
+      <div class="card dsn-team-note">
+        <div class="row between">
+          <div class="grow">
+            <div class="strong small">${icon('team', 15)} Team</div>
+            <div class="tiny muted">Not in a team. Pick one here, or add it later from Team management.</div>
+          </div>
+          <select class="input compact" data-dsn="teamId" aria-label="Team for this agent">
+            <option value="">No team</option>
+            ${teams.map((t) => `<option value="${esc(t.id)}">${esc(t.name)} · ${t.memberCount}</option>`).join('')}
+          </select>
+        </div>
+      </div>`;
+  }
+  const team = teams.find((t) => t.id === draft.teamId);
+  return `
+    <div class="card dsn-team-note ${draft.teamSuggested ? 'is-suggestion' : ''}">
+      <div class="row between">
+        <div class="grow">
+          <div class="strong small">${icon('team', 15)} Team: ${esc(team?.name || draft.teamId)}</div>
+          <div class="tiny muted">${draft.teamSuggested
+            ? 'Suggested from the team panel. Change it or clear it — nothing is assigned until you save this definition.'
+            : `${team?.memberCount ?? 0} member${(team?.memberCount ?? 0) === 1 ? '' : 's'} · editable here.`}</div>
+        </div>
+        <span class="chip tiny ${draft.teamSuggested ? 'warn' : ''}">${draft.teamSuggested ? 'suggestion' : 'chosen'}</span>
+      </div>
+      <div class="row wrap" style="gap:8px;margin-top:8px">
+        <select class="input compact" data-dsn="teamId" aria-label="Team for this agent">
+          <option value="">No team</option>
+          ${teams.map((t) => `<option value="${esc(t.id)}" ${t.id === draft.teamId ? 'selected' : ''}>${esc(t.name)} · ${t.memberCount}</option>`).join('')}
+        </select>
+        ${draft.teamSuggested ? `<button class="btn sm" data-act="dsn-team-keep">Keep this team</button>` : ''}
+        <button class="btn sm" data-act="dsn-team-clear">Clear</button>
+      </div>
+    </div>`;
+}
+
 function goalStep() {
   const check = validateDraft(draft);
   return `
@@ -720,6 +782,8 @@ function goalStep() {
       </div>
       ${check.findings.filter((f) => ['def-goal', 'def-name', 'def-name-dup'].includes(f.id)).map((f) => `<div class="dsn-fix tiny">${icon('shield', 13)} ${esc(f.detail)}</div>`).join('')}
     </div>
+
+    ${teamSuggestionHTML()}
 
     <div class="section-title">Start from a template</div>
     <div class="col" style="gap:8px">
@@ -1366,7 +1430,11 @@ function onFieldChange(event) {
   } else if (t.tagName === 'SELECT') {
     const next = { ...draft };
     const val = key === 'autonomy' || key.startsWith('limits.') ? Number(t.value) : t.value;
-    if (key.includes('.')) setPath(next, key, val);
+    if (key === 'teamId') {
+      // Picking a team by hand is a choice, not a suggestion — and "No team" really clears it.
+      next.teamId = val || null;
+      next.teamSuggested = false;
+    } else if (key.includes('.')) setPath(next, key, val);
     else next[key] = val;
     patchDraft(next, { repaint: false });
   } else if (t.type === 'checkbox') {

@@ -18,6 +18,7 @@ import { seed } from './src/seed.js';
 import * as comms from './src/comms.js';
 import { runner as browserRunner, browserCapability, setBrowserBroadcast } from './src/browser/index.js';
 import { evolution, setEvolutionBroadcast, ensurePoliciesForAllAgents } from './src/evolution/index.js';
+import * as teams from './src/teams.js';
 import * as auth from './src/auth.js';
 import {
   can,
@@ -177,6 +178,12 @@ function hydrateAgent(a) {
     skills: safeJson(a.skills, []),
     memory: safeJson(a.memory, {}),
     framework_config: safeJson(a.framework_config, {}),
+    description: a.description || '',
+    goal: a.goal || '',
+    responsibilities: safeJson(a.responsibilities, []),
+    approval_gates: safeJson(a.approval_gates, {}),
+    team_id: a.team_id ?? null,
+    team_position: Number(a.team_position) || 0,
     deleted_at: a.deleted_at ?? null,
   };
 }
@@ -436,11 +443,16 @@ route('POST', /^\/api\/v1\/agents$/, { permission: 'agent:write', mutating: true
     return { code: 400, body: { error: 'name is required (max 120 chars)' } };
   }
   const id = typeof b.id === 'string' && /^[\w-]{1,64}$/.test(b.id) ? b.id : `ag-${Date.now().toString(36)}`;
-  db.prepare(`INSERT INTO agents (id,name,role,framework,model,fallback,status,trust,autonomy,success_rate,cost_today,runs,last_active,tools,skills,prompt,memory,created_by)
-              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, b.name, b.role || '', b.framework || 'LangGraph', b.model || 'anthropic/claude-sonnet-4',
+  const teamId = b.teamId ?? b.team_id ?? null;
+  if (teamId) teams.getTeam(teamId); // 404 rather than a dangling foreign key
+  const position = Number.isFinite(Number(b.teamPosition ?? b.team_position)) ? Number(b.teamPosition ?? b.team_position) : null;
+  db.prepare(`INSERT INTO agents (id,name,role,description,goal,framework,model,fallback,status,trust,autonomy,success_rate,cost_today,runs,last_active,tools,skills,prompt,memory,created_by,team_id,team_position,responsibilities,approval_gates)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, b.name, b.role || '', String(b.description || '').slice(0, 400), String(b.goal || '').slice(0, 600), b.framework || 'LangGraph', b.model || 'anthropic/claude-sonnet-4',
       b.fallback || 'deepseek/deepseek-v3', b.status || 'idle', b.trust ?? 50, b.autonomy ?? 2, 0.85, 0, 0,
-      Date.now(), JSON.stringify(b.tools || []), JSON.stringify(b.skills || []), b.prompt || '', '{}', ctx.principal.id);
+      Date.now(), JSON.stringify(b.tools || []), JSON.stringify(b.skills || []), b.prompt || '', '{}', ctx.principal.id,
+      teamId, 0, JSON.stringify(Array.isArray(b.responsibilities) ? b.responsibilities : []), JSON.stringify(b.approvalGates || {}));
+  if (teamId) teams.assignAgent(id, teamId, position, ctx.principal.id);
   try { evolution.ensurePolicy(id); } catch { /* policy is created lazily on first use */ }
   const ev = logEvent('agent', `Agent ${b.name} created via API by ${ctx.principal.name}`, id);
   audit(ctx.principal.id, ctx.principal.via, 'agent.create', { id, name: b.name }, 'allow', 'ok');
@@ -456,14 +468,155 @@ route('GET', /^\/api\/v1\/agents\/([\w-]+)$/, { permission: 'read' }, (ctx) => {
 route('PATCH', /^\/api\/v1\/agents\/([\w-]+)$/, { permission: 'agent:write', mutating: true }, (ctx) => {
   const a = db.prepare('SELECT * FROM agents WHERE id=?').get(ctx.match[1]);
   if (!a) return { code: 404, body: { error: 'not found' } };
-  const allowed = ['name', 'role', 'framework', 'model', 'fallback', 'status', 'trust', 'autonomy', 'prompt'];
+  const allowed = ['name', 'role', 'description', 'goal', 'framework', 'model', 'fallback', 'status', 'trust', 'autonomy', 'prompt', 'responsibilities', 'approval_gates'];
   const fields = allowed.filter((k) => k in ctx.body);
-  if (!fields.length) return { code: 400, body: { error: `no updatable fields (${allowed.join(', ')})` } };
-  for (const k of fields) db.prepare(`UPDATE agents SET ${k}=? WHERE id=?`).run(ctx.body[k], ctx.match[1]);
+  const touchesTeam = 'team_id' in ctx.body || 'teamId' in ctx.body;
+  const movesPosition = 'team_position' in ctx.body || 'teamPosition' in ctx.body;
+  if (!fields.length && !touchesTeam && !movesPosition) {
+    return { code: 400, body: { error: `no updatable fields (${allowed.join(', ')}, team_id, team_position)` } };
+  }
+  if (fields.includes('name')) {
+    const name = String(ctx.body.name ?? '').trim();
+    if (!name || name.length > 120) return { code: 400, body: { error: 'name must be 1–120 characters' } };
+  }
+  try {
+    for (const k of fields) {
+      let value = ctx.body[k];
+      if (k === 'responsibilities') value = JSON.stringify(Array.isArray(value) ? value.map((v) => String(v).slice(0, 300)).slice(0, 40) : []);
+      if (k === 'approval_gates') value = JSON.stringify(value && typeof value === 'object' ? value : {});
+      if (k === 'description') value = String(value ?? '').slice(0, 400);
+      if (k === 'goal') value = String(value ?? '').slice(0, 600);
+      db.prepare(`UPDATE agents SET ${k}=? WHERE id=?`).run(value, ctx.match[1]);
+    }
+    // Membership is deliberately not written directly: assignAgent keeps positions dense, moves the
+    // row inside its own transaction and records the change, so two views cannot disagree.
+    if (touchesTeam) {
+      const teamId = ctx.body.team_id !== undefined ? ctx.body.team_id : ctx.body.teamId;
+      const position = ctx.body.team_position ?? ctx.body.teamPosition;
+      teams.assignAgent(ctx.match[1], teamId ?? null, position ?? null, ctx.principal.id);
+    } else if (movesPosition) {
+      teams.moveTo(ctx.match[1], ctx.body.team_position ?? ctx.body.teamPosition);
+    }
+  } catch (error) {
+    const code = error?.code === 'not-found' ? 404 : 400;
+    return { code, body: { error: error.message, code: error.code || 'error' } };
+  }
   const ev = logEvent('agent', `Agent ${a.name} updated by ${ctx.principal.name}`, ctx.match[1]);
-  audit(ctx.principal.id, ctx.principal.via, 'agent.update', { id: ctx.match[1], fields }, 'allow', 'ok');
+  audit(ctx.principal.id, ctx.principal.via, 'agent.update', { id: ctx.match[1], fields, teamChanged: touchesTeam }, 'allow', 'ok');
   broadcast('agents', { type: 'agent.updated', entity: ctx.match[1], event: ev });
   return { code: 200, body: hydrateAgent(db.prepare('SELECT * FROM agents WHERE id=?').get(ctx.match[1])) };
+});
+
+/* ---- Teams: a view over `agents.team_id` (see src/teams.js) ----
+ * Teams share the `agents` WebSocket topic on purpose: membership lives on the agent row, so any
+ * change to a team is a change to agent rows and the app should re-read both together.
+ */
+const teamFail = (error) => {
+  const code = error?.code || 'error';
+  const status = code === 'not-found' ? 404 : code === 'conflict' ? 409 : 400;
+  return { code: status, body: { error: error.message, code } };
+};
+
+route('GET', /^\/api\/v1\/teams$/, { permission: 'read' }, () => ({ code: 200, body: teams.listTeams() }));
+
+route('GET', /^\/api\/v1\/teams\/([\w-]+)$/, { permission: 'read' }, (ctx) => {
+  try {
+    return { code: 200, body: teams.getTeam(ctx.match[1]) };
+  } catch (error) {
+    return teamFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/teams$/, { permission: 'swarm:write', mutating: true }, (ctx) => {
+  try {
+    const team = teams.createTeam({ ...(ctx.body || {}), principal: ctx.principal.id });
+    broadcast('agents', { type: 'team.created', entity: team.id });
+    return { code: 201, body: team };
+  } catch (error) {
+    return teamFail(error);
+  }
+});
+
+route('PATCH', /^\/api\/v1\/teams\/([\w-]+)$/, { permission: 'swarm:write', mutating: true }, (ctx) => {
+  try {
+    const team = teams.updateTeam(ctx.match[1], ctx.body || {}, ctx.principal.id);
+    broadcast('agents', { type: 'team.updated', entity: team.id });
+    return { code: 200, body: team };
+  } catch (error) {
+    return teamFail(error);
+  }
+});
+
+/**
+ * Delete a team. Its members are unassigned in the same transaction — never deleted, never silently
+ * moved — and the response says exactly who lost their team so the caller can report it truthfully.
+ */
+route('DELETE', /^\/api\/v1\/teams\/([\w-]+)$/, { permission: 'swarm:write', mutating: true }, (ctx) => {
+  try {
+    const result = teams.deleteTeam(ctx.match[1], ctx.principal.id);
+    broadcast('agents', { type: 'team.deleted', entity: ctx.match[1], unassigned: result.unassigned.map((m) => m.id) });
+    return { code: 200, body: result };
+  } catch (error) {
+    return teamFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/teams\/([\w-]+)\/order$/, { permission: 'agent:write', mutating: true }, (ctx) => {
+  try {
+    const team = teams.reorderTeam(ctx.match[1], ctx.body?.order || [], ctx.principal.id);
+    broadcast('agents', { type: 'team.reordered', entity: ctx.match[1] });
+    return { code: 200, body: team };
+  } catch (error) {
+    return teamFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/teams\/([\w-]+)\/members$/, { permission: 'agent:write', mutating: true }, (ctx) => {
+  try {
+    const agentId = String(ctx.body?.agentId || '');
+    if (!agentId) return { code: 400, body: { error: 'agentId is required' } };
+    const result = teams.assignAgent(agentId, ctx.match[1], ctx.body?.position ?? null, ctx.principal.id);
+    broadcast('agents', { type: 'team.member.added', entity: ctx.match[1], agentId });
+    return { code: 200, body: result };
+  } catch (error) {
+    return teamFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/teams\/([\w-]+)\/members\/([\w-]+)$/, { permission: 'agent:write', mutating: true }, (ctx) => {
+  try {
+    const result = teams.assignAgent(ctx.match[2], null, null, ctx.principal.id);
+    broadcast('agents', { type: 'team.member.removed', entity: ctx.match[1], agentId: ctx.match[2] });
+    return { code: 200, body: result };
+  } catch (error) {
+    return teamFail(error);
+  }
+});
+
+/**
+ * Soft-delete an agent. The row is kept (deleted_at) so audit, experiments and history stay readable;
+ * the agent loses its team in the same transaction, and anything that referenced it keeps its text.
+ */
+route('DELETE', /^\/api\/v1\/agents\/([\w-]+)$/, { permission: 'agent:write', mutating: true }, (ctx) => {
+  const a = db.prepare('SELECT * FROM agents WHERE id=? AND deleted_at IS NULL').get(ctx.match[1]);
+  if (!a) return { code: 404, body: { error: 'not found' } };
+  const team = a.team_id ? db.prepare('SELECT name FROM teams WHERE id=?').get(a.team_id) : null;
+  db.transaction(() => {
+    db.prepare('UPDATE agents SET deleted_at=?, team_id=NULL, team_position=0 WHERE id=?').run(Date.now(), ctx.match[1]);
+  })();
+  const ev = logEvent('agent', `Agent ${a.name} deleted by ${ctx.principal.name} (soft delete, kept for audit)`, ctx.match[1]);
+  audit(ctx.principal.id, ctx.principal.via, 'agent.delete', { id: ctx.match[1], name: a.name, team: a.team_id }, 'allow', 'ok');
+  broadcast('agents', { type: 'agent.deleted', entity: ctx.match[1], event: ev });
+  return {
+    code: 200,
+    body: {
+      id: ctx.match[1],
+      name: a.name,
+      softDeleted: true,
+      unassignedFrom: team ? team.name : null,
+      summary: `Agent ${a.name} removed from the workspace. The row is kept for audit and experiments; it was also unassigned from ${team ? team.name : 'no team'}.`,
+    },
+  };
 });
 
 route('GET', /^\/api\/v1\/tasks$/, { permission: 'read' }, () => ({

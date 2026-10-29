@@ -1,0 +1,145 @@
+/* ============ Agent grid, cards and the Teams board ============
+ * Mobile first: one column until 560px, two until 900px, three above. Every card is the same shape so
+ * a row of them reads as a grid rather than a pile. Tokens only.
+ */
+
+.ag-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.ag-cell {
+  position: relative;
+  min-width: 0;
+}
+
+.ag-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.ag-card:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.ag-open {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+
+.ag-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.ag-x {
+  color: var(--text-muted);
+}
+
+.ag-x:hover,
+.ag-x:focus-visible {
+  color: var(--state-error-strong);
+}
+
+.ag-card-edit {
+  border-color: var(--accent-primary);
+  border-style: dashed;
+}
+
+/* ---------- Teams board ---------- */
+
+.teams-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.teams-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-base);
+}
+
+.teams-menu-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+}
+
+.teams-menu-row.on {
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-base));
+}
+
+.teams-menu-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.teams-menu-row .tpm-menu-pop {
+  top: 44px;
+}
+
+.teams-active {
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-base);
+  min-width: 0;
+}
+
+@media (min-width: 560px) {
+  .ag-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .ag-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .teams-layout {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+}

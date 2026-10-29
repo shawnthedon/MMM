@@ -355,3 +355,36 @@ when the health check fails, quotas that stop runaway loops, and a ten-stage aud
 - Honest limits: the sandbox is **process isolation, not a container** (no network isolation) and the API
   and screen both say so; there is no model-driven patch author yet; reproduction is files + manifest,
   not an image digest. Full list: [`evolution/SELF_MODIFICATION.md`](evolution/SELF_MODIFICATION.md) §10.
+
+---
+
+## 👥 2026-10-29 — Teams, membership and the agent panel (M24)
+
+Teams are real. Membership is stored **once**, on the agent row (`agents.team_id` +
+`agents.team_position`); `team_members` is retired by `006_team_membership.sql`, so the grid, the
+panel, the designer and the gateway cannot disagree about who is on what team.
+
+- Backend: `apps/gateway/src/teams.js` + 8 routes (create, rename, delete, add/remove member, reorder).
+  Reads need `read`, team mutations `swarm:write`, membership writes `agent:write`; every change is
+  audited and broadcast on WS topic `agents`. `DELETE /api/v1/agents/:id` is a soft delete that also
+  frees the team slot — a team is never deleted as a side effect.
+- **Deleting a team unassigns its members** (`teamId → null`), detaches its swarms and deletes no agent;
+  the confirmation says exactly that, and the audit entry records `agentsDeleted: 0`.
+- Panel: full-height sheet below 900 px, docked right-hand panel at 900 px and up. Identity, team
+  assignment with an “n of m” position slider, responsibilities, instructions (goal + multiline prompt,
+  never truncated), capabilities, autonomy **with an explicit “orchestration is not implemented” note**,
+  status, and four shortcuts (Skills filtered to that agent, Tools and MCP, Chat enabled only while the
+  agent is active, and the team menu).
+- Left team menu with real member counts, an active-team panel, a ⋯ menu, and **“New agent in <team>”**
+  that carries the team into the designer as a visible, editable suggestion — nothing is written until
+  the definition is saved.
+- Grid: 1 / 2 / 3 columns, cards with avatar, name, role, team, lifecycle pill, capability chips and an X
+  delete; inline editing of name, role and team behind an explicit Save, and a failed write leaves the
+  card unchanged.
+- Evidence: `npm run test:teams` — **12 passed** against a real gateway, including *“deleting a team
+  unassigns members instead of deleting them”*; `npm run test:teams:ui` — **23 passed**;
+  `npm run test:teams:browser` — **6 passed** in real Chromium (full-height sheet at 390 px, no overflow
+  at 320 px, 900 px dock at 1280 px, grid 1/2/3, screen values matching state). `npm test` and
+  `npm run build` green.
+- Honest limits: `team_position` is not yet used for dispatch, there are no per-team budgets, and there is
+  no membership-history screen beyond the audit trail.

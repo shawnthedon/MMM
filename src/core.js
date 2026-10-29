@@ -44,6 +44,10 @@ export const icons = {
   plug: svg(P('M9 3v6M15 3v6M6 9h12v3a6 6 0 0 1-12 0zM12 18v3')),
   chart: svg(P('M4 20V4M4 20h16M8 16V10M12 16V6M16 16v-4')),
   gear: svg(P('M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19 12c0-.5-.05-1-.13-1.46l2-1.5-2-3.46-2.3.94a7 7 0 0 0-2.53-1.46L13.6 2.5h-3.2l-.44 2.56a7 7 0 0 0-2.53 1.46l-2.3-.94-2 3.46 2 1.5A7 7 0 0 0 5 12c0 .5.05 1 .13 1.46l-2 1.5 2 3.46 2.3-.94a7 7 0 0 0 2.53 1.46l.44 2.56h3.2l.44-2.56a7 7 0 0 0 2.53-1.46l2.3.94 2-3.46-2-1.5c.08-.46.13-.96.13-1.46z')),
+  more: svg(P('M5 12h.01M12 12h.01M19 12h.01')),
+  eye: svg(P('M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12zM12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z')),
+  refresh: svg(P('M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5')),
+  user: svg(P('M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0')),
   folder: svg(P('M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z')),
   terminal: svg(P('M4 5h16v14H4zM7 9l3 3-3 3M12.5 15H17')),
   send: svg(P('M4 12l16-8-6 8 6 8z')),
@@ -136,6 +140,10 @@ export function seed() {
         autonomy: 3, successRate: 0.94, costToday: 4.28, runs: 214, lastActive: mins(2),
         tools: ['firecrawl.scrape', 'firecrawl.map', 'web.search'], skills: ['firecrawl.deep-research', 'core.citations'],
         prompt: 'You are Researcher-01. Gather multi-source evidence, never fabricate citations, prefer primary sources.',
+        teamId: 'tm-research', teamPosition: 1, description: 'Reads primary sources, keeps a citation ledger, and refuses to invent a reference.',
+        responsibilities: ['Collect primary sources', 'Keep a citation ledger', 'Flag contradictory evidence'],
+        approvalGates: { beforeToolCall: true, beforeDeploy: true, beforeSpend: false },
+        goal: 'Turn a question into a cited briefing, and say what the sources cannot support.',
         memory: { episodic: 1840, semantic: 412, kb: '14.2 MB' },
       },
       {
@@ -144,6 +152,10 @@ export function seed() {
         autonomy: 2, successRate: 0.91, costToday: 6.12, runs: 156, lastActive: mins(5),
         tools: ['github.repos', 'github.pr.create', 'fs.write'], skills: ['dev.tdd-loop', 'dev.code-review'],
         prompt: 'You are Coder-07. Write tests first, small diffs, explain trade-offs briefly.',
+        teamId: 'tm-ops', teamPosition: 2, description: 'Small diffs, tests first, explains trade-offs before opening a pull request.',
+        responsibilities: ['Write the failing test first', 'Keep diffs small', 'Open a PR with evidence'],
+        approvalGates: { beforeToolCall: true, beforeDeploy: true, beforeSpend: false },
+        goal: 'Ship small, tested changes and open a pull request a person can review.',
         memory: { episodic: 980, semantic: 260, kb: '9.1 MB' },
       },
       {
@@ -152,6 +164,10 @@ export function seed() {
         autonomy: 1, successRate: 0.87, costToday: 2.03, runs: 64, lastActive: mins(95),
         tools: ['net.probe', 'http.fuzz'], skills: ['sec.recon', 'sec.report'],
         prompt: 'You are RedTeam-Alpha. Operate strictly inside the engagement scope. Every exploit step requires approval.',
+        teamId: 'tm-red', teamPosition: 1, description: 'Scope-bound security testing. Every exploit step waits for an approval gate.',
+        responsibilities: ['Stay inside engagement scope', 'Request approval per step', 'Report reproducible findings'],
+        approvalGates: { beforeToolCall: true, beforeDeploy: true, beforeSpend: false },
+        goal: 'Test the engagement scope, one approved step at a time.',
         memory: { episodic: 420, semantic: 150, kb: '5.4 MB' },
       },
       {
@@ -160,6 +176,10 @@ export function seed() {
         autonomy: 3, successRate: 0.96, costToday: 1.44, runs: 502, lastActive: mins(1),
         tools: ['vercel.logs', 'vercel.deploy', 'webhook.alert'], skills: ['sre.triage', 'sre.postmortem'],
         prompt: 'You are SRE-Bot. Detect, triage, mitigate. Never touch prod without a gate approval.',
+        teamId: 'tm-ops', teamPosition: 1, description: 'Watches deploys and logs, triages incidents, and never touches production without a gate.',
+        responsibilities: ['Watch deploys and logs', 'Triage incidents', 'Write the postmortem'],
+        approvalGates: { beforeToolCall: true, beforeDeploy: true, beforeSpend: false },
+        goal: 'Catch a bad deploy before a customer does.',
         memory: { episodic: 3200, semantic: 890, kb: '22.8 MB' },
       },
       {
@@ -168,6 +188,10 @@ export function seed() {
         autonomy: 2, successRate: 0.89, costToday: 0.87, runs: 122, lastActive: mins(30),
         tools: ['airtable.records', 'supabase.db.query'], skills: ['content.longform', 'content.repurpose'],
         prompt: 'You are Content-Weaver. Match brand voice, always include sources, respect editorial gates.',
+        teamId: 'tm-research', teamPosition: 2, description: 'Turns one long source into a thread, a newsletter draft and a summary in house voice.',
+        responsibilities: ['Match brand voice', 'Include sources', 'Respect editorial gates'],
+        approvalGates: { beforeToolCall: true, beforeDeploy: true, beforeSpend: false },
+        goal: 'Turn one long source into a thread, a newsletter draft and a summary.',
         memory: { episodic: 760, semantic: 320, kb: '8.7 MB' },
       },
       {
@@ -176,13 +200,19 @@ export function seed() {
         autonomy: 2, successRate: 0.78, costToday: 3.19, runs: 88, lastActive: mins(40),
         tools: ['supabase.db.query', 'firecrawl.extract'], skills: ['data.etl', 'data.forecast'],
         prompt: 'You are Analyst-Prime. Deliberate over hypotheses, validate data before conclusions.',
+        teamId: 'tm-red', teamPosition: 2, description: 'Builds the cost and usage picture, and states what the data cannot support.',
+        responsibilities: ['Validate data before conclusions', 'Track spend by agent', 'State the limits of the data'],
+        approvalGates: { beforeToolCall: true, beforeDeploy: true, beforeSpend: false },
+        goal: 'Keep the cost and usage picture honest, and flag what the data cannot show.',
         memory: { episodic: 610, semantic: 240, kb: '7.2 MB' },
       },
     ],
+    // Teams carry no member list of their own: membership is `agent.teamId`. A second copy is a
+    // second truth, and the two drift the moment one is edited.
     teams: [
-      { id: 'tm-research', name: 'Research Squad', topology: 'Hierarchical', members: ['ag-researcher', 'ag-content', 'ag-analyst'], health: 'good' },
-      { id: 'tm-ops', name: 'Ops Crew', topology: 'Peer mesh', members: ['ag-sre', 'ag-coder'], health: 'good' },
-      { id: 'tm-red', name: 'Red Cell', topology: 'Pipeline', members: ['ag-pentester', 'ag-analyst'], health: 'watch' },
+      { id: 'tm-research', name: 'Research Squad', topology: 'Hierarchical', health: 'good', description: 'Multi-source research and cited briefings.' },
+      { id: 'tm-ops', name: 'Ops Crew', topology: 'Peer mesh', health: 'good', description: 'Infrastructure watch and incident response.' },
+      { id: 'tm-red', name: 'Red Cell', topology: 'Pipeline', health: 'watch', description: 'Gated security assessment inside an engagement scope.' },
     ],
     swarms: [
       {
@@ -374,6 +404,21 @@ function migrate(saved) {
     .map((profile) => ({ ...voiceDefaults.profiles.find((seedProfile) => seedProfile.id === profile.id), ...profile }))
     .filter((profile) => profile && profile.id);
   next.settings.voice = mergedVoice;
+  // Team membership moved from `teams[].members` to `agent.teamId`. A saved state from before the
+  // move is converted once here, then the list is dropped: one place, or two truths.
+  const legacyTeams = (next.teams || []).filter((t) => Array.isArray(t.members));
+  if (legacyTeams.length) {
+    const positions = new Map();
+    legacyTeams.forEach((t) => (t.members || []).forEach((id, index) => {
+      if (!positions.has(id)) positions.set(id, { teamId: t.id, teamPosition: index + 1 });
+    }));
+    next.agents = (next.agents || []).map((a) => (a.teamId || !positions.has(a.id) ? a : { ...a, ...positions.get(a.id) }));
+  }
+  next.teams = (next.teams || []).map(({ members, ...t }) => t);
+  next.agents = (next.agents || []).map((a) => ({
+    description: '', responsibilities: [], approvalGates: { beforeToolCall: true, beforeDeploy: false, beforeSpend: false },
+    teamId: null, teamPosition: 0, ...a,
+  }));
   return next;
 }
 
@@ -447,5 +492,28 @@ export function setProvenance(patch) {
 export const isLive = (slice) => (state.provenance || {})[slice] === 'gateway';
 
 export function getAgent(id) { return state.agents.find((a) => a.id === id); }
+
+/* ---- team membership: one source, read everywhere ---- */
+/** Members of a team, ordered by the position the slider shows. */
+export function teamMembers(teamId) {
+  if (!teamId) return [];
+  return state.agents
+    .filter((a) => a.teamId === teamId)
+    .sort((x, y) => (Number(x.teamPosition) || 0) - (Number(y.teamPosition) || 0) || x.name.localeCompare(y.name));
+}
+/** The team an agent belongs to, or null. */
+export function teamOf(agent) {
+  return agent?.teamId ? state.teams.find((t) => t.id === agent.teamId) || null : null;
+}
+/** 1-based position of an agent inside its team, and the team size ("n of m"). */
+export function teamPosition(agent) {
+  const members = teamMembers(agent?.teamId);
+  const index = members.findIndex((m) => m.id === agent.id);
+  return { position: index < 0 ? 0 : index + 1, total: members.length };
+}
+/** Teams with real member counts, for the left menu and every card. */
+export function teamsWithCounts() {
+  return state.teams.map((t) => ({ ...t, members: teamMembers(t.id), memberCount: teamMembers(t.id).length }));
+}
 export function getTeam(id) { return state.teams.find((t) => t.id === id); }
 export function pendingApprovals() { return state.approvals.filter((a) => a.status === 'pending'); }

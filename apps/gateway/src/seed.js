@@ -11,7 +11,7 @@ export function seed({ reset = false } = {}) {
     // Identity and credential tables are deliberately excluded: re-seeding demo content must
     // never delete the workspace owner, active sessions, API tokens, or the lockout history.
     const tables = ['audit_log', 'jobs', 'files', 'messages', 'threads', 'model_policies', 'providers',
-      'plugins', 'skills', 'events', 'approvals', 'tasks', 'swarms', 'team_members', 'teams', 'agents'];
+      'plugins', 'skills', 'events', 'approvals', 'tasks', 'swarms', 'teams', 'agents'];
     db.transaction(() => { for (const t of tables) db.prepare(`DELETE FROM ${t}`).run(); })();
   }
 
@@ -24,18 +24,23 @@ export function seed({ reset = false } = {}) {
     // audit attribution are always explicit.
     for (const a of j('agents.json')) {
       db.prepare(`INSERT OR REPLACE INTO agents
-        (id,name,role,framework,framework_config,model,fallback,status,trust,autonomy,success_rate,cost_today,runs,last_active,tools,skills,prompt,memory,created_by)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-        .run(a.id, a.name, a.role, a.framework, '{}', a.model, a.fallback, a.status, a.trust, a.autonomy,
+        (id,name,role,description,goal,framework,framework_config,model,fallback,status,trust,autonomy,success_rate,cost_today,runs,last_active,tools,skills,prompt,memory,created_by,team_id,team_position,responsibilities,approval_gates)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(a.id, a.name, a.role, a.description || '', a.goal || '', a.framework, '{}', a.model, a.fallback, a.status, a.trust, a.autonomy,
           a.successRate, a.costToday, a.runs, a.lastActive, JSON.stringify(a.tools), JSON.stringify(a.skills),
-          a.prompt, JSON.stringify(a.memory), 'seed');
+          a.prompt, JSON.stringify(a.memory), 'seed', a.teamId ?? null, a.teamPosition ?? 0,
+          JSON.stringify(a.responsibilities || []), JSON.stringify(a.approvalGates || {}));
     }
     counts.agents = j('agents.json').length;
 
     for (const t of j('teams.json')) {
-      db.prepare('INSERT OR REPLACE INTO teams (id,name,topology,config,health,created_by) VALUES (?,?,?,?,?,?)')
-        .run(t.id, t.name, t.topology, '{}', t.health, 'seed');
-      for (const m of t.members) db.prepare('INSERT OR REPLACE INTO team_members (team_id,agent_id,role) VALUES (?,?,?)').run(t.id, m, 'member');
+      db.prepare('INSERT OR REPLACE INTO teams (id,name,topology,config,health,created_by,description) VALUES (?,?,?,?,?,?,?)')
+        .run(t.id, t.name, t.topology, '{}', t.health, 'seed', t.description || `Members: ${(t.members || []).length} agents.`);
+      // Membership exists once, on the agent row. The fixture's member list is a seed input, not a
+      // second store: it is written into agents.team_id/team_position and never read back.
+      (t.members || []).forEach((agentId, index) => {
+        db.prepare('UPDATE agents SET team_id=?, team_position=? WHERE id=?').run(t.id, index + 1, agentId);
+      });
     }
     counts.teams = j('teams.json').length;
 

@@ -1,0 +1,552 @@
+/* ============ Team management panel — mobile first ============
+ * Base: a full-height sheet covering the viewport, because on a phone there is nothing beside it.
+ * From 900px: it docks to the right at 900px wide, which is the smallest width at which the team
+ * menu, the member list and an agent's instructions can be read at the same time.
+ * Mobile-first: every rule below is the small-screen rule; only `min-width` queries widen it.
+ * Tokens only — no literal colours.
+ */
+
+.tpm-open {
+  overflow: hidden;
+}
+
+.tpm-scrim {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-base) 72%, transparent);
+  z-index: 60;
+}
+
+.tpm-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 61;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-default);
+  border-radius: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  overflow: hidden;
+}
+
+.tpm-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+}
+
+.tpm-head h2 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.tpm-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+/* ---------- team menu ---------- */
+
+.tpm-menu {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tpm-menu-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tpm-menu-head h3 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.tpm-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tpm-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  text-align: left;
+  font-size: 13px;
+}
+
+.tpm-team.on {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-base));
+}
+
+.tpm-team-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.tpm-count {
+  margin-left: auto;
+  min-width: 24px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tpm-team-note {
+  flex-basis: 100%;
+  padding-left: 2px;
+}
+
+.tpm-menu-foot {
+  margin: 0;
+}
+
+/* ---------- active team ---------- */
+
+.tpm-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 14px 28px;
+}
+
+.tpm-active {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-base);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tpm-active-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.tpm-active-head h3 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.tpm-menu-wrap {
+  position: relative;
+}
+
+.tpm-menu-pop {
+  position: absolute;
+  right: 0;
+  top: 46px;
+  z-index: 5;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--bg-base) 70%, transparent);
+  display: flex;
+  flex-direction: column;
+}
+
+.tpm-menu-pop button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+}
+
+.tpm-menu-pop button:hover,
+.tpm-menu-pop button:focus-visible {
+  background: var(--bg-surface);
+}
+
+.tpm-menu-pop button.danger {
+  color: var(--state-error-strong);
+}
+
+.tpm-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tpm-member {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+.tpm-member.on {
+  border-color: var(--accent-primary);
+}
+
+.tpm-member-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.tpm-avatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bg-elevated);
+  color: var(--accent-primary);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.tpm-avatar.lg {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+  font-size: 18px;
+}
+
+.tpm-add-member {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tpm-fab {
+  margin-top: 4px;
+}
+
+/* ---------- agent panel ---------- */
+
+.tpm-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tpm-identity {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-base);
+}
+
+.tpm-identity h3 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.tpm-desc {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.tpm-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-base);
+  padding: 10px 12px;
+}
+
+.tpm-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.tpm-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.tpm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tpm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tpm-range {
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--accent-primary);
+}
+
+.tpm-resp {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tpm-resp li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.tpm-suggest {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.tpm-suggestion {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.tpm-suggestion .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tpm-prompt {
+  min-height: 120px;
+  max-height: none;
+  resize: vertical;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tpm-gates {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.tpm-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.tpm-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--state-warning) 12%, var(--bg-surface));
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.tpm-note.warn {
+  background: color-mix(in srgb, var(--state-warning) 14%, var(--bg-surface));
+}
+
+.tpm-caps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tpm-cap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tpm-cap-tools {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
+
+.tpm-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.tpm-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tpm-shortcuts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.tpm-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.tpm-shortcut span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tpm-shortcut small {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.tpm-shortcut[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tpm-inline-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px dashed var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+/* ---------- wider screens ---------- */
+
+@media (min-width: 560px) {
+  .tpm-facts {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .tpm-shortcuts {
+    grid-template-columns: 1fr 1fr;
+  }
+  .tpm-suggestion .input {
+    max-width: none;
+  }
+}
+
+/* The docked panel: from 900px the sheet becomes a right-hand panel 900px wide. */
+@media (min-width: 900px) {
+  .tpm-scrim {
+    background: color-mix(in srgb, var(--bg-base) 55%, transparent);
+  }
+  .tpm-panel {
+    inset: 0 0 0 auto;
+    width: 900px;
+    max-width: 100vw;
+    border-left: 1px solid var(--border-default);
+    border-top: 0;
+    border-radius: 16px 0 0 0;
+    box-shadow: -18px 0 48px color-mix(in srgb, var(--bg-base) 65%, transparent);
+  }
+  .tpm-body {
+    grid-template-columns: 260px minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .tpm-menu {
+    border-bottom: 0;
+    border-right: 1px solid var(--border-subtle);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .tpm-main {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .tpm-shortcuts {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -16,7 +16,36 @@ const SKILL_TABS = [
   ['synthesized', 'Synthesized'],
 ];
 
-const skillFilter = () => (window.__skillFilter ||= { category: 'all', author: 'all', license: 'all', status: 'all', q: '' });
+const skillFilter = () => (window.__skillFilter ||= { category: 'all', author: 'all', license: 'all', status: 'all', q: '', agent: '' });
+
+/** Skills Hub, filtered to one agent's installed skills. Used by the team panel shortcut. */
+export function openSkillsForAgent(agentId) {
+  window.__skillsTab = 'installed';
+  const filter = skillFilter();
+  filter.agent = agentId || '';
+  filter.q = '';
+  import('./main.js').then((m) => m.navigate('skills'));
+}
+
+/** Chat with an agent selected. The agent must be running; callers check before calling. */
+export function selectChatAgent(agentId) {
+  const s = getState();
+  const agent = s.agents.find((a) => a.id === agentId);
+  if (!agent) return;
+  const thread = (s.threads || []).find((t) => t.title && t.title.includes(agent.name)) || (s.threads || [])[0];
+  if (thread) window.__chatThread = thread.id;
+  window.__chatAgent = agent.id;
+}
+
+const agentSkillNames = (agent) => new Set((agent?.skills || []).map((s) => String(s)));
+function agentFilteredSkills(s, list) {
+  const id = skillFilter().agent;
+  if (!id) return list;
+  const agent = (s.agents || []).find((a) => a.id === id);
+  if (!agent) return list;
+  const names = agentSkillNames(agent);
+  return list.filter((k) => names.has(k.name));
+}
 
 function skillTab() {
   if (!window.__skillsTab) window.__skillsTab = 'installed';
@@ -109,7 +138,10 @@ views.skills = {
     const s = getState();
     const tab = skillTab();
     const counts = Object.fromEntries(SKILL_TABS.map(([id]) => [id, tabSkills(s, id).length]));
-    const list = tab === 'marketplace' ? filteredMarket(s) : tabSkills(s, tab);
+    const agentFilter = skillFilter().agent || '';
+    const agentForFilter = (s.agents || []).find((a) => a.id === agentFilter) || null;
+    const filteredByAgent = (list) => agentFilteredSkills(s, list);
+    const list = filteredByAgent(tab === 'marketplace' ? filteredMarket(s) : tabSkills(s, tab));
     const relCount = (s.relations || []).length;
     const installs = s.skillImports || [];
     return `
@@ -127,6 +159,10 @@ views.skills = {
       <div class="tabs">
         ${SKILL_TABS.map(([id, label]) => `<button class="${tab === id ? 'active' : ''}" data-act="skills-tab" data-tab="${id}">${label}${counts[id] ? ` (${counts[id]})` : ''}</button>`).join('')}
       </div>
+      ${agentForFilter ? `<div class="banner" style="margin:10px 0">${icon('robot', 16)}
+        <div class="grow">Filtered to <strong>${esc(agentForFilter.name)}</strong> — ${list.length} skill${list.length === 1 ? '' : 's'} on its row.
+          <span class="tiny muted">This is a filter on the agent's own skill list, not a separate assignment.</span></div>
+        <button class="btn sm" data-act="skill-agent-filter-clear">Clear</button></div>` : ''}
       ${tab === 'marketplace' ? filterBar(s) : ''}
       <div id="skill-list-host">
       ${list.length ? list.map(skillCard).join('') : `
@@ -289,6 +325,11 @@ on('skill-uninstall', (el, ds) => {
   }, 'skill-uninstall');
   closeAllSheets(); toast('Skill uninstalled'); import('./main.js').then((m) => m.rerender());
 });
+on('skill-agent-filter-clear', () => {
+  skillFilter().agent = '';
+  import('./main.js').then((m) => m.rerender());
+});
+
 on('skill-add-agent', (el, ds) => {
   toast('Pick an agent in Agent Manager → Skills tab', 'ok');
   closeAllSheets(); import('./main.js').then((m) => m.navigate('agents'));

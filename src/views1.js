@@ -2,11 +2,14 @@
 import {
   getState, setState, esc, icon, avatar, uid, now, fmtTime, fmtMoney, trustColor, trustTier,
   logEvent, pendingApprovals, getAgent, commit, initials, avatarColor,
+  teamOf, teamPosition, teamsWithCounts,
 } from './core.js';
 import { openSheet, closeAllSheets, toast, confirmModal, on, actions } from './shell.js';
 import { sourceTagHTML, sourceBannerHTML } from './sourceui.js';
-import { isLive, getStatus, createAgent, updateAgent, createTask, updateTask } from './datastore.js';
+import { isLive, getStatus, createAgent, updateAgent, createTask, updateTask, deleteAgent } from './datastore.js';
 import { isApiMode } from './api.js';
+import { openTeamPanel } from './team-panel.js';
+import './agents.css';
 import { can } from './auth.js';
 import {
   COLUMNS as COLS, ZOOM_MIN, ZOOM_MAX, COLUMN_IDS, columnLabel, boardPrefs, boardStats,
@@ -138,43 +141,99 @@ views.agents = {
   render(params) {
     if (params && params.id) return agentDetail(params.id);
     const s = getState();
+    const running = s.agents.filter((a) => a.status === 'running').length;
+    const teams = teamsWithCounts();
     return `
       <div class="page-head row between">
-        <div><h1>Agents</h1><div class="sub">${s.agents.length} profiles · ${s.agents.filter((a) => a.status === 'running').length} running ${sourceTagHTML('agents')}</div></div>
-        <div class="row" style="gap:8px">
+        <div><h1>Agents</h1><div class="sub">${s.agents.length} profiles · ${running} running · ${teams.length} teams ${sourceTagHTML('agents')}</div></div>
+        <div class="row wrap" style="gap:8px">
+          <button class="btn sm" data-act="team-panel" data-id="">${icon('team', 16)} Teams</button>
           <button class="btn sm" data-act="open-designer">${icon('spark', 16)} Designer</button>
           <button class="btn primary sm" data-act="new-agent">${icon('plus', 16)} New</button>
         </div>
       </div>
       ${sourceBannerHTML('agents')}
       <div class="scroll-x" style="margin-bottom:12px">
-        <span class="chip brand">All</span><span class="chip">LangGraph</span><span class="chip">CrewAI</span>
-        <span class="chip">Swarmzero</span><span class="chip">AutoPentest</span><span class="chip">A.I.M.A</span>
-        <span class="chip">Nautilus</span><span class="chip">OpenAI Swarm</span>
+        <span class="chip brand">All</span>${teams.map((t) => `<span class="chip">${esc(t.name)} · ${t.memberCount}</span>`).join('')}
       </div>
-      <p class="swipe-hint" id="swipe-help">${icon('left', 12)} Swipe left to run · swipe right to stop · swipe left and hold to delete. Or open an agent and use its buttons.</p>
-      ${s.agents.map((a) => swipeCard(a, `
-          ${avatar(a.name)}
-          <div class="grow">
-            <div class="row" style="gap:6px"><span class="strong small">${esc(a.name)}</span>
-              <span class="pulse-dot ${a.status === 'running' ? 'run' : a.status === 'error' ? 'bad' : a.status === 'paused' ? 'warn' : 'idle'}"></span>
-            </div>
-            <div class="tiny muted ellipsis">${esc(a.role)}</div>
-            <div class="row" style="gap:6px;margin-top:5px">
-              <span class="chip tiny">${esc(a.framework)}</span>
-              <span class="chip tiny brand">${esc(a.model.split('/')[1] || a.model)}</span>
-            </div>
-          </div>
-          <div class="col" style="align-items:flex-end;gap:6px">
-            <span class="chip tiny" style="color:${trustColor(a.trust)}">◈ ${a.trust}</span>
-            <div class="trust-bar"><i style="width:${a.trust}%;background:${trustColor(a.trust)}"></i></div>
-          </div>`)).join('')}`;
+      <p class="swipe-hint" id="swipe-help">${icon('left', 12)} Swipe a card left to run · right to stop · left and hold to delete. Every action is also a button on the card and in the agent panel.</p>
+      <div class="ag-grid">
+        ${s.agents.map((a) => agentCard(a)).join('')}
+      </div>`;
   },
 };
+
+/** Which card is being edited inline. Editing is local until Save writes. */
+let agentEditId = '';
+
+function agentCard(a) {
+  if (agentEditId === a.id) return agentEditCard(a);
+  const team = teamOf(a);
+  const { position, total } = teamPosition(a);
+  const chips = [
+    a.framework,
+    String(a.model).split('/')[1] || a.model,
+    ...(a.skills || []).slice(0, 3),
+  ];
+  const inner = `
+    ${avatar(a.name)}
+    <div class="grow">
+      <div class="row" style="gap:6px">
+        <span class="strong small">${esc(a.name)}</span>
+        <span class="chip tiny ${a.status === 'running' ? 'ok' : a.status === 'error' ? 'bad' : ''}">${esc(a.status)}</span>
+      </div>
+      <div class="tiny muted ellipsis">${esc(a.role || 'No role')}</div>
+      <div class="tiny muted">${team ? `${esc(team.name)} · ${position} of ${total}` : 'No team'}</div>
+      <div class="row wrap" style="gap:4px;margin-top:6px">
+        ${chips.map((c, i) => `<span class="chip tiny ${i === 1 ? 'brand' : ''}">${esc(c)}</span>`).join('')}
+        ${(a.tools || []).length ? `<span class="chip tiny">${(a.tools || []).length} tools</span>` : ''}
+      </div>
+    </div>`;
+  return `
+    <div class="swipe-wrap ag-cell" data-swipe-card data-swipe-id="${esc(a.id)}" data-swipe-name="${esc(a.name)}">
+      <div class="swipe-under" data-side="left" aria-hidden="true"><span class="swipe-under-label">${icon('play', 15)} Run</span><span class="swipe-under-note">hold to delete</span></div>
+      <div class="swipe-under" data-side="right" aria-hidden="true"><span class="swipe-under-label">${icon('stop', 15)} Stop</span></div>
+      <article class="ag-card swipe-surface" data-act="open-agent" data-id="${esc(a.id)}">
+        <button class="ag-open" data-act="open-agent" data-id="${esc(a.id)}" aria-label="Open ${esc(a.name)}">
+          ${inner}
+        </button>
+        <div class="ag-foot">
+          <button class="btn sm" data-act="agent-edit" data-id="${esc(a.id)}">${icon('doc', 14)} Edit</button>
+          <button class="iconbtn ag-x" data-act="agent-delete-x" data-id="${esc(a.id)}" aria-label="Delete ${esc(a.name)}">${icon('x', 18)}</button>
+        </div>
+      </article>
+    </div>`;
+}
+
+/** Inline edit of name, role and team with an explicit Save. Nothing is written until it is tapped. */
+function agentEditCard(a) {
+  const teams = teamsWithCounts();
+  return `
+    <article class="ag-card ag-card-edit" data-edit-id="${esc(a.id)}">
+      <div class="tpm-form" style="margin-top:0">
+        <label class="tiny muted" for="ag-name-${esc(a.id)}">Name</label>
+        <input class="input" id="ag-name-${esc(a.id)}" value="${esc(a.name)}" maxlength="120">
+        <label class="tiny muted" for="ag-role-${esc(a.id)}">Role</label>
+        <input class="input" id="ag-role-${esc(a.id)}" value="${esc(a.role || '')}" maxlength="160">
+        <label class="tiny muted" for="ag-team-${esc(a.id)}">Team</label>
+        <select class="input" id="ag-team-${esc(a.id)}">
+          <option value="">No team</option>
+          ${teams.map((t) => `<option value="${esc(t.id)}" ${t.id === a.teamId ? 'selected' : ''}>${esc(t.name)} · ${t.memberCount} member${t.memberCount === 1 ? '' : 's'}</option>`).join('')}
+        </select>
+        <div class="tpm-actions">
+          <button class="btn sm primary" data-act="agent-save" data-id="${esc(a.id)}">Save</button>
+          <button class="btn sm" data-act="agent-edit-cancel">Cancel</button>
+        </div>
+        <p class="tiny muted">A failed write leaves this card exactly as the server has it.</p>
+      </div>
+    </article>`;
+}
 
 function agentDetail(id) {
   const a = getAgent(id);
   if (!a) return `<div class="empty">Agent not found</div>`;
+  const team = teamOf(a);
+  const { position, total: positionTotal } = teamPosition(a);
   return `
     <button class="btn sm" data-act="nav" data-to="agents">${icon('left', 14)} All agents</button>
     <div class="card" style="margin-top:12px">
@@ -187,6 +246,12 @@ function agentDetail(id) {
         <button class="btn sm ${a.status === 'running' ? '' : 'primary'}" data-act="toggle-agent" data-id="${a.id}">
           ${a.status === 'running' ? icon('pause', 14) + ' Pause' : icon('play', 14) + ' Run'}
         </button>
+      </div>
+      <div class="row wrap" style="margin-top:10px;gap:8px">
+        <button class="btn sm" data-act="team-panel" data-id="${a.id}" data-team="${esc(a.teamId || '')}">
+          ${icon('team', 15)} Team management
+        </button>
+        <span class="tiny muted">${team ? `${esc(team.name)} · position ${position} of ${positionTotal}` : 'Not in a team'}</span>
       </div>
       <div class="row wrap" style="margin-top:12px">
         <span class="chip tiny">${esc(a.framework)}</span>
@@ -367,6 +432,62 @@ export function agentWizard() {
 }
 
 /* ================= TEAMS & SWARMS ================= */
+/* Current selection on the Teams screen. One source of membership: the agent rows. */
+let teamsSel = '';
+let teamsMenuFor = '';
+
+/** The team board: left menu with real member counts, active team panel, ⋯ menu, floating new-agent. */
+export function teamsBoardHTML() {
+  const teams = teamsWithCounts();
+  const sel = teamsSel || teams[0]?.id || '';
+  const active = teams.find((t) => t.id === sel) || null;
+  const loose = getState().agents.filter((a) => !a.teamId);
+  return `
+    <div class="teams-layout">
+      <nav class="teams-menu" aria-label="Teams">
+        ${teams.map((t) => `
+          <div class="teams-menu-row ${t.id === sel ? 'on' : ''}">
+            <button class="teams-menu-main" data-act="teams-select" data-id="${esc(t.id)}" aria-current="${t.id === sel ? 'true' : 'false'}">
+              <span class="strong small grow">${esc(t.name)}</span>
+              <span class="chip tiny">${t.memberCount} member${t.memberCount === 1 ? '' : 's'}</span>
+            </button>
+            <button class="iconbtn" data-act="teams-menu" data-id="${esc(t.id)}" aria-haspopup="menu"
+              aria-expanded="${teamsMenuFor === t.id}" aria-label="Actions for ${esc(t.name)}">${icon('more', 18)}</button>
+            ${teamsMenuFor === t.id ? `
+              <div class="tpm-menu-pop" role="menu">
+                <button role="menuitem" data-act="teams-view" data-id="${esc(t.id)}">${icon('eye', 15)} View team</button>
+                <button role="menuitem" data-act="teams-edit" data-id="${esc(t.id)}">${icon('gear', 15)} Edit team</button>
+                <button role="menuitem" class="danger" data-act="teams-delete" data-id="${esc(t.id)}">${icon('trash', 15)} Delete team</button>
+              </div>` : ''}
+          </div>`).join('')}
+        <div class="teams-menu-row">
+          <span class="strong small grow muted">No team</span>
+          <span class="chip tiny">${loose.length}</span>
+        </div>
+        <button class="btn sm block" data-act="team-panel" data-id="" style="margin-top:8px">${icon('plus', 14)} New team</button>
+      </nav>
+      <section class="teams-active" aria-label="Active team">
+        ${active ? `
+          <div class="row between">
+            <div class="grow">
+              <div class="strong">${esc(active.name)}</div>
+              <div class="tiny muted">${esc(active.topology)} · ${active.memberCount} member${active.memberCount === 1 ? '' : 's'} · ${esc(active.health)}</div>
+            </div>
+            <button class="btn sm" data-act="team-panel" data-team="${esc(active.id)}" data-id="${esc(active.members[0]?.id || '')}">${icon('team', 14)} Open</button>
+          </div>
+          <p class="small muted">${esc(active.description || 'No description yet.')}</p>
+          <div class="row wrap" style="gap:6px">
+            ${active.members.map((m) => `<span class="chip tiny">${esc(m.name)} · ${m.teamPosition || m.position || 0} of ${active.memberCount}</span>`).join('') || '<span class="tiny muted">No agents yet.</span>'}
+          </div>
+          <button class="btn block primary" style="margin-top:12px" data-act="team-new-agent" data-team="${esc(active.id)}" data-name="${esc(active.name)}">
+            ${icon('plus', 15)} New agent in ${esc(active.name)}
+          </button>
+          <p class="tiny muted">The designer opens with ${esc(active.name)} filled in as an editable suggestion — nothing is created until you save there.</p>` : `
+          <div class="empty"><div class="e-ico">◇</div><div>No teams yet. Create one from the team management panel.</div></div>`}
+      </section>
+    </div>`;
+}
+
 views.teams = {
   title: 'Teams & Swarms',
   render(params) {
@@ -394,20 +515,7 @@ views.teams = {
         </button>`).join('')}
 
       <div class="section-title">Teams</div>
-      ${s.teams.map((t) => `
-        <div class="card">
-          <div class="row between">
-            <div class="row">
-              <div class="avatar" style="background:var(--elevated);color:var(--brand)">${icon('team', 18)}</div>
-              <div><div class="strong small">${esc(t.name)}</div><div class="tiny muted">${esc(t.topology)} · ${t.members.length} agents</div></div>
-            </div>
-            <span class="chip tiny ${t.health === 'good' ? 'ok' : 'warn'}">${esc(t.health)}</span>
-          </div>
-          <div class="row" style="margin-top:10px">
-            ${t.members.map((id) => { const a = getAgent(id); return a ? avatar(a.name, 'sm') : ''; }).join('')}
-            <button class="btn sm" data-act="new-swarm" data-team="${t.id}" style="margin-left:auto">${icon('play', 13)} Deploy</button>
-          </div>
-        </div>`).join('')}
+      ${teamsBoardHTML()}
 
       <div class="section-title">Templates</div>
       <div class="scroll-x">
@@ -488,7 +596,7 @@ export function swarmDeploySheet(teamId) {
         <textarea class="input" id="sw-obj" placeholder="e.g. Map the EU AI-agent market…">Explore the Q4 agent-framework landscape and draft a comparison report.</textarea>
       </div>
       <div class="field"><label>Team</label>
-        <select class="input" id="sw-team">${s.teams.map((t) => `<option value="${t.id}" ${t.id === (teamId || 'tm-research') ? 'selected' : ''}>${esc(t.name)} · ${t.members.length} agents</option>`).join('')}</select>
+        <select class="input" id="sw-team">${teamsWithCounts().map((t) => `<option value="${t.id}" ${t.id === (teamId || 'tm-research') ? 'selected' : ''}>${esc(t.name)} · ${t.memberCount} agents</option>`).join('')}</select>
       </div>
       <div class="grid-2">
         <div class="field"><label>Topology</label>
@@ -1023,35 +1131,148 @@ document.addEventListener('swipe-command', (event) => {
   else if (action === 'arm') deleteAgentWithConfirm(id);
 });
 
-function deleteAgentWithConfirm(id) {
+/**
+ * Deleting an agent is confirmed with the consequences that actually apply to this agent: which team
+ * it leaves, what is kept (audit, experiments, history) and what stops working (task assignment).
+ */
+export function deleteAgentWithConfirm(id) {
   const a = getAgent(id);
   if (!a) return;
-  if (writeBlocked('agents', a.name, 'delete')) return;
+  if (isApiMode() && permissionDenied('agent:write')) {
+    toast('Your role cannot delete agents. Nothing was changed.', 'bad');
+    return;
+  }
+  const team = teamOf(a);
+  const assignedTasks = (getState().tasks || []).filter((t) => t.assignee === a.id).length;
+  const runs = Number(a.runs) || 0;
   confirmModal({
     title: `Delete ${esc(a.name)}?`,
-    body: `You swiped left and held. ${esc(a.name)} will be soft-deleted with 30-day restore; runs and audit logs are preserved.`,
+    body: `<ul class="tiny" style="margin:0 0 8px 16px;padding:0">
+        <li>The agent leaves the workspace${team ? ` and is unassigned from <strong>${esc(team.name)}</strong>` : ''}.</li>
+        <li>The row is kept as a soft delete, so ${runs} recorded run${runs === 1 ? '' : 's'}, its audit trail and its self-improvement history stay readable.</li>
+        <li>${assignedTasks ? `${assignedTasks} task${assignedTasks === 1 ? '' : 's'} currently assigned to it keep their text but lose the live assignee.` : 'No task is currently assigned to it.'}</li>
+        <li>Its prompt, skills and capabilities are not copied anywhere else.</li>
+      </ul>
+      <span class="tiny muted">The team and every other agent are untouched.</span>`,
     confirmText: 'Delete agent', danger: true, requireText: 'DELETE',
-    onConfirm: () => {
-      setState((st) => { st.agents = st.agents.filter((x) => x.id !== id); logEvent('agent', `Agent ${a.name} deleted`); }, 'del-agent');
-      toast('Agent deleted', 'ok');
-      import('./main.js').then((m) => m.rerender());
+    onConfirm: async () => {
+      try {
+        if (isApiMode()) {
+          if (!isLive('agents')) throw new Error('The gateway is not serving agents right now');
+          const result = await deleteAgent(id);
+          toast(result?.summary || 'Agent deleted', 'ok');
+        } else {
+          setState((st) => {
+            st.agents = st.agents.filter((x) => x.id !== id);
+            st.tasks = (st.tasks || []).map((t) => (t.assignee === id ? { ...t, assignee: '' } : t));
+            logEvent('agent', `Agent ${a.name} deleted`);
+          }, 'del-agent');
+          toast('Agent deleted', 'ok');
+        }
+        const { rerender, navigate } = await import('./main.js');
+        if (currentView() === 'agents' && currentParams().id === id) navigate('agents');
+        else rerender();
+      } catch (error) {
+        toast(`${error.message}. Nothing was changed.`, 'bad');
+      }
     },
   });
 }
 
-on('delete-agent', (el, ds) => {
-  const a = getAgent(ds.id);
-  if (writeBlocked('agents', a?.name || 'Agent', 'delete')) return;
-  confirmModal({
-    title: `Delete ${esc(a?.name)}?`,
-    body: 'Soft-deleted with 30-day restore. Runs and audit logs are preserved.',
-    confirmText: 'Delete agent', danger: true, requireText: 'DELETE',
-    onConfirm: () => {
-      setState((s) => { s.agents = s.agents.filter((x) => x.id !== ds.id); logEvent('agent', `Agent ${a?.name} deleted`); }, 'del-agent');
-      toast('Agent deleted', 'ok');
-      import('./main.js').then((m) => m.navigate('agents'));
-    },
-  });
+function currentView() { return (location.hash.replace(/^#\/?/, '').split('/')[0] || 'home'); }
+function currentParams() { const id = location.hash.replace(/^#\/?/, '').split('/')[1]; return id ? { id } : {}; }
+
+on('delete-agent', (el, ds) => deleteAgentWithConfirm(ds.id));
+on('agent-delete-x', (el, ds) => deleteAgentWithConfirm(ds.id));
+
+on('agent-edit', (el, ds) => {
+  agentEditId = ds.id;
+  import('./main.js').then((m) => m.rerender());
+});
+
+on('agent-edit-cancel', () => {
+  agentEditId = '';
+  import('./main.js').then((m) => m.rerender());
+});
+
+on('agent-save', async (el, ds) => {
+  const agent = getAgent(ds.id);
+  if (!agent) return;
+  const name = (document.getElementById(`ag-name-${ds.id}`)?.value || '').trim();
+  const role = (document.getElementById(`ag-role-${ds.id}`)?.value || '').trim();
+  const teamId = document.getElementById(`ag-team-${ds.id}`)?.value || '';
+  if (!name) { toast('An agent needs a name. Nothing was changed.', 'bad'); return; }
+  if (isApiMode() && permissionDenied('agent:write')) { toast('Your role cannot edit agents. Nothing was changed.', 'bad'); return; }
+  el?.setAttribute('disabled', 'disabled');
+  try {
+    if (isApiMode() && isLive('agents')) {
+      const patch = { name, role };
+      if (teamId !== (agent.teamId || '')) patch.team_id = teamId || null;
+      await updateAgent(ds.id, patch);
+    } else {
+      setState((s) => {
+        const row = s.agents.find((a) => a.id === ds.id);
+        if (!row) return;
+        row.name = name;
+        row.role = role;
+        if ((row.teamId || '') !== teamId) {
+          row.teamId = teamId || null;
+          row.teamPosition = teamId ? s.agents.filter((a) => a.teamId === teamId && a.id !== ds.id).length + 1 : 0;
+        }
+        logEvent('agent', `Agent ${name} updated inline`);
+      }, 'agent:inline-edit');
+    }
+    agentEditId = '';
+    toast('Saved', 'ok');
+    import('./main.js').then((m) => m.rerender());
+  } catch (error) {
+    // The card is re-rendered from state, which the failed write never touched.
+    el?.removeAttribute('disabled');
+    toast(`${error.message}. The card is unchanged.`, 'bad');
+    import('./main.js').then((m) => m.rerender());
+  }
+});
+
+/* ---- team management entry points ---- */
+on('team-panel', (el, ds) => {
+  const opts = { agentId: ds.id || '', teamId: ds.team || '' };
+  openTeamPanel(opts);
+});
+
+on('teams-select', (el, ds) => {
+  teamsSel = ds.id;
+  teamsMenuFor = '';
+  import('./main.js').then((m) => m.rerender());
+});
+
+on('teams-menu', (el, ds) => {
+  teamsMenuFor = teamsMenuFor === ds.id ? '' : ds.id;
+  import('./main.js').then((m) => m.rerender());
+});
+
+on('teams-view', (el, ds) => {
+  teamsMenuFor = '';
+  teamsSel = ds.id;
+  openTeamPanel({ teamId: ds.id });
+});
+
+on('teams-edit', (el, ds) => {
+  teamsMenuFor = '';
+  teamsSel = ds.id;
+  openTeamPanel({ teamId: ds.id, action: 'edit' });
+});
+
+on('teams-delete', (el, ds) => {
+  teamsMenuFor = '';
+  openTeamPanel({ teamId: ds.id, action: 'delete' });
+});
+
+on('team-new-agent', async (el, ds) => {
+  const designer = await import('./designer.js');
+  designer.suggestTeam({ id: ds.team, name: ds.name });
+  const { navigate } = await import('./main.js');
+  navigate('designer');
+  toast(`Designer opened — ${esc(ds.name)} is a suggestion you can change`, 'ok');
 });
 
 on('clone-agent', async (el, ds) => {
