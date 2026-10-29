@@ -65,7 +65,7 @@
 
 | | Module | | Module |
 | :---: | --- | :---: | --- |
-| 🤖 | **Agent Manager** — profiles, brain, memory, trust | 🐝 | **Teams & Swarms** — topologies, deploy, live DAG |
+| 🤖 | **Agent Manager** — profiles, team + position, goal, trust; full-height team panel on a phone, 900 px dock on a desktop | 🐝 | **Teams & Swarms** — real teams, real membership (one row, one truth); swarms still simulate |
 | 📋 | **Kanban Board** — drag & drop, @agent dispatch | ⚡ | **Skills Hub** — 24-skill marketplace, multi-format import, [Skills Matrix](docs/copilot/skills-hub.md) |
 | 🧠 | **Model Gateway** — routing, budgets, key vault | 🧩 | **Plugins** — MCP install & scoped grants |
 | 💬 | **Chat** — streaming, inline approvals | 📡 | **Comms** — Telegram · WhatsApp · Discord · Slack · SMS · Browser gateways |

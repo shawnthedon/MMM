@@ -6,16 +6,17 @@
  *   degraded  — a gateway session exists but the last refresh failed; demo fixtures are shown
  *               and labelled as such (never a stale mix)
  *
- * Only agents / tasks / approvals / events exist on the gateway today. Swarms, teams and usage
- * stay local and are labelled demo, because there is no server-side store for them yet.
+ * Agents, tasks, approvals, events and teams exist on the gateway. Teams are names and topology
+ * only: membership is `agents.team_id`, fetched in the same pull, so there is one value to read.
+ * Swarms and usage stay local and are labelled demo.
  */
 import { getState, replaceSlices, setProvenance, getProvenance, isLive, setPersistFilter, resetDemo } from './core.js';
 import { api, ApiError, isApiMode, gatewayUrl } from './api.js';
 import { getAuth, getAuthVersion, subscribeAuth, isAuthenticated, refreshSession } from './auth.js';
 import { demoCommsForPersistence } from './commsGateway.js';
 
-export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events'];
-export const LOCAL_SLICES = ['swarms', 'teams', 'usage'];
+export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events', 'teams'];
+export const LOCAL_SLICES = ['swarms', 'usage'];
 
 const listeners = new Set();
 /* Panels that want their own live refresh (the Self-Improvement cycle) subscribe here instead of
@@ -75,11 +76,28 @@ export function adaptAgent(row) {
     tools: arr(maybeJson(row.tools, [])),
     skills: arr(maybeJson(row.skills, [])),
     prompt: row.prompt || '',
+    teamId: row.team_id ?? null,
+    teamPosition: num(row.team_position, 0),
+    description: row.description || '',
+    goal: row.goal || '',
+    responsibilities: arr(maybeJson(row.responsibilities, [])),
+    approvalGates: maybeJson(row.approval_gates, {}) || {},
     memory: {
       episodic: num(memory.episodic, 0),
       semantic: num(memory.semantic, 0),
       kb: memory.kb || '0 MB',
     },
+    source: 'gateway',
+  };
+}
+
+export function adaptTeam(row) {
+  return {
+    id: row.id,
+    name: row.name || 'Untitled team',
+    topology: row.topology || 'Hierarchical',
+    health: row.health || 'good',
+    description: row.description || '',
     source: 'gateway',
   };
 }
@@ -198,6 +216,7 @@ function adopt(data, { requestId = null } = {}) {
   });
   const approvals = data.approvals.map(adaptApproval);
   const events = data.events.map(adaptEvent).sort((a, b) => b.ts - a.ts).slice(0, 80);
+  const teams = (data.teams || []).map(adaptTeam);
 
   // Set ownership before publishing rows to subscribers or persistence.
   // Slices without a server store stay local and keep their demo provenance.
@@ -207,10 +226,10 @@ function adopt(data, { requestId = null } = {}) {
     approvals: 'gateway',
     events: 'gateway',
     swarms: 'demo',
-    teams: 'demo',
+    teams: 'gateway',
     usage: 'demo',
   });
-  replaceSlices({ agents, tasks, approvals, events }, 'data:gateway');
+  replaceSlices({ agents, tasks, approvals, events, teams }, 'data:gateway');
   // Reflect the real gateway in the demo `gateway` object so header dots are not lies.
   replaceSlices(
     {
@@ -228,7 +247,7 @@ function adopt(data, { requestId = null } = {}) {
 
   Object.assign(sync, { status: 'live', error: null, at: Date.now(), requestId });
   emit();
-  return { agents: agents.length, tasks: tasks.length, approvals: approvals.length, events: events.length };
+  return { agents: agents.length, tasks: tasks.length, approvals: approvals.length, events: events.length, teams: teams.length };
 }
 
 /** Restore the pre-gateway fixtures and forget gateway rows. */
@@ -257,17 +276,20 @@ export function reloadDemoData() {
 }
 
 async function fetchAll() {
-  const [agents, tasks, approvals, events] = await Promise.all([
+  const [agents, tasks, approvals, events, teams] = await Promise.all([
     api.agents(),
     api.tasks(),
     api.approvals(),
     api.events(0),
+    // Teams are only names/topology now: membership is read from the agent rows fetched alongside.
+    api.teams().catch(() => ({ body: { teams: [] } })),
   ]);
   return {
     agents: agents.body,
     tasks: tasks.body,
     approvals: approvals.body,
     events: events.body,
+    teams: teams.body?.teams || [],
     requestId: agents.requestId,
   };
 }
@@ -563,6 +585,47 @@ export async function updateAgent(id, patch) {
   const row = adaptAgent(out.body);
   if (isLive('agents')) upsert('agents', row);
   return row;
+}
+
+/* ---------- teams ----------
+ * Membership is a column on the agent row, so a member change is an agent write. These helpers exist
+ * so callers never build a second, client-side membership list.
+ */
+export async function createTeam(draft) {
+  const out = await api.createTeam(draft);
+  if (isLive('teams')) scheduleRefresh(250);
+  return out.body;
+}
+
+export async function updateTeam(id, patch) {
+  const out = await api.updateTeam(id, patch);
+  if (isLive('teams')) scheduleRefresh(250);
+  return out.body;
+}
+
+export async function deleteTeam(id) {
+  const out = await api.deleteTeam(id);
+  // The server unassigned the members; re-read rather than editing the local copy by hand.
+  scheduleRefresh(200);
+  return out.body;
+}
+
+export async function assignAgentToTeam(agentId, teamId, position = null) {
+  const row = await updateAgent(agentId, { team_id: teamId ?? null, team_position: position });
+  return row;
+}
+
+export async function reorderTeam(teamId, order) {
+  const out = await api.reorderTeam(teamId, order);
+  scheduleRefresh(200);
+  return out.body;
+}
+
+export async function deleteAgent(id) {
+  const out = await api.deleteAgent(id);
+  replaceSlices({ agents: (getState().agents || []).filter((a) => a.id !== id) }, 'data:delete');
+  scheduleRefresh(200);
+  return out.body;
 }
 
 export async function createTask(draft) {

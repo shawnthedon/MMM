@@ -133,7 +133,7 @@ Every real feature in this repo is built the same way. Learn this once; reuse it
 | approvals | ✅ | ✅ | Approvals |
 | events | ✅ | ✅ | Home, activity lists |
 | comms_channels, comms_messages, comms_settings | ✅ | ✅ | Comms |
-| **teams, team_members** | ❌ | ❌ | Teams |
+| **teams, agents.team_id** | ❌ | ✅ | Teams |
 | **swarms** | ❌ | ❌ | Teams & Swarms |
 | **skills** | ❌ | ❌ | Skills Hub, Matrix |
 | **plugins** | ❌ | ❌ | Plugin Marketplace |
@@ -160,9 +160,9 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | # | Screen | Route | Status | What is actually happening | Where |
 | --- | --- | --- | --- | --- | --- |
 | 1 | **Home / Deck** | `#/home` | ✅ | Agents, approvals and events come from the gateway when signed in | `src/views1.js` |
-| 2 | **Agents** | `#/agents` | 🟠 | Rows are real and persist, **but every number in them is a seed constant** — `status: 'running'` is a label, `successRate`, `costToday`, `runs`, `lastActive`, `memory` are never computed | `001_init.sql` (agents), `fixtures/agents.json` |
+| 2 | **Agents** | `#/agents` | 🟠 | Cards are real and persist, and **team, team position and goal are real columns** (`agents.team_id`, `agents.team_position`, `agents.goal`); every *number* is still a seed constant — `status: 'running'` is a label, `successRate`, `costToday`, `runs`, `lastActive`, `memory` are never computed | `001_init.sql` (agents), `006_team_membership.sql`, `fixtures/agents.json` |
 | 3 | **Agent Designer** | `#/designer` | 🟠 | Saves through `createAgent()` → `POST /api/v1/agents` (real), but validation is client-side only and there is no versioning, evaluation or rollback | `src/designer.js:648` |
-| 4 | **Teams** | `#/teams` | 🟠 | `teams` + `team_members` tables are seeded; no routes; screen reads seed | `src/views1.js` |
+| 4 | **Teams** | `#/teams` | ✅ | Real end to end: create, rename, delete, add/remove member, reorder by position, through gateway routes with RBAC and audit. Membership lives once, on `agents.team_id` + `agents.team_position` (`team_members` retired by `006`). Deleting a team **unassigns** its members and says so. The panel is a full-height sheet on a phone and a 900 px docked panel above that | `apps/gateway/src/teams.js`, `server.js`, `src/team-panel.js`, `src/views1.js`, `src/agents.css` |
 | 5 | **Teams & Swarms** | `#/swarms` | 🎭 | Deploy writes a **local object** with a fabricated node list; the estimate `$6.40` is a string literal; progress advances from `Math.random()` in a `setInterval` | `src/views1.js:500-520`, `src/main.js` `tick()` |
 | 6 | **Tasks / Kanban** | `#/tasks` | ✅ | Real CRUD through the gateway; moves confirm before writing; drag, wires and zoom are client-side by design | `src/kanban.js`, `src/views2.js` |
 | 7 | **Approvals** | `#/approvals` | ✅ | Real gates, separation of duties (you cannot approve your own), audited decisions | `server.js`, `scripts/gateway-auth-test.mjs` |
@@ -1380,6 +1380,41 @@ checks are command-based rather than real production probes.
 
 **URLs:** A.27.
 
+### M24 · Teams, membership and the agent panel
+
+**Today.** Implemented and proven end to end. Membership is a **single fact stored once** — on the agent
+row — so the grid, the panel, the designer and the gateway can never disagree about who is on what team.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| Storage | `apps/gateway/migrations/006_team_membership.sql` | Retires `team_members` and adds `agents.team_id` (references `teams(id)`, nullable) + `agents.team_position` (dense, 0 when unassigned). SQLite cannot add `NOT NULL` without a constant default, so the column is added nullable and back-filled in the same migration. |
+| Membership model | `apps/gateway/src/teams.js` | `assignAgent` moves the row and renumbers the old and new team; `reorderTeam` refuses a partial order; `deleteTeam` runs one transaction: `UPDATE agents SET team_id = NULL, team_position = 0`, `UPDATE swarms SET team_id = NULL`, `DELETE FROM teams`. Audit event `team.delete` records `agentsDeleted: 0` and the unassigned list. |
+| Routes | `apps/gateway/server.js` | `GET/POST/PATCH/DELETE /api/v1/teams`, `POST /teams/:id/order`, `POST/DELETE /teams/:id/members`. Reads need `read`; team mutations need `swarm:write`; membership writes need `agent:write`. Every change broadcasts WS topic `agents`. |
+| Agent delete | `server.js` `DELETE /api/v1/agents/:id` | Soft delete: the row is flagged, its team slot is renumbered away, and the response says what happened (`softDeleted`, `unassignedFrom`). A team is never deleted as a side effect. |
+| Panel | `src/team-panel.js`, `src/team-panel.css` | Right-hand dock ≥ 900 px, full-height sheet below. Identity, team assignment with an “n of m” position slider, responsibilities, instructions (goal + multiline prompt, never truncated), capabilities, autonomy **with an explicit “orchestration is not implemented” note**, status and four shortcuts. A running agent states that prompt edits apply from the next message. |
+| Team menu | `src/team-panel.js`, `src/agents.css` | Left menu with real member counts, the active team panel, a ⋯ menu (view / edit / delete) and a floating **“New agent in <team>”** that hands the team to the designer as a visible, editable suggestion (`suggestTeam()`), applied only on save. |
+| Grid | `src/views1.js`, `src/agents.css` | 1 / 2 / 3 columns (min-width 560 / 900). Card = avatar, name, role, team, lifecycle pill, capability chips, X delete. Inline edit covers name, role and team with an explicit Save; a failed write leaves the card untouched. |
+| Shortcuts | `src/team-panel.js`, `src/views2.js` | Skills (opens the Skills Hub filtered to that agent), Tools and MCP (existing settings screen), Chat (selects the agent, enabled only when it is running), and the team menu. |
+
+**Acceptance tests.** `npm run test:teams` — 12 checks against a real gateway on a temporary `DATA_DIR`,
+including the verbatim case *“deleting a team unassigns members instead of deleting them”*.
+`npm run test:teams:ui` — 23 checks over the rendered panel and grid in happy-dom.
+`npm run test:teams:browser` — 6 checks in a real Chromium: full-height sheet at 390 px, no horizontal
+overflow at 320 px, a 900 px docked panel with a 260 px menu at 1280 px, the grid reflowing 1/2/3, and the
+screen values matching the session state. Needs `npm i --no-save puppeteer-core @sparticuz/chromium`.
+
+**The gap.** Position is a stored integer, not a scheduling or routing input — nothing dispatches work by
+it yet. There is no per-team budget, no nested teams, and no history of membership changes beyond the audit
+trail. Deleting a team is irreversible from the UI (the audit entry is the record).
+
+**Next steps**
+
+1. Read `team_position` when dispatching a task, so the order means something operationally.
+2. Per-team spend ceilings, sitting inside the existing budget gate rather than beside it.
+3. A membership history view built from the audit trail that already records every move.
+
+**URLs:** A.28.
+
 ---
 
 ## 6. Master implementation checklist
@@ -1545,6 +1580,22 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 - [ ] Model-driven patch author behind the existing gates
 - [ ] Sandbox spend metering and a cost ceiling
 - [ ] Real production health probes
+
+### M24 · Teams and the agent panel
+- [x] Membership stored once, on `agents.team_id`, with a dense `agents.team_position`
+- [x] Gateway routes for create / rename / delete / add / remove / reorder, with RBAC and audit
+- [x] Deleting a team unassigns members (teamId → null), deletes no agent and says so in the confirmation
+- [x] Panel: full-height sheet on a phone, 900 px dock above it; every required section rendered
+- [x] Position slider labelled “n of m”; releasing it writes the new order explicitly
+- [x] Responsibilities and suggestion drafts that are only applied when their own button is tapped
+- [x] Instructions shown in full, with the next-message note for a running agent
+- [x] Autonomy section that states orchestration is not implemented
+- [x] Four shortcuts; Chat enabled only for an active agent
+- [x] Agent grid at 1 / 2 / 3 columns with inline name, role and team editing behind an explicit Save
+- [x] Failed write leaves the card unchanged; X delete lists the real consequences
+- [ ] Position drives dispatch
+- [ ] Per-team budget ceilings
+- [ ] Membership history surface
 
 ---
 
@@ -1781,6 +1832,19 @@ an unfinished one.
 > repeated here — they are in [`PRODUCTION_ROADMAP.md` Appendix A](PRODUCTION_ROADMAP.md).
 
 ---
+
+### A.28 Team membership: the decision record
+
+No external service is required for any of this; the appendix exists so the next session does not
+re-litigate a decision that cost a bug to learn.
+
+| Question | Answer | Where |
+| --- | --- | --- |
+| Why not a `team_members` join table? | It allows two rows to disagree with the agent itself, and its `ON DELETE CASCADE` silently deletes membership when a team goes away — the exact shortcut this module forbids. One nullable column on `agents` makes “who is on what team” a single fact with no reconciliation step. | `006_team_membership.sql`, `src/teams.js` |
+| Why a dense integer position? | Reindexing on every move keeps the value meaningful (1…n, no gaps) and makes a partial reorder detectable: `reorderTeam` rejects an order that omits a member rather than guessing. | `src/teams.js` `reorderTeam` |
+| Why is the delete a transaction? | Three tables change together — agents, swarms and teams. A half-applied delete would either orphan membership or leave a team with no row. The audit event is written inside it, so there is no state without a record. | `src/teams.js` `deleteTeam` |
+| Why does the panel show the agent row rather than its own copy? | The panel, grid and designer all read the same slice; the WS `agents` broadcast invalidates it after every write. Nothing caches a second source of truth. | `src/core.js`, `src/datastore.js` |
+| What is honestly missing? | Position is not used for dispatch, teams have no budget, and there is no membership history screen — only the audit trail. | M24 “The gap” |
 
 ## Appendix B — Beginner reference
 
