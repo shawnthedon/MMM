@@ -383,8 +383,9 @@ export function nodeState(d, id) {
             : `${preset?.label || d.preset}: limits are recorded on the definition; no runtime enforces them.`,
         facts: [
           `Preset: ${preset?.label || d.preset}`,
-          `Autonomy: L${d.autonomy}`,
+          `Autonomy: L${d.autonomy} (behavioural intent — it does not grant code-writing authority)`,
           `Limits: ${d.limits.steps} steps · ${d.limits.minutes} min · $${Number(d.limits.cost).toFixed(2)}`,
+          'Self-modification: separate authority — a new agent starts at L1 recommend until an Owner sets its policy on Self-Improvement',
         ],
       };
     }
@@ -647,6 +648,9 @@ export async function saveDefinition() {
       if (!isLive('agents')) throw new Error('The gateway is not serving agents right now, so nothing was saved.');
       const row = await createAgent(record);
       finishSave(row.id);
+      /* The gateway creates the agent's self-modification policy at level 1. Saying so here avoids
+       * the reader assuming the behaviour preset above also authorises code changes. */
+      toast('Saved. Self-modification policy starts at L1 (recommend) — an Owner can raise it on Self-Improvement.', 'ok');
       return { ok: true, id: row.id, mode: 'gateway' };
     }
     const id = uid('ag');
