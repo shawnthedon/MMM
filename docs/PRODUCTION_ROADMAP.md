@@ -37,6 +37,7 @@ document wins. When they disagree about *detail*, the older document wins.
 | --- | --- | --- |
 | [`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md) | Functional build-out, Phases 0–18, sample-data inventory | Reference for *how* each feature is built. Its Phase 6/7/9/12/13 map onto L4–L7 here. |
 | [`IMPLEMENTATION_ROADMAP.md`](IMPLEMENTATION_ROADMAP.md) | NFR deep dives + milestones **M1–M9** + resource library | Reference for NFR theory. Part 4 here is the *checklist* form of M1–M9, plus the demo-exit track that it lacks. |
+| [`FEATURE_COMPLETION_ROADMAP.md`](FEATURE_COMPLETION_ROADMAP.md) | Module playbooks M01–M21: what each screen fakes, and step-by-step how to make it real | **The how.** Phases L3–L7 below are the *order*; this file is the *implementation detail* for each screen. |
 | [`roadmap/next-up.md`](roadmap/next-up.md) | Open items with acceptance criteria (Kanban, Comms, Local AI) | Its open items appear here as `L7`/`L8` work. |
 | [`PROGRESS.md`](PROGRESS.md) | Running status log | Append one line per phase completed here. |
 | [`DESIGN_SPEC.md`](DESIGN_SPEC.md), [`design/RELAY_DESIGN_SYSTEM.md`](design/RELAY_DESIGN_SYSTEM.md) | Visual + behavioural standards | Binding on every UI change below. |
@@ -400,6 +401,9 @@ without a gateway.
 ---
 
 ### L3 — Make swarms real, delete the ticker (1 week)
+
+> Implementation detail for this phase: [`FEATURE_COMPLETION_ROADMAP.md` §M04](FEATURE_COMPLETION_ROADMAP.md)
+> (and §4.1–§4.5 there for the migration/route/slice/test recipes used by every phase below).
 
 **Why now.** This is the loudest lie in the product (D04, D05): a swarm that “runs” because a
 `setInterval` says so. It also unblocks usage/cost, analytics, and Copilot swarm control.

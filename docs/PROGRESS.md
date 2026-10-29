@@ -301,3 +301,20 @@ which also purges the pre-rename shell), npm package name, docs and diagrams.
 Upgrade steps, the full before/after table and the rationale for a clean break rather than a
 compatibility shim: [`ops/RENAME_MMM.md`](ops/RENAME_MMM.md). `npm test` and `npm run build` green
 after the rename; `data/` is now gitignored and no longer tracked.
+
+---
+
+## 🧩 2026-10-29 — Feature Completion Roadmap
+
+Added [`FEATURE_COMPLETION_ROADMAP.md`](FEATURE_COMPLETION_ROADMAP.md): the feature-level companion to
+the production roadmap. It audits all 18 routed screens (plus the approvals list, Copilot overlay,
+training and the usage ledger) against what actually backs them, and gives 21 module playbooks with
+beginner-level steps, real code for this repo, a test per module and 95 documentation links.
+
+Key audit finding: **migration 001 already creates and seeds 15 tables, but only 4 have routes.**
+`swarms`, `teams`, `team_members`, `skills`, `plugins`, `providers`, `model_policies`, `threads`,
+`messages`, `files` and `jobs` are all persisted, seeded and unreachable — so most of the remaining
+work is "expose an existing table + add the runtime", not "design a backend". Also documented: the
+Telegram Bridge is entirely local even though a real Telegram adapter already exists in
+`apps/gateway/src/comms.js`, and agent rows persist fictional history (`runs`, `success_rate`,
+`cost_today` are seed constants nothing recomputes).
