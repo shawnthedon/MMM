@@ -151,7 +151,7 @@ bottom block is real engineering.
 
 ## 2. The truth table — every screen and surface
 
-18 routed screens, plus four surfaces that are not routes (the approvals list inside Home, the
+19 routed screens, plus four surfaces that are not routes (the approvals list inside Home, the
 Copilot overlay, Training, and the usage ledger behind Analytics).
 
 Legend: **✅ real** · **🟠 persisted but not served** · **🎭 simulated** · **❌ absent**.
@@ -180,6 +180,7 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | 19 | **Voice Studio** | `#/voice` | 🟠 | `browser-speech` adapter is real where `speechSynthesis` exists (on-device); the local-endpoint and cloning adapters are contract-only until you run a server | `src/voice/adapters.js` |
 | 20 | **Training** | — | ❌ | No screen, no backend, no job runner. Correctly reports `blocked` | `capabilities.js` |
 | 21 | **Local AI** | `#/local` | ❌ | Phase 2 spike only; model manager, offline text, image phases not started | `src/local.js`, `docs/local/` |
+| 23 | **Agent Browser** | `#/browser` | ✅ | Real end to end: gateway-owned tasks, one action per tick, watchdog, bounded recovery, checkpoints, evidence. **Requires Chromium on the gateway host** — until it is installed the screen reports `unconfigured` and offers no start button | `apps/gateway/src/browser/`, `src/browser.js` |
 | 22 | **Settings** | `#/settings` | 🎭 | Trust-weight sliders change a *preview number* only; notification toggles do nothing; retention is display text; “4 templates active”, “AEAD-sealed vault”, “default-deny · proxy” are static strings | `src/views2.js:930-1000` |
 
 > **Note on honesty already present.** The header chip, the provenance notes and the capability
@@ -202,6 +203,7 @@ to get, where, how long it takes, whether it costs money, and exactly what the a
 | **Slack / Discord / WhatsApp / Twilio** | Comms | Appendix A.3 | Free sandboxes for Slack/Discord; WhatsApp and Twilio need a business account | Those channels stay `unverified` in the UI |
 | **Local speech server** (Kokoro-FastAPI or Piper) | Voice: local engine | Appendix A.5 | Free; one Docker command | Voice falls back to `browser-speech`, which is real but OS-dependent |
 | **Training/evals backend** (promptfoo, OpenAI evals, or a job runner) | Training | Appendix A.6 | Free/OSS, 1 day to wire | Training stays `blocked` — that is the correct state, not a bug |
+| **Chromium for the Agent Browser** | Agent Browser | Appendix A.24 | Free/OSS; `npm i puppeteer` (~180 MB) or point at a system Chrome | The browser module reports `unconfigured` with the driver reason and refuses to start a task — no fake session |
 | **Local GGUF model** | Local AI | Appendix A.7 | Free; 1–4 GB download | Local AI stays “spike only”; never claim offline inference |
 | **Sandbox for tool execution** | Agents that run code | Appendix A.8 | Free tiers exist | Tools that execute code stay disabled |
 
@@ -1295,6 +1297,46 @@ production roadmap) and verify installability on iOS and Android once.
 
 ---
 
+### M22 · Agent Browser (autonomous browsing that stops when it should)
+
+**Today.** Implemented and proven. The gateway owns the task; the browser is a replaceable driver.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| Policy & states | `apps/gateway/src/browser/policy.js` | `queued → running → recovering → waiting_for_user / paused` → `completed / failed / blocked / cancelled / timed_out`. Terminal states are final. Refusals are classified (`captcha`, `rate_limit`, `forbidden`, `paywall`, `login`) and a blocked kind has an **empty recovery ladder**. |
+| Watchdog | `browser/watchdog.js` | Measures three things: time since the last meaningful change, the age of the in-flight action, and the deadline. “A page that remains open is not evidence of progress.” Aborts via `AbortController`. |
+| Loop detection | `browser/loops.js` | Repeated action against the same page state, two-page ping-pong, and repeated identical errors. Real progress resets the detector, so pagination does not trip it. |
+| Recovery ladder | `policy.js` (`RECOVERY_LADDER`) | settle → re-inspect → safe refresh → relocate element → alternate interaction → declared alternate source. Each rung is bounded and never repeats for the same obstacle; exhausted ⇒ `waiting_for_user`. |
+| Driver contract | `browser/driver.js` | `start/open/goto/waitFor/click/type/extract/snapshot/screenshot/reload/health/close`, every failure a typed `BrowserError`. |
+| Real engine | `browser/drivers/puppeteer.js` | Chromium over CDP, 390×844 mobile viewport, optional whole-session proxy. **No stealth, no UA rotation, no CAPTCHA solving, no credential extraction, no access-control bypass.** |
+| Test engine | `browser/drivers/simulated.js` | Scripted pages/faults so the resilience rules are provable on any machine. Refused unless `MMM_BROWSER_ALLOW_SIM=1`, and every task it runs is labelled **Simulated** in the API and the UI. |
+| Runner | `browser/runner.js` | One action per tick, checkpoint after every successful step, evidence per milestone, criteria-driven completion, `resumeInterrupted()` on boot. |
+| Storage | `apps/gateway/migrations/004_browser.sql` | `browser_tasks` (objective, criteria, plan, budgets, deadline, checkpoint, recovery log), `browser_steps` (timeline), `browser_evidence` (digest + capped payload). |
+| API | `apps/gateway/server.js` | `GET /api/v1/browser/capabilities`, `GET|POST /api/v1/browser/tasks`, `GET /api/v1/browser/tasks/:id`, `GET …/evidence/:eid`, `POST …/:id/{pause,resume,stop,assist}`, WebSocket topic `browser`. Permissions: `browser:read` (Observer+), `browser:run` (Operator+). |
+| Screen | `src/browser.js`, `src/browser.css` | Objective, site, last verified milestone, time since progress, recovery counters, blocker, timeline, evidence viewer (real screenshots), pause/resume/stop/assist. Mobile-first, 44 px targets, no fabricated activity. |
+
+**Acceptance tests (spec AT-15…AT-26)** — `npm run test:browser` (22 checks, scripted driver) and
+`npm run test:browser:engine` (7 checks, real Chromium; prints `SKIP` when no engine is installed
+rather than passing falsely). Screen: `npm run test:browser-ui` (8 checks).
+
+**The gap.** No engine is bundled, so a stock checkout reports `unconfigured`. There is no task
+scheduler across owners, no per-domain allowlist, no download interception, no video/screenshot
+annotation, and no cost accounting tied to browser minutes.
+
+**Next steps**
+
+1. Install Chromium on the deployment host and record one real task; only then may the capability
+   card move from `unverified` to `available` for that deployment.
+2. Add a **domain allowlist** per principal (`browser:run` scoped to hosts) — the honest alternative
+   to “undetectable” browsing.
+3. Move evidence payloads to object storage when `MMM_BROWSER_EVIDENCE_DIR` exists; keep the digest in
+   SQLite.
+4. Add downloads: `page.on('download')` into a quarantine folder, hashed, listed in the timeline.
+
+**URLs:** A.24 (Puppeteer), A.25 (CDP), A.26 (robots.txt / terms).
+
+---
+
 ## 6. Master implementation checklist
 
 Tick a box only when its **evidence** exists (test output, SQL row, recorded call). Order matters
@@ -1427,6 +1469,19 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 ### M21 · PWA
 - [ ] Cache version bumped per release
 - [ ] Installability verified on iOS + Android
+
+### M22 · Agent Browser
+- [x] Watchdog, deadline, action/evidence budgets, cancellation
+- [x] Loop detection (repeated action, page cycle, repeated error)
+- [x] Bounded recovery ladder; refusal ⇒ BLOCKED, login ⇒ WAITING_FOR_USER
+- [x] Checkpoints + `resumeInterrupted()` that inspects the page first
+- [x] Evidence row per milestone, with digest and capped payload
+- [x] Completion only when every success criterion is verified
+- [x] Mobile-first screen with pause/resume/stop/assist and evidence viewer
+- [ ] Chromium installed on the deployment host + one recorded real task
+- [ ] Per-principal domain allowlist
+- [ ] Evidence moved to object storage
+- [ ] Downloads captured, hashed and listed
 
 ---
 
@@ -1635,6 +1690,21 @@ an unfinished one.
 - MDN PWA — https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps
 - web.dev Learn PWA — https://web.dev/learn/pwa
 - Service worker lifecycle — https://web.dev/articles/service-worker-lifecycle
+
+### A.24 Browser automation (the engine)
+- Puppeteer — what it is, and its licence — https://pptr.dev/guides/what-is-puppeteer
+- Puppeteer API reference — https://pptr.dev/api
+- Chrome DevTools Protocol — https://chromedevtools.github.io/devtools-protocol/
+- Playwright (an alternative engine with the same driver contract) — https://playwright.dev/docs/intro
+
+### A.25 Honest automation (what this module will not do)
+- `robots.txt` — https://www.rfc-editor.org/rfc/rfc9309.html
+- MDN `navigator.webdriver` (why hiding it is a losing game) — https://developer.mozilla.org/en-US/docs/Web/API/Navigator/webdriver
+- OWASP automated threats to web applications — https://owasp.org/www-project-automated-threats-to-web-applications/
+
+### A.26 Resilience primitives used by the runner
+- MDN `AbortController` — https://developer.mozilla.org/en-US/docs/Web/API/AbortController
+- Node timers, `unref()` and why the ticker must not hold the process open — https://nodejs.org/api/timers.html
 
 > Deployment, CI, backups, TLS, metrics, alerts and the rest of the operational stack are **not**
 > repeated here — they are in [`PRODUCTION_ROADMAP.md` Appendix A](PRODUCTION_ROADMAP.md).

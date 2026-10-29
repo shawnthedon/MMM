@@ -201,12 +201,51 @@ const CAPS = {
   browser: {
     id: 'browser',
     label: 'Browser control',
-    status: 'blocked',
-    summary: 'No adapter reviewed or enabled; authorised automation only.',
+    status: 'unverified',
+    summary: 'Autonomous browsing with a watchdog, bounded recovery and evidence — needs an engine on the gateway.',
     detail:
-      'Two candidate projects must pass licence, activity, security, mobile and testability review before integration behind a feature flag. “Stealth” is never authorisation to defeat anti-bot, auth, paywall or access controls.',
-    requirements: ['Candidate review + licence/security assessment', 'Adapter + feature flag + safe-failure tests'],
-    evidence: () => 'no browser-control module in repo',
+      'The gateway owns the Agent Browser: one action per tick, a deadline and action/evidence budgets, a stall watchdog, loop detection, a bounded recovery ladder, checkpoints that survive a restart, and a timeline plus evidence record per milestone. “Completed” requires every success criterion to be verified. A site that refuses automation (CAPTCHA, 403, paywall) ends the task as blocked; a login wall asks the operator to sign in. There is no CAPTCHA solving, fingerprint spoofing, credential extraction or access-control bypass, and no claim to be undetectable. The Puppeteer/Chromium driver is optional and reported as unconfigured until installed — the UI never fakes a session.',
+    requirements: [
+      'Chromium on the gateway host (puppeteer-core + a binary) — until then the panel reports unconfigured',
+      'A real task on the operator’s own gateway to promote this to available',
+    ],
+    evidence: () => {
+      if (!isApiMode()) return 'no gateway configured — the Agent Browser cannot run';
+      const auth = getAuth();
+      return auth.status === 'authenticated'
+        ? 'gateway connected · driver status is reported live on the Agent Browser screen'
+        : 'gateway configured but not signed in';
+    },
+    dynamic() {
+      const auth = getAuth();
+      if (!isApiMode()) {
+        return {
+          status: 'unverified',
+          summary: 'The Agent Browser runs on the gateway; nothing browses from this browser tab.',
+          detail:
+            'The module (watchdog, recovery ladder, loop detection, checkpoints, evidence) lives in apps/gateway/src/browser and is proven by scripts/browser-agent-test.mjs (AT-15…AT-26) and scripts/browser-engine-test.mjs against a real Chromium. Connect a gateway to run a task.',
+          requirements: ['Set a gateway URL and sign in'],
+          evidence: 'no gateway configured',
+        };
+      }
+      if (auth.status !== 'authenticated') {
+        return {
+          status: 'unconfigured',
+          summary: 'Sign in to read the gateway’s browser driver status.',
+          detail: 'The driver catalogue, limits and any task history are only readable with browser:read.',
+          requirements: ['Sign in with browser:read to inspect, browser:run to start a task'],
+          evidence: 'no session',
+        };
+      }
+      return {
+        status: 'unverified',
+        summary: 'Engine availability is decided by the gateway, not by this card — open Agent Browser.',
+        detail:
+          'The Agent Browser screen reports the live driver probe: available only when a Chromium binary was found on the host. A task that used the test-only simulated driver is labelled Simulated everywhere and never counts as a real session.',
+        requirements: ['A Chromium binary on the gateway host', 'One recorded real task on this gateway'],
+        evidence: 'signed in · driver status on the Agent Browser screen',
+      };
+    },
   },
   llm: {
     id: 'llm',

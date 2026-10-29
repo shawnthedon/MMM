@@ -22,6 +22,7 @@ export const PERMISSIONS = Object.freeze({
   'event:read': 'Observer',
   'token:issue': 'Observer',
   'comms:read': 'Observer',
+  'browser:read': 'Observer',
   // review surface
   'approval:request': 'Observer',
   'approval:decide': 'Reviewer',
@@ -32,6 +33,7 @@ export const PERMISSIONS = Object.freeze({
   'task:write': 'Operator',
   'swarm:write': 'Operator',
   'comms:write': 'Operator',
+  'browser:run': 'Operator',
   // administration
   'principal:read': 'Admin',
   'principal:write': 'Admin',
@@ -42,9 +44,9 @@ export const PERMISSIONS = Object.freeze({
   'dev:seed': 'Owner',
 });
 
-const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read'];
+const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read'];
 const REVIEW = ['audit:read', 'audit:verify'];
-const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write'];
+const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run'];
 
 /** Explicit role → permission sets (the authoritative check). */
 export const ROLE_PERMISSIONS = Object.freeze({

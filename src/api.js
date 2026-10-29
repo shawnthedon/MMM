@@ -221,6 +221,13 @@ export const api = {
   runCommsQueue: () => request('/api/v1/comms/queue', { method: 'POST', body: {} }),
   saveCommsSettings: (body) => request('/api/v1/comms/settings', { method: 'PUT', body }),
   commsMessages: (params = '') => request(`/api/v1/comms/messages${params}`),
+  browserCapabilities: () => request('/api/v1/browser/capabilities'),
+  browserTasks: (limit = 30) => request(`/api/v1/browser/tasks?limit=${Number(limit) || 30}`),
+  browserTask: (id) => request(`/api/v1/browser/tasks/${encodeURIComponent(id)}`),
+  createBrowserTask: (body) => request('/api/v1/browser/tasks', { method: 'POST', body }),
+  browserControl: (id, action) => request(`/api/v1/browser/tasks/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: {} }),
+  browserEvidence: (id, evidenceId) =>
+    request(`/api/v1/browser/tasks/${encodeURIComponent(id)}/evidence/${encodeURIComponent(evidenceId)}`),
   events: (cursor = 0) => request(`/api/v1/events?cursor=${Number(cursor) || 0}`),
   audit: (limit = 50) => request(`/api/v1/audit?limit=${Number(limit) || 50}`),
   verifyAudit: () => request('/api/v1/audit/verify'),
