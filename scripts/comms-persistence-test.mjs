@@ -19,7 +19,7 @@ const comms = await import('../src/commsGateway.js');
 await auth.configureGateway('https://gateway.test');
 assert.equal((await comms.refreshComms()).ok, true);
 await new Promise((resolve) => setTimeout(resolve, 320));
-const stored = win.localStorage.getItem('swarmos-state-v1');
+const stored = win.localStorage.getItem('mmm-state-v1');
 assert(stored);
 assert(!stored.includes('private-unpersisted-record'));
 assert(!stored.includes('••••hidden'));

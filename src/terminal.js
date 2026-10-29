@@ -4,7 +4,7 @@ import { toast, on } from './shell.js';
 import { views } from './views1.js';
 
 const BANNER = [
-  { kind: 'dim', text: 'SwarmOS shell v0.1.0-proto · self-hosted gateway · SQLite WAL' },
+  { kind: 'dim', text: 'MMM shell v0.1.0-proto · self-hosted gateway · SQLite WAL' },
   { kind: 'dim', text: "Type `help` for commands. Try: status · agents · swarm ls · approve ap-1" },
 ];
 
@@ -157,7 +157,7 @@ export function execCommand(raw) {
       });
       break;
     case 'whoami':
-      push({ kind: '', text: 'maya@swarmlab · role Owner · via app session' });
+      push({ kind: '', text: 'maya@mmm · role Owner · via app session' });
       break;
     case 'date':
       push({ kind: '', text: new Date().toString() });

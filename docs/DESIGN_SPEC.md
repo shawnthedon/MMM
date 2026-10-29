@@ -1,10 +1,10 @@
-# SwarmOS — Design Specification
+# MMM — Design Specification
 ## Mobile-First AI Agent Orchestration Dashboard
 
 | Field | Value |
 | --- | --- |
 | Document | Design Specification (UI/UX + Systems) |
-| Codename | **SwarmOS** (working title) |
+| Codename | **MMM** (working title) |
 | Version | 1.0 |
 | Date | 2026-10-12 |
 | Status | Draft for build |
@@ -15,7 +15,7 @@
 
 ## 1. Executive Summary
 
-**SwarmOS** is a mobile-first control plane for creating, deploying, and governing teams and swarms of AI agents. It unifies:
+**MMM** is a mobile-first control plane for creating, deploying, and governing teams and swarms of AI agents. It unifies:
 
 - **Agent engineering** — advanced agent profiles across seven selectable frameworks (Swarmzero, AutoPentest, A.I.M.A, Project Nautilus, OpenAI Swarm, CrewAI, LangGraph), each runnable with any LLM from a 25+ provider model gateway.
 - **Swarm operations** — parallel execution with dependency graphs, resource allocation, live task telemetry, and a Kanban surface for human-in-the-loop work.
@@ -257,7 +257,7 @@ The Copilot is a **first-class operator** embedded in every screen. It can perfo
 Per-thread memory + workspace-level memory store (opt-in). Memory items are user-visible ("What Copilot remembers") and editable/deletable — mirrors agent memory governance (§14.2).
 
 ### 10.6 Voice & Push-to-Talk
-Hold mic = record; release = transcribe → intent preview → confirm → act. Always shows the recognized intent before acting. Hands-free mode ("Hey SwarmOS" wake is optional, local-only).
+Hold mic = record; release = transcribe → intent preview → confirm → act. Always shows the recognized intent before acting. Hands-free mode ("Hey MMM" wake is optional, local-only).
 
 ### 10.7 Copilot Surfaces
 - Dock (global), inline "sparkle" buttons on empty states and error states, `/copilot` in chat threads, Telegram `/copilot <msg>`, terminal `swarm copilot` command.
@@ -765,7 +765,7 @@ Telegram-first (§11.8) with a platform-agnostic command parser (`/verb noun arg
 
 ### 18.1 Deployment Shape
 ```
-swarmos-gateway (single process; or docker compose with 1 container)
+mmm-gateway (single process; or docker compose with 1 container)
 ├── HTTP/WS API  (app + PWA served statically from same process)
 ├── Scheduler + Parallel Execution Engine (in-process, async workers)
 ├── MCP Proxy + Plugin Runners (subprocesses; stdio/SSE/HTTP)
@@ -783,7 +783,7 @@ swarmos-gateway (single process; or docker compose with 1 container)
 - **SQLite WAL** handles concurrent readers + single writer; write serialization per-workspace keeps consistency.
 - **Job queue in SQLite** (`jobs` table with leasing, visibility timeouts, retries) replaces Redis-sidekiq.
 - **Realtime** via in-process event bus → WebSocket fanout (single gateway node is authoritative). Horizontal scale-out is a v2 concern (read replicas / gateway clustering); v1 targets hundreds of agents on one node.
-- **Zero-ops:** install = download binary or `docker run -v data:/data ghcr.io/swarmos/gateway`. Backup = hot-copy SQLite (`.backup`) + artifacts dir; restore = replace + restart. Scheduled backups to local dir or mounted volume; optional push to any S3-compatible store via plugin.
+- **Zero-ops:** install = download binary or `docker run -v data:/data ghcr.io/mmm/gateway`. Backup = hot-copy SQLite (`.backup`) + artifacts dir; restore = replace + restart. Scheduled backups to local dir or mounted volume; optional push to any S3-compatible store via plugin.
 
 ### 18.3 Reliability
 - Crash-safe journaling (WAL + job leases); startup recovery replays incomplete jobs.
@@ -848,7 +848,7 @@ telegram_links(id, chat_id, role, topic_map_json)
 ## 20. API & Realtime Surface
 
 ### 20.1 API Style
-Single JSON-RPC-ish REST hybrid under `/api/v1/*` + WebSocket `/ws`. All mutations accept `Idempotency-Key`. Auth: session cookie (PWA) / scoped bearer tokens (CLI, bots). Every response carries `x-swarmos-request-id` for diagnostics.
+Single JSON-RPC-ish REST hybrid under `/api/v1/*` + WebSocket `/ws`. All mutations accept `Idempotency-Key`. Auth: session cookie (PWA) / scoped bearer tokens (CLI, bots). Every response carries `x-mmm-request-id` for diagnostics.
 
 ### 20.2 Representative Endpoints
 ```
@@ -960,7 +960,7 @@ WS topics: runs.*, tasks.*, chat.*, approvals.*, trust.*, resources.*, analytics
 | **Trust score** | 0–100 composite of reliability, compliance, and quality signals per agent |
 | **Self-improving loop** | Plan→Act→Observe→Reflect cycle with ML-driven skill/prompt/tool optimization |
 | **FAI** | Framework Adapter Interface — common contract for all 7 agent frameworks |
-| **Gateway** | The single self-hosted SwarmOS process (API, scheduler, proxy, storage) |
+| **Gateway** | The single self-hosted MMM process (API, scheduler, proxy, storage) |
 
 ---
 
@@ -969,7 +969,7 @@ WS topics: runs.*, tasks.*, chat.*, approvals.*, trust.*, resources.*, analytics
 ### A.1 Home / Command Deck
 ```
 ┌─────────────────────────────────────┐
-│ ☰  SwarmOS ▾        🔔 2   👤       │  ← top bar (2 pending approvals)
+│ ☰  MMM ▾        🔔 2   👤       │  ← top bar (2 pending approvals)
 │ ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬ │
 │ Good evening, Maya        [LIVE ●]  │
 │ ┌─────────┐ ┌─────────┐             │

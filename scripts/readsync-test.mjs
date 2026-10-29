@@ -36,7 +36,7 @@ let behaviour = {};
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', 'x-swarmos-request-id': 'req-readsync' },
+    headers: { 'content-type': 'application/json', 'x-mmm-request-id': 'req-readsync' },
   });
 
 const SESSION_BODY = {
@@ -196,7 +196,7 @@ await check('the tasks screen renders the gateway card in its server column', as
 
 await check('gateway rows are never written to localStorage', async () => {
   await sleep(400); // persist() is debounced
-  const raw = globalThis.localStorage.getItem('swarmos-state-v1') || '';
+  const raw = globalThis.localStorage.getItem('mmm-state-v1') || '';
   assert(!raw.includes(GW_AGENT), 'gateway agent must not be persisted');
   assert(!raw.includes(GW_TASK), 'gateway task must not be persisted');
   assert(!raw.includes(GW_APPROVAL_ACTION), 'gateway approval must not be persisted');

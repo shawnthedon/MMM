@@ -41,7 +41,7 @@ Both shortcut variants navigate to the same view; the drawer variant opens that 
 | `skill.json` | single JSON object | Manifest fields, with `metadata.*` fallbacks |
 | registry JSON | array or `{ "skills": [...] }` | Several skills (+ optional `relations`) |
 | `skill.yaml` | `.yaml`/`.yml` extension or name/description keys | YAML subset: scalars, inline lists, block lists, nested map, literal blocks |
-| SwarmOS package | `schema: "swarmos.skill.package.v1"` | Skills **and** typed relationships; re-imports our own export |
+| MMM package | `schema: "mmm.skill.package.v1"` | Skills **and** typed relationships; re-imports our own export |
 | `.zip` / `.skill` | binary upload | Stored/deflated entries; every `SKILL.md` and `skill.json` inside becomes a candidate |
 
 Anything else is refused with an explanation of the accepted formats.
@@ -100,7 +100,7 @@ reason, finding count); the *Imported* tab renders it as the audit trail.
 
 ## Export
 
-`buildPackage(names)` produces `swarmos.skill.package.v1` with the selected skills and only the
+`buildPackage(names)` produces `mmm.skill.package.v1` with the selected skills and only the
 relationships whose endpoints are both included (the count of omitted edges is reported). It contains
 no credentials, memory, run logs, permission grants or local metadata, and re-imports cleanly.
 

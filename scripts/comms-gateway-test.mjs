@@ -14,13 +14,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 
-const DATA_DIR = mkdtempSync(join(tmpdir(), 'swarmos-comms-'));
+const DATA_DIR = mkdtempSync(join(tmpdir(), 'mmm-comms-'));
 process.env.DATA_DIR = DATA_DIR;
-process.env.SWARMOS_QUIET = '1';
-process.env.SWARMOS_SECRET = 'test-secret-material-for-comms-encryption';
-process.env.SWARMOS_COMMS_DISABLE = '1'; // the ticker is driven explicitly by the tests
-process.env.SWARMOS_BOOTSTRAP_EMAIL = 'owner@test.local';
-process.env.SWARMOS_BOOTSTRAP_PASSWORD = 'OwnerPassw0rd!2026';
+process.env.MMM_QUIET = '1';
+process.env.MMM_SECRET = 'test-secret-material-for-comms-encryption';
+process.env.MMM_COMMS_DISABLE = '1'; // the ticker is driven explicitly by the tests
+process.env.MMM_BOOTSTRAP_EMAIL = 'owner@test.local';
+process.env.MMM_BOOTSTRAP_PASSWORD = 'OwnerPassw0rd!2026';
 process.env.NODE_ENV = 'test';
 
 const { createGateway } = await import('../apps/gateway/server.js');
@@ -163,7 +163,7 @@ await check('a masked value sent back is ignored instead of overwriting the secr
   eq(commsSvc.readChannel('telegram').config.botToken, '123456789:AA-telegram-token-value', 'the real secret survived');
 });
 
-await check('a local key file is only used when SWARMOS_SECRET is absent', () => {
+await check('a local key file is only used when MMM_SECRET is absent', () => {
   eq(commsSvc.keySource(), 'env', 'the configured secret is used');
   const sealed = commsSvc.encryptJson({ a: 1 });
   eq(commsSvc.decryptJson(sealed).a, 1, 'round-trip');
@@ -333,7 +333,7 @@ await check('a replayed webhook is deduped by delivery id', async () => {
   resetProvider({ status: 200 });
   const send = (delivery) => fetch(`${BASE}/api/v1/comms/telegram/inbound`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...signTelegram('hook-secret-1'), 'x-swarmos-delivery': delivery },
+    headers: { 'content-type': 'application/json', ...signTelegram('hook-secret-1'), 'x-mmm-delivery': delivery },
     body: JSON.stringify(telegramUpdate),
   });
   const first = await send('delivery-abc');

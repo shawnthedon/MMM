@@ -271,7 +271,7 @@ await check('a disabled channel rejects inbound before verifying', async () => {
 await check('gated commands cannot run from a channel', async () => {
   const out = comms.runChannelCommand('/approve ap-2');
   assert(out.ok && out.gated, 'gated, not executed');
-  assert(/open SwarmOS/i.test(out.reply), 'tells the user to confirm in-app');
+  assert(/open MMM/i.test(out.reply), 'tells the user to confirm in-app');
   comms.setCommandAllowed('/status', false);
   const blocked = comms.runChannelCommand('/status');
   assert(!blocked.ok && blocked.reason === 'blocked', 'disabled command is refused');
@@ -439,7 +439,7 @@ await check('saving sends the patch to the gateway, never to localStorage', asyn
   assert(put, 'PUT /api/v1/comms/telegram was called');
   // window.localStorage is written asynchronously (debounced 250 ms)
   await sleep(320);
-  const stored = win.localStorage.getItem('swarmos-state-v1') || '{}';
+  const stored = win.localStorage.getItem('mmm-state-v1') || '{}';
   assert(!stored.includes('new-token-value-9999'), 'the secret never reached localStorage');
 });
 

@@ -9,12 +9,12 @@
  */
 import { esc, getState } from '../core.js';
 
-const KEY = 'swarmos-copilot-memory-v1';
+const KEY = 'mmm-copilot-memory-v1';
 const EPISODE_CAP = 50;
 
 const EMPTY = () => ({
   version: 1,
-  workspace: 'SwarmLab',
+  workspace: 'MMM HQ',
   working: { mode: null, draft: '' },
   preferences: { defaultMode: 'ask', verbose: false },
   episodic: [],

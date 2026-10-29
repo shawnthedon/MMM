@@ -80,7 +80,7 @@ try {
       `better-sqlite3 unusable (${String(nativeErr?.message || nativeErr).split('\n')[0]}). ` +
         'Falling back to the experimental node:sqlite driver — run `npm rebuild better-sqlite3` ' +
         'for the supported configuration.',
-      'SwarmOSWarning'
+      'MMMWarning'
     );
   } catch (fallbackErr) {
     throw new Error(
@@ -97,7 +97,7 @@ export const MIGRATIONS_DIR = join(here, '..', 'migrations');
 export const FIXTURES_DIR = join(ROOT, 'fixtures');
 
 mkdirSync(DATA_DIR, { recursive: true });
-export const db = new Database(join(DATA_DIR, 'swarmos.sqlite'));
+export const db = new Database(join(DATA_DIR, 'mmm.sqlite'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 db.pragma('busy_timeout = 5000');

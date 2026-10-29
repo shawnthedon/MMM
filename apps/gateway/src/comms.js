@@ -1,7 +1,7 @@
-/* SwarmOS gateway — comms service (server-side channels, credentials, delivery, queue, fan-out)
+/* MMM gateway — comms service (server-side channels, credentials, delivery, queue, fan-out)
  *
  * Why this exists: the browser panel used to hold provider secrets in localStorage. Here the
- * gateway owns them — encrypted at rest with AES-256-GCM under a key derived from SWARMOS_SECRET,
+ * gateway owns them — encrypted at rest with AES-256-GCM under a key derived from MMM_SECRET,
  * and never returned to a client (the API exposes only `••••last4`). Delivery, retries and inbound
  * webhooks therefore run where the credentials are.
  *
@@ -12,9 +12,9 @@
  *   • nothing is queued, retried or delivered silently: every attempt is a row in comms_messages.
  *
  * Environment:
- *   SWARMOS_SECRET          key material for credential encryption (required in production; when
+ *   MMM_SECRET          key material for credential encryption (required in production; when
  *                           absent the gateway generates data/.comms-key and says so)
- *   SWARMOS_COMMS_DISABLE=1 skip the background retry ticker (tests drive processQueue directly)
+ *   MMM_COMMS_DISABLE=1 skip the background retry ticker (tests drive processQueue directly)
  */
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
@@ -44,21 +44,21 @@ const SECRET_FIELDS = new Set(
 let cachedKey = null;
 
 function keyMaterial() {
-  if (process.env.SWARMOS_SECRET) return { source: 'env', secret: process.env.SWARMOS_SECRET };
+  if (process.env.MMM_SECRET) return { source: 'env', secret: process.env.MMM_SECRET };
   const file = join(DATA_DIR, '.comms-key');
   if (!existsSync(file)) {
     writeFileSync(file, randomBytes(32).toString('hex'), { mode: 0o600 });
     try { chmodSync(file, 0o600); } catch { /* best effort on filesystems without modes */ }
-    console.warn('[comms] SWARMOS_SECRET is not set — generated a local key at data/.comms-key. Set SWARMOS_SECRET before production use.');
+    console.warn('[comms] MMM_SECRET is not set — generated a local key at data/.comms-key. Set MMM_SECRET before production use.');
   }
   return { source: 'file', secret: readFileSync(file, 'utf8').trim() };
 }
 
-/** 32-byte AES key derived with HKDF-SHA256 from SWARMOS_SECRET (or the generated local key). */
+/** 32-byte AES key derived with HKDF-SHA256 from MMM_SECRET (or the generated local key). */
 export function encryptionKey() {
   if (cachedKey) return cachedKey;
   const { secret, source } = keyMaterial();
-  const derived = hkdfSync('sha256', Buffer.from(secret, 'utf8'), Buffer.from('swarmos-comms-salt'), Buffer.from('comms-config-v1'), 32);
+  const derived = hkdfSync('sha256', Buffer.from(secret, 'utf8'), Buffer.from('mmm-comms-salt'), Buffer.from('comms-config-v1'), 32);
   cachedKey = { key: Buffer.from(derived), source };
   return cachedKey;
 }
@@ -351,7 +351,7 @@ const sentInLastMinute = (channel, at = Date.now()) =>
  * Try to deliver one message now. Records the attempt either way and returns what happened.
  * Never turns a failure into a success.
  */
-export async function sendChannelMessage(channelId, { text, title = 'SwarmOS', fetchImpl, actor = 'system', dedupeKey = null, queueOnFailure = true } = {}) {
+export async function sendChannelMessage(channelId, { text, title = 'MMM', fetchImpl, actor = 'system', dedupeKey = null, queueOnFailure = true } = {}) {
   const channel = getChannel(channelId);
   if (!channel) return { ok: false, code: 404, error: `Unknown channel “${channelId}”.`, reason: 'unknown_channel' };
   if (!String(text || '').trim()) return { ok: false, code: 400, error: 'A message body is required.', reason: 'empty' };
@@ -439,7 +439,7 @@ export async function processQueue({ fetchImpl, at = Date.now(), limit = 20 } = 
     const channel = getChannel(msg.channel);
     const result = channel.kind === 'local'
       ? { ok: true, local: true, detail: 'Delivered to the in-app inbox.' }
-      : await deliver(msg.channel, rec.config, { text: msg.body_redacted, title: 'SwarmOS' }, { fetchImpl: fetchFor(fetchImpl) });
+      : await deliver(msg.channel, rec.config, { text: msg.body_redacted, title: 'MMM' }, { fetchImpl: fetchFor(fetchImpl) });
     const attempts = msg.attempts + 1;
     if (result.ok) {
       db.prepare("UPDATE comms_messages SET status = 'sent', attempts = ?, detail = ?, provider_status = ?, next_attempt_at = NULL WHERE id = ?")
@@ -482,7 +482,7 @@ export function runCommand(text, { actor = 'channel' } = {}) {
   const settings = getSettings();
   if (settings.commands[cmd] === false) return { ok: false, reason: 'blocked', reply: `${cmd} is disabled for channels.` };
   if (known.gate) {
-    return { ok: true, gated: true, reply: `${cmd} is gated: open SwarmOS to confirm — channel commands cannot perform gated actions.` };
+    return { ok: true, gated: true, reply: `${cmd} is gated: open MMM to confirm — channel commands cannot perform gated actions.` };
   }
   if (cmd === '/status') {
     const agents = db.prepare('SELECT status FROM agents WHERE deleted_at IS NULL').all();
@@ -560,7 +560,7 @@ export async function handleInbound(channelId, { headers = {}, rawBody = '', jso
   // is a real outbound message, and the row above already records the inbound half.
   let reply = null;
   if (result.reply && rec.enabled && missingFields(channelId, rec.config).length === 0) {
-    reply = await sendChannelMessage(channelId, { text: result.reply, title: 'SwarmOS', actor: 'webhook', dedupeKey: dedupeKey ? `reply:${dedupeKey}` : null });
+    reply = await sendChannelMessage(channelId, { text: result.reply, title: 'MMM', actor: 'webhook', dedupeKey: dedupeKey ? `reply:${dedupeKey}` : null });
   }
   return { ok: true, code: 200, parsed, reply: result.reply, delivered: Boolean(reply?.ok), deliveryError: reply?.ok ? null : reply?.error, inboundId: inbound.id };
 }
@@ -629,7 +629,7 @@ export function fanOut({ agentId = null, text, reason = 'event', dedupeKey = nul
 /* ---------- background ticker (opt-in, unref'd so it never holds a process open) ---------- */
 let ticker = null;
 export function startQueueTicker({ intervalMs = 60000 } = {}) {
-  if (ticker || process.env.SWARMOS_COMMS_DISABLE === '1') return null;
+  if (ticker || process.env.MMM_COMMS_DISABLE === '1') return null;
   ticker = setInterval(() => { processQueue().catch(() => {}); }, intervalMs);
   ticker.unref?.();
   return ticker;

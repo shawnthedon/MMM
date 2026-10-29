@@ -1,6 +1,6 @@
 {
-  "name": "SwarmOS — Agent Orchestration",
-  "short_name": "SwarmOS",
+  "name": "MMM — Agent Orchestration",
+  "short_name": "MMM",
   "description": "Mobile-first AI Agent Orchestration Dashboard: deploy agent teams & swarms, skills, MCP plugins, multi-model routing, trust & governance.",
   "id": "/",
   "start_url": "./",

@@ -1,12 +1,14 @@
 <div align="center">
 
-<img src="public/icons/icon.svg" width="88" alt="SwarmOS logo"/>
+<img src="public/icons/icon.svg" width="88" alt="MMM logo"/>
 
-# ⬡ SwarmOS
+# ⬡ MMM
 
 ### 📱 Mobile-First AI Agent Orchestration Dashboard
 
 **Build, deploy & govern AI agent teams and swarms — from your phone.**
+
+<sub>Formerly *SwarmOS*. Upgrading an existing install? Read [the rename note](docs/ops/RENAME_MMM.md) first — env vars, cookie and database filename changed.</sub>
 
 ![PWA](https://img.shields.io/badge/PWA-installable-6C8CFF?style=for-the-badge&logo=pwa&logoColor=white)
 ![Mobile-first](https://img.shields.io/badge/Mobile--first-360px%2B-22D3EE?style=for-the-badge&logo=smartphone&logoColor=white)
@@ -19,11 +21,11 @@
 
 ---
 
-<img src="docs/images/banner.png" alt="SwarmOS banner" width="100%"/>
+<img src="docs/images/banner.png" alt="MMM banner" width="100%"/>
 
 ## 🎯 System Specification
 
-**SwarmOS** is a self-hosted, mobile-first control plane for AI agent operations: create agent profiles, compose teams, deploy swarms, and govern everything through a four-layer security framework — all from an installable Progressive Web App with an embedded full-control Copilot.
+**MMM** is a self-hosted, mobile-first control plane for AI agent operations: create agent profiles, compose teams, deploy swarms, and govern everything through a four-layer security framework — all from an installable Progressive Web App with an embedded full-control Copilot.
 
 | | Spec | Detail |
 | :---: | --- | --- |
@@ -82,7 +84,7 @@ npm run dev:gateway     # first start prints a generated Owner password once
 npm run dev             # PWA on :5173, /api and /ws proxied to :8787
 ```
 Open the app → **Account** (top-right chip) → *Configure gateway* → **Use this origin (dev proxy)** →
-sign in. Set your own first Owner with `SWARMOS_BOOTSTRAP_EMAIL` / `SWARMOS_BOOTSTRAP_PASSWORD`
+sign in. Set your own first Owner with `MMM_BOOTSTRAP_EMAIL` / `MMM_BOOTSTRAP_PASSWORD`
 (see `.env.example`); production refuses to start without an owner.
 
 Without a gateway the app stays in **demo mode** and says so — nothing is enforced. Signed-in
@@ -186,7 +188,7 @@ npm i -g vercel
 vercel login          # or set VERCEL_TOKEN
 vercel --prod         # uses vercel.json → outputs the production URL
 ```
-Or: push to GitHub → **vercel.com/new** → import `swarmos` → Framework: **Vite** → Deploy. *(PWA works out of the box: manifest + service worker included.)*
+Or: push to GitHub → **vercel.com/new** → import `mmm` → Framework: **Vite** → Deploy. *(PWA works out of the box: manifest + service worker included.)*
 
 | Env | Command | URL |
 | --- | --- | --- |
@@ -223,6 +225,7 @@ npm run lint        # code style (after Phase-1 tooling)
 | --- | --- |
 | 📐 [Design Spec](docs/DESIGN_SPEC.md) | Full 12-module spec, governance, data model, providers |
 | ✅ [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) | Functional build: 19 phases, seed data & restore guide |
+| 🏷 [Rename: SwarmOS → MMM](docs/ops/RENAME_MMM.md) | Every identifier that changed, and the one-time upgrade steps |
 | 🚀 [Production Roadmap](docs/PRODUCTION_ROADMAP.md) | **Start here.** Ordered plan out of demo mode into live operation: demo inventory + rectification, NFR checklist, TODO list, beginner recipes, resource links |
 | 🗺 [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | Non-functional track to production + 100+ resource links |
 | 🔄 [Read Sync](docs/copilot/read-sync.md) | How module screens read the gateway and how demo vs live data is labelled |

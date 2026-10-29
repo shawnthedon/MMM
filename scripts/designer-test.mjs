@@ -33,7 +33,7 @@ win.document.body.innerHTML = '<div id="app"></div>';
 const calls = [];
 let behaviour = {};
 const json = (body, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'x-swarmos-request-id': 'req-dsn' } });
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'x-mmm-request-id': 'req-dsn' } });
 
 const SESSION_BODY = {
   principal: { id: 'user-dsn', name: 'Design Owner', role: 'Owner', type: 'user', via: 'cookie', status: 'active' },
@@ -312,7 +312,7 @@ await check('saving in demo mode writes an idle definition and clears the draft'
   assert(row, 'agent row missing');
   eq(row.status, 'idle', 'definition is idle, never running');
   assert(row.prompt.includes('You are Designer-Demo-Agent.'), 'prompt built from the goal');
-  assert(!JSON.parse(globalThis.localStorage.getItem('swarmos.agentDraft.v1') || 'null'), 'draft cleared after save');
+  assert(!JSON.parse(globalThis.localStorage.getItem('mmm.agentDraft.v1') || 'null'), 'draft cleared after save');
 });
 
 await check('an unsaveable draft produces no row and a plain refusal', async () => {
@@ -340,7 +340,7 @@ await check('with a signed-in gateway the definition is POSTed and the server co
   eq(out.mode, 'gateway', 'saved on the gateway');
   const post = calls.find((c) => c.path === '/api/v1/agents' && c.method === 'POST');
   assert(post, 'no POST /api/v1/agents');
-  eq(post.headers['x-swarmos-csrf'], 'csrf-dsn', 'CSRF header');
+  eq(post.headers['x-mmm-csrf'], 'csrf-dsn', 'CSRF header');
   const row = core.getState().agents.find((a) => a.id === 'ag-gw-dsn');
   assert(row && row.name === 'Server-Named-Agent', 'server copy adopted');
   assert(!core.getState().agents.some((a) => a.name === 'Gateway-Designed-Agent'), 'the client draft must not linger');
@@ -366,7 +366,7 @@ await check('the draft survives a reload through localStorage', async () => {
   await auth.configureGateway('');
   designer.patchDraft({ name: 'Persisted-Draft', goal: 'Remember my questions.' }, { repaint: false });
   await sleep(320);
-  const raw = JSON.parse(globalThis.localStorage.getItem('swarmos.agentDraft.v1') || 'null');
+  const raw = JSON.parse(globalThis.localStorage.getItem('mmm.agentDraft.v1') || 'null');
   assert(raw, 'draft not persisted');
   eq(raw.name, 'Persisted-Draft', 'persisted name');
   assert(designer.getDraft().name === 'Persisted-Draft', 'in-memory draft kept');

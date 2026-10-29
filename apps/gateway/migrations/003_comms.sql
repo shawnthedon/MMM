@@ -1,4 +1,4 @@
--- SwarmOS gateway — 003: comms channels, messages and settings
+-- MMM gateway — 003: comms channels, messages and settings
 -- Credentials move server-side: only an AES-256-GCM ciphertext is stored, and the API never returns
 -- a secret back to the browser (masked last-4 only). Channel definitions live in src/commsChannels.js
 -- and are shared by the browser panel and this table's validation.

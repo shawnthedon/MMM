@@ -7,7 +7,7 @@
  *   *.json              array or { "skills": [...] } registry index
  *   skill.yaml / .yml   single manifest in YAML
  *   *.zip / *.skill     bundle: one or more SKILL.md / skill.json files (+ resources)
- *   swarmos package     { schema: 'swarmos.skill.package.v1', skills: [...], relations: [...] }
+ *   mmm package     { schema: 'mmm.skill.package.v1', skills: [...], relations: [...] }
  *
  * Workflow (spec §7.2): select → validate schema → quarantine → scan → resolve dependencies →
  * review permissions → preview → install/reject → audit. Nothing here fetches a URL, executes
@@ -17,7 +17,7 @@
 import { getState, setState, logEvent, uid, now } from './core.js';
 import { REL_TYPES } from './skillsData.js';
 
-export const PACKAGE_SCHEMA = 'swarmos.skill.package.v1';
+export const PACKAGE_SCHEMA = 'mmm.skill.package.v1';
 export const MAX_BODY_BYTES = 64 * 1024;
 export const MAX_PACKAGE_BYTES = 4 * 1024 * 1024;
 
@@ -29,7 +29,7 @@ export const FORMATS = [
   { id: 'skill-json', label: 'skill.json', detail: 'Single manifest: name, description, version, inputs/outputs, permissions' },
   { id: 'registry-json', label: 'Registry JSON', detail: 'Array of manifests or {"skills": [...], "relations": [...]}' },
   { id: 'skill-yaml', label: 'skill.yaml', detail: 'Single manifest in YAML (nested metadata supported)' },
-  { id: 'swarmos-package', label: 'SwarmOS package', detail: 'Portable package with typed relationships (round-trips our export)' },
+  { id: 'mmm-package', label: 'MMM package', detail: 'Portable package with typed relationships (round-trips our export)' },
   { id: 'zip-bundle', label: '.zip / .skill', detail: 'Bundle of one or more skills, stored or deflated entries' },
 ];
 
@@ -128,9 +128,9 @@ export function detectFormat({ filename = '', text = '', isBinary = false } = {}
   if (/^[[{]/.test(body)) {
     try {
       const parsed = JSON.parse(body);
-      if (parsed && parsed.schema === PACKAGE_SCHEMA) return 'swarmos-package';
+      if (parsed && parsed.schema === PACKAGE_SCHEMA) return 'mmm-package';
       if (Array.isArray(parsed)) return 'registry-json';
-      if (parsed && Array.isArray(parsed.skills)) return parsed.schema === PACKAGE_SCHEMA ? 'swarmos-package' : 'registry-json';
+      if (parsed && Array.isArray(parsed.skills)) return parsed.schema === PACKAGE_SCHEMA ? 'mmm-package' : 'registry-json';
       return 'skill-json';
     } catch {
       return 'unknown';
@@ -354,7 +354,7 @@ function parseJsonPayload(parsed, file) {
     return { skills, relations };
   }
   if (parsed && parsed.schema === PACKAGE_SCHEMA) {
-    (parsed.skills || []).forEach((raw) => add(raw, 'swarmos-package'));
+    (parsed.skills || []).forEach((raw) => add(raw, 'mmm-package'));
     (parsed.relations || []).forEach((r) => relations.push({ ...r }));
     return { skills, relations };
   }
@@ -455,7 +455,7 @@ export async function analyseImport(input = {}) {
           }],
         };
       }
-      if (format === 'swarmos-package' || format === 'registry-json' || format === 'skill-json') {
+      if (format === 'mmm-package' || format === 'registry-json' || format === 'skill-json') {
         const payload = parseJsonPayload(JSON.parse(text), filename);
         skills.push(...payload.skills);
         relations.push(...payload.relations);
@@ -644,7 +644,7 @@ export function buildPackage(skillNames, { relations = null, agent = null } = {}
   return {
     schema: PACKAGE_SCHEMA,
     exportedAt: new Date().toISOString(),
-    exporter: 'SwarmOS Skills Hub',
+    exporter: 'MMM Skills Hub',
     agent: agent || null,
     skills,
     relations: edges,

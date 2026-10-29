@@ -223,7 +223,7 @@ export const ADAPTERS = {
     id: 'browser',
     verify() { return true; }, // same-origin session only; no webhook
     buildSend(_config, msg) {
-      return { local: true, message: { title: msg.title || 'SwarmOS', text: msg.text, ts: Date.now() } };
+      return { local: true, message: { title: msg.title || 'MMM', text: msg.text, ts: Date.now() } };
     },
     parseInbound(body) {
       return body?.text ? { text: body.text, from: 'browser', chatId: 'inbox' } : null;

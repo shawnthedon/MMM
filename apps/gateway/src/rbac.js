@@ -1,4 +1,4 @@
-/* ============ SwarmOS RBAC — role matrix and permission checks ============
+/* ============ MMM RBAC — role matrix and permission checks ============
  * Layer 1 of the governance model (design spec §"Layer 1 — Identity & Access").
  * Five roles, ordered. A permission names the minimum role that holds it; capability tokens can
  * narrow that further through scopes, never widen it.

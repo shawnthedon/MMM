@@ -1,4 +1,4 @@
--- SwarmOS gateway — initial schema (see docs/DESIGN_SPEC.md §19)
+-- MMM gateway — initial schema (see docs/DESIGN_SPEC.md §19)
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS migrations (

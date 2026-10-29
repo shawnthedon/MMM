@@ -1,4 +1,4 @@
-/* ============ SwarmOS boot: router, simulation, PWA ============ */
+/* ============ MMM boot: router, simulation, PWA ============ */
 import './styles.css';
 import './kanban.css';
 import { getState, setState, subscribe, logEvent, now, uid, fmtMoney, commit, esc, pendingApprovals } from './core.js';
@@ -286,7 +286,7 @@ function boot() {
   });
 
   // A 401 from any API call drops straight back to the sign-in screen.
-  window.addEventListener('swarmos:unauthenticated', () => {
+  window.addEventListener('mmm:unauthenticated', () => {
     if (currentRoute !== 'login') navigate('login');
   });
 

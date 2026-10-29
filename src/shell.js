@@ -1,4 +1,4 @@
-/* ============ SwarmOS shell: chrome, sheets, toasts, actions ============ */
+/* ============ MMM shell: chrome, sheets, toasts, actions ============ */
 import { getState, setState, commit, esc, icon, pendingApprovals, logEvent, uid, now } from './core.js';
 import { identityChipHTML } from './authview.js';
 import { getAuth } from './auth.js';

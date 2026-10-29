@@ -536,7 +536,7 @@ await check('G1 migration fills voice defaults without losing saved choices', ()
 await check('G2 settings persist through the store and survive a reload', async () => {
   core.setState((state) => { state.settings.voice.autoSpeak = false; state.settings.voice.strategy = 'phrase'; }, 'voice-test');
   await tick(400);
-  const raw = JSON.parse(localStorage.getItem('swarmos-state-v1') || '{}');
+  const raw = JSON.parse(localStorage.getItem('mmm-state-v1') || '{}');
   assert.equal(raw.settings.voice.autoSpeak, false);
   assert.equal(raw.settings.voice.strategy, 'phrase');
 });

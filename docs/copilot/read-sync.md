@@ -50,7 +50,7 @@ Helpers: `getProvenance()`, `isLive(slice)`, `replaceSlices(patch, label)`, `set
 
 ## Persistence
 
-Gateway rows are never written to `localStorage['swarmos-state-v1']`: `core.persist()` runs through
+Gateway rows are never written to `localStorage['mmm-state-v1']`: `core.persist()` runs through
 the filter installed by the data layer, which swaps gateway slices back to the demo snapshot. A
 signed-out browser therefore only ever holds fixtures, and a stale server copy can never resurface
 as "demo" data. Verified by `test:readsync` ("gateway rows are never written to localStorage").

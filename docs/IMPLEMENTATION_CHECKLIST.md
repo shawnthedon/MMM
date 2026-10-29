@@ -1,6 +1,6 @@
-# ✅ SwarmOS — Implementation Checklist (Prototype → Production)
+# ✅ MMM — Implementation Checklist (Prototype → Production)
 
-> **Purpose:** an ordered, beginner-friendly checklist to turn the SwarmOS PWA prototype into a real production application — including restructuring the codebase, replacing every simulated behavior with a working implementation, and handling all sample data, objects, and instances (seed → migrate → restore).
+> **Purpose:** an ordered, beginner-friendly checklist to turn the MMM PWA prototype into a real production application — including restructuring the codebase, replacing every simulated behavior with a working implementation, and handling all sample data, objects, and instances (seed → migrate → restore).
 >
 > **Audience:** developers new to the project (or new to production web development).
 > **Format:** every item is a checkbox. Work top-to-bottom. Each phase has a **Goal**, ordered **To-dos**, and **Done when…** exit criteria.
@@ -45,7 +45,7 @@
 
 ## 🎯 Definition of “Production Ready”
 
-Before starting, agree on what “done” means. SwarmOS is production-ready when:
+Before starting, agree on what “done” means. MMM is production-ready when:
 
 - [ ] A fresh machine can go from `git clone` → running app in **< 15 minutes** using only the README.
 - [ ] Every item in the **Prototype → Real** table below is `✅` (no simulated behavior remains in default mode).
@@ -196,7 +196,7 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   - Create `apps/gateway/src/db.js`:
     ```js
     import Database from 'better-sqlite3';
-    export const db = new Database(process.env.DATA_DIR + '/swarmos.sqlite');
+    export const db = new Database(process.env.DATA_DIR + '/mmm.sqlite');
     db.pragma('journal_mode = WAL');   // concurrency + crash safety
     ```
   - **Why WAL?** many readers + one writer, crash-safe — exactly what spec §18 requires.
@@ -227,7 +227,7 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   - The UI button **Settings → Reset demo data** must call `POST /api/v1/dev/seed?reset=1` (gateway) instead of rewriting `localStorage`.
 
 - [ ] **2.4 Add an export/backup/restore drill**
-  - `npm run backup` → copies `swarmos.sqlite` (via `sqlite3 .backup` API) + `data/artifacts/` into `backups/<timestamp>/`.
+  - `npm run backup` → copies `mmm.sqlite` (via `sqlite3 .backup` API) + `data/artifacts/` into `backups/<timestamp>/`.
   - `npm run restore -- backups/<timestamp>` → replaces data dir and restarts.
   - Practice the drill now, then schedule it in Phase 16.
 
@@ -341,7 +341,7 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   `src/skillsImport.js`, `src/skillsImportView.js`, `src/skillsMatrix.js`, routes `#/skills`, `#/matrix`
   - 24-skill catalogue (21 marketplace, 1 user, 2 synthesized) with category/author/licence/
     compatibility/inputs/outputs/changelog, plus 8 typed relationship types and 24 seeded edges.
-  - Import accepts SKILL.md (YAML frontmatter), skill.json, registry JSON, skill.yaml, SwarmOS
+  - Import accepts SKILL.md (YAML frontmatter), skill.json, registry JSON, skill.yaml, MMM
     portable packages and .zip/.skill bundles; each package is schema-checked, scanned for embedded
     secrets, instruction injection and path traversal, dependency/version resolved, permission
     reviewed, then installed **into quarantine** or rejected into the audit log. Imports grant no
@@ -428,7 +428,7 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
 
 - [x] **4.14 Comms: server-side credentials, routes, delivery queue** — `apps/gateway/src/comms.js`,
   `apps/gateway/migrations/003_comms.sql`, `apps/gateway/server.js`, `src/commsGateway.js`
-  - Credentials encrypted with AES-256-GCM (key from `SWARMOS_SECRET`), masked on every read; the
+  - Credentials encrypted with AES-256-GCM (key from `MMM_SECRET`), masked on every read; the
     browser never receives a secret and never persists one when the gateway owns comms.
   - Routes for channels, settings, messages, send, queue, provider verify handshakes and signed
     inbound webhooks; `comms:read` / `comms:write`, audited including denials.
@@ -610,7 +610,7 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
 
 # Phase 10 ✈️ Telegram Bridge (Real Bot)
 
-**Goal:** operate SwarmOS from real Telegram: commands, notifications, two-way agent chat, inline approval buttons.
+**Goal:** operate MMM from real Telegram: commands, notifications, two-way agent chat, inline approval buttons.
 
 - [ ] **10.1 Bot setup (real)**
   - Create a bot with @BotFather; put the token in the gateway `.env` (sealed vault). Setup wizard in the UI calls the real Telegram API (`getMe` test, webhook/long-poll toggle).
@@ -771,7 +771,7 @@ The prototype **simulates** these behaviors. Each one must become real (each is 
   - `docker-compose.yml`:
     ```yaml
     services:
-      swarmos:
+      mmm:
         build: .
         ports: ["8787:8787"]
         env_file: .env
@@ -853,7 +853,7 @@ Frontier: OpenAI, Anthropic, Google, xAI · Mid-tier: OpenRouter, Together, Mist
 ## Chat (3) · Files (6) · Events (6) · Telegram demo
 Threads: `th-1` Researcher-01 DM · `th-2` # market-intel-swarm · `th-3` SRE-Bot DM (with an embedded approval card)
 Files: `runs/market-intel/report.md`, `vendors.csv`, `skills/content.repurpose/skill.md`, `logs/gateway-2026-10-12.log`, `configs/routing.yaml`, `artifacts/heatmap-positioning.png`
-Settings: workspace `SwarmLab`, trust weights (success 12, compliance 10, approvals 8, evals 8, uptime 6, incidents 15, cost 8), self-improve policy `suggest`, autonomy default L2.
+Settings: workspace `MMM HQ`, trust weights (success 12, compliance 10, approvals 8, evals 8, uptime 6, incidents 15, cost 8), self-improve policy `suggest`, autonomy default L2.
 
 ---
 
@@ -867,7 +867,7 @@ Use this whenever you want the factory demo back (screenshots, workshops, debugg
 | **Seed script** | Fresh DB / scripted setup | `npm run seed -- --reset` (wipes, re-migrates, inserts all fixtures) |
 | **Seed (non-destructive)** | Add demo to an empty DB | `npm run seed` (skips entities that already exist) |
 | **Backup restore** | Recover real data | `npm run restore -- backups/<timestamp>` |
-| **Nuclear (prototype only)** | Old localStorage prototype | DevTools → Application → Local Storage → delete key `swarmos-state-v1` → reload |
+| **Nuclear (prototype only)** | Old localStorage prototype | DevTools → Application → Local Storage → delete key `mmm-state-v1` → reload |
 | **API (CI/tests)** | Ephemeral environments | `POST /api/v1/dev/seed?reset=1` (must be disabled in production via `ALLOW_DEV_SEED=false`) |
 
 **Fresh-machine bring-up (everything, in order):**
@@ -912,7 +912,7 @@ npm run build && npm run start
 | **WS (WebSocket)** | A persistent connection the server uses to push live updates to the UI |
 | **PTY** | A pseudo-terminal — what makes the in-app terminal a *real* shell |
 | **MCP** | Model Context Protocol — standard way to expose tools to agents |
-| **Adapter** | Code that lets one agent framework speak SwarmOS's common interface (FAI) |
+| **Adapter** | Code that lets one agent framework speak MMM's common interface (FAI) |
 | **Approval gate** | A policy checkpoint requiring human sign-off before a privileged action |
 | **Trust tier** | A (≥80) / B (50–79) / C (<50) — computed score unlocking or restricting autonomy |
 | **Hash chain** | Each audit row embeds the previous row's hash — tampering breaks the chain |

@@ -17,8 +17,8 @@ scripts/comms-gateway-test.mjs          npm run test:comms-gateway (27 checks, r
 | | |
 | --- | --- |
 | Cipher | AES-256-GCM, random 12-byte IV, auth tag stored with the ciphertext (`v1.<iv>.<tag>.<body>`, base64url) |
-| Key | HKDF-SHA256 over `SWARMOS_SECRET` (salt `swarmos-comms-salt`, info `comms-config-v1`) → 32 bytes |
-| No `SWARMOS_SECRET` | the gateway generates `data/.comms-key` (mode 600) **and prints a warning**. Never silently "fine" |
+| Key | HKDF-SHA256 over `MMM_SECRET` (salt `mmm-comms-salt`, info `comms-config-v1`) → 32 bytes |
+| No `MMM_SECRET` | the gateway generates `data/.comms-key` (mode 600) **and prints a warning**. Never silently "fine" |
 | Tampering / wrong key | decryption yields `{}` — the gateway reports "not configured", it never guesses |
 | API responses | secrets are returned as `••••last4` only; a client that sends `••••…` back cannot overwrite the stored value |
 | Logs | `redact()` scrubs bot tokens, Meta tokens, Slack tokens, bearer headers and phone numbers before a body is stored |
@@ -39,7 +39,7 @@ panel can print it instead of claiming it.
 | POST | `/api/v1/comms/:channel/send` | `comms:write` | real delivery; `dedupeKey` makes it idempotent |
 | POST | `/api/v1/comms/queue` | `comms:write` | run the retry queue now |
 | GET | `/api/v1/comms/:channel/verify` | public | Meta `hub.challenge` (plain text), Slack `challenge` (signed) |
-| POST | `/api/v1/comms/:channel/inbound` | public, signature | adapter verifies over the raw body; `x-swarmos-delivery` dedupes |
+| POST | `/api/v1/comms/:channel/inbound` | public, signature | adapter verifies over the raw body; `x-mmm-delivery` dedupes |
 
 `comms:read` joins `read` for every role; `comms:write` sits with `agent:write`/`task:write` in the
 Operator set. Every comms route writes an audit row (including refusals).
@@ -57,7 +57,7 @@ Public routes still record everything: an unsigned inbound call is answered `401
 * Quiet hours (`22:00-06:00`, wraps midnight) hold outbound mail instead of sending it; the send route
   answers `202` with `reason: quiet_hours`.
 * The background ticker (`processQueue` every 60 s) is `unref()`'d and disabled with
-  `SWARMOS_COMMS_DISABLE=1`, so tests drive it explicitly.
+  `MMM_COMMS_DISABLE=1`, so tests drive it explicitly.
 
 ## 4. Inbound
 

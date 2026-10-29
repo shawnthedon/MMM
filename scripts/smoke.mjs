@@ -53,9 +53,9 @@ check('the header keeps the workspace mark but not the workspace name text', () 
   const ws = win.document.querySelector('.topbar .ws');
   if (!ws) throw new Error('workspace block missing');
   if (ws.querySelector('#ws-name')) throw new Error('workspace name text still rendered');
-  if (/SwarmLab/.test(ws.textContent)) throw new Error('workspace name text still visible');
+  if (/MMM HQ/.test(ws.textContent)) throw new Error('workspace name text still visible');
   if (!ws.querySelector('.ws-logo')) throw new Error('workspace mark removed');
-  if (!/SwarmLab workspace/.test(ws.getAttribute('aria-label') || '')) throw new Error('workspace name no longer announced');
+  if (!/MMM HQ workspace/.test(ws.getAttribute('aria-label') || '')) throw new Error('workspace name no longer announced');
 });
 
 const { navigate, rerender } = await import('../src/main.js');
@@ -294,11 +294,11 @@ check('terminal execCommand', () => {
   const h = html();
   navigate('terminal');
   rerender();
-  if (!html().includes('SwarmOS shell')) throw new Error('terminal not rendered');
+  if (!html().includes('MMM shell')) throw new Error('terminal not rendered');
 });
 
 check('store persists', () => {
-  const raw = win.localStorage.getItem('swarmos-state-v1');
+  const raw = win.localStorage.getItem('mmm-state-v1');
   if (raw && !raw.includes('agents')) throw new Error('bad state shape');
 });
 

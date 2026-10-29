@@ -6,7 +6,7 @@ The Vite development server, Vite built preview and Vercel configuration send
 `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. The
 pre-existing Local screen measures `window.crossOriginIsolated` and `SharedArrayBuffer`; it does not
 assume that headers alone made threads available. The service-worker cache was bumped from
-`swarmos-v1` to `swarmos-v2`, so an update does not keep serving a pre-header cached shell offline.
+`mmm-v1` to `mmm-v2`, so an update does not keep serving a pre-header cached shell offline.
 An initial online update is necessary before an existing installation gets the new worker and shell.
 
 Same-origin HTML, JS, CSS, manifest, icons and service worker require no third-party exemption. No

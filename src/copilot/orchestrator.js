@@ -231,7 +231,7 @@ export async function runDiagnostics() {
   });
   let raw = null;
   try {
-    raw = globalThis.localStorage?.getItem('swarmos-state-v1') || null;
+    raw = globalThis.localStorage?.getItem('mmm-state-v1') || null;
   } catch {
     raw = null;
   }
@@ -239,7 +239,7 @@ export async function runDiagnostics() {
     label: 'App store',
     status: raw ? 'ok' : 'warn',
     detail: raw
-      ? `swarmos-state-v1 present · ${(raw.length / 1024).toFixed(1)} KB · rev ${s.rev}`
+      ? `mmm-state-v1 present · ${(raw.length / 1024).toFixed(1)} KB · rev ${s.rev}`
       : 'no persisted store yet — seeded fixtures are in memory',
   });
   checks.push({

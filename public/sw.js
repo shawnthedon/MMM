@@ -1,8 +1,12 @@
-/* SwarmOS service worker — offline shell + stale-while-revalidate assets */
+/* MMM service worker — offline shell + stale-while-revalidate assets */
 // Invalidate the pre-isolation shell: offline navigation must not reuse a cached document
 // without the COOP/COEP headers from before the deployment.
-// v3 discards older caches which may contain authenticated API responses.
-const CACHE = 'swarmos-v3';
+// v4 also purges the pre-rename (SwarmOS-era) caches, whose shell could have been built against
+// authenticated API responses under different cache keys.
+const CACHE = 'mmm-v4';
+// Historical prefix from before this app was renamed. Kept only so existing installs do not carry
+// a stale shell forever; nothing new is ever written under it.
+const LEGACY_PREFIX = 'swarmos-';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/favicon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
@@ -14,7 +18,11 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('swarmos-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(
+          keys.filter((k) => k !== CACHE && (k.startsWith('mmm-') || k.startsWith(LEGACY_PREFIX))).map((k) => caches.delete(k))
+        )
+      )
       .then(() => self.clients.claim())
   );
 });

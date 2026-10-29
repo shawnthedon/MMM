@@ -79,7 +79,7 @@ behaves like any other in Agents/Tasks/Copilot.
 - **Refused**: if the gateway is not serving agents (or the role cannot write) nothing is written
   anywhere — the designer never creates a row the server does not have.
 
-The draft itself is persisted to `localStorage['swarmos.agentDraft.v1']` (name/goal/components only,
+The draft itself is persisted to `localStorage['mmm.agentDraft.v1']` (name/goal/components only,
 no credentials) and cleared after a successful save. *Discard* deletes it after a confirmation.
 
 ## Spec items not implemented (deliberate)

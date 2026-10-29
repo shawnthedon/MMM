@@ -24,10 +24,10 @@ Copilot's approval cards could not be enforced anywhere except the browser.
 | Principals | `principals` table gains `email`, `password_hash`, `status`, `last_login_at`, `token_version`, `must_change_password`, `created_by` (migration `002_auth.sql`). Unique index on `email`. |
 | Passwords | `scrypt` (N=16384, r=8, p=1, 32-byte key) with a 16-byte per-user salt, stored as `scrypt$N$r$p$salt$hash`, compared with `timingSafeEqual`. Argon2id would be preferable but needs a native addon — recorded as a trade-off, not hidden. |
 | Sessions | 256-bit `sws_…` secret; only its SHA-256 is stored in `sessions`. HttpOnly, `SameSite=Strict`, `Secure` behind TLS, 12 h TTL, `last_seen_at` refreshed at most once a minute, revocation on logout/password change/role change/disable. |
-| CSRF | Cookie-authenticated mutations must send `x-swarmos-csrf`; the value is `HMAC-SHA256(serverSecret, "csrf:" + sessionSecret)` and is returned by `/api/v1/auth/session`. Bearer callers are exempt (they are not ambient credentials). |
-| Server secret | `SWARMOS_AUTH_SECRET` (≥32 chars) or one generated once and stored in `settings` (`auth.secret`). |
-| API tokens | `swk_…` secrets, hashed at rest (`capability_tokens`), explicit `scopes_json`, optional expiry, `prefix` for display, immediate revocation, `last_used_at`. Scopes can only narrow the holder's role. |
-| Bootstrap | First start creates an Owner from `SWARMOS_BOOTSTRAP_EMAIL`/`SWARMOS_BOOTSTRAP_PASSWORD`, or in development generates a password and prints it **once** with `must_change_password`. Production without credentials refuses to start — there is no silent default admin. |
+| CSRF | Cookie-authenticated mutations must send `x-mmm-csrf`; the value is `HMAC-SHA256(serverSecret, "csrf:" + sessionSecret)` and is returned by `/api/v1/auth/session`. Bearer callers are exempt (they are not ambient credentials). |
+| Server secret | `MMM_AUTH_SECRET` (≥32 chars) or one generated once and stored in `settings` (`auth.secret`). |
+| API tokens | `mmm_…` secrets, hashed at rest (`capability_tokens`), explicit `scopes_json`, optional expiry, `prefix` for display, immediate revocation, `last_used_at`. Scopes can only narrow the holder's role. |
+| Bootstrap | First start creates an Owner from `MMM_BOOTSTRAP_EMAIL`/`MMM_BOOTSTRAP_PASSWORD`, or in development generates a password and prints it **once** with `must_change_password`. Production without credentials refuses to start — there is no silent default admin. |
 | Lockout | 5 failures per email in 5 min → 15 min lock; 20 attempts per address in 5 min → 429. Attempts persisted in `auth_attempts` and written to the audit log. |
 
 ## 3. RBAC matrix
@@ -88,19 +88,19 @@ POST /api/v1/approvals/:id/deny    approval:decide  (+ separation of duties)
 GET  /api/v1/events?cursor=        event:read
 GET  /api/v1/audit                 audit:read
 GET  /api/v1/audit/verify          audit:verify
-POST /api/v1/dev/seed              dev:seed   (also blocked in production unless SWARMOS_ALLOW_SEED=1)
+POST /api/v1/dev/seed              dev:seed   (also blocked in production unless MMM_ALLOW_SEED=1)
 WS   /ws                           authenticated; topic-filtered by permission
 ```
 
 ## 5. Transport & hardening
 
-- **CORS is an explicit allowlist** (`SWARMOS_CORS_ORIGIN`, default the local Vite origins) and
+- **CORS is an explicit allowlist** (`MMM_CORS_ORIGIN`, default the local Vite origins) and
   echoes the origin **with** `Access-Control-Allow-Credentials`. Unknown origins get `null` rather
   than a wildcard, because `*` cannot carry cookies.
 - **Bodies** are capped (256 KB), must be JSON objects, and malformed JSON is a 400 instead of a
   silently empty object.
 - **Rate limits**: 600 authenticated requests/min per principal+address; login has its own bucket.
-- **Responses** carry `x-swarmos-request-id`, `x-swarmos-auth`, `nosniff`, `no-referrer`,
+- **Responses** carry `x-mmm-request-id`, `x-mmm-auth`, `nosniff`, `no-referrer`,
   `Cache-Control: no-store`.
 - **Health** no longer leaks `dataDir` to anonymous callers (only `system:diagnostics` sees it).
 - **Audit** records every mutation *and* every denial (role, via, route, permission), with the
@@ -119,7 +119,7 @@ WS   /ws                           authenticated; topic-filtered by permission
   permission chips, password change, sign out), gateway configuration, and always-available
   "Continue without a gateway" that is labelled **unenforced**.
 - Top bar shows `demo` / `signed out` / `offline` / the role.
-- A 401 from any call dispatches `swarmos:unauthenticated`, which routes back to sign-in.
+- A 401 from any call dispatches `mmm:unauthenticated`, which routes back to sign-in.
 - Dev convenience: `npm run dev` proxies `/api`, `/healthz` and `/ws` to `:8787`, so "Use this
   origin (dev proxy)" gives a same-origin session cookie (no CORS, works behind a preview proxy).
 
@@ -151,7 +151,7 @@ WS   /ws                           authenticated; topic-filtered by permission
    never mix into a live screen, and a failed refresh is labelled (`stale gateway` / `demo · offline`).
    `POST /agents/:id/run` and `DELETE /agents/:id` do not exist, so the UI refuses those actions
    instead of faking them.
-6. **TLS termination is external.** `SWARMOS_SECURE_COOKIES=1` must be set behind HTTPS;
+6. **TLS termination is external.** `MMM_SECURE_COOKIES=1` must be set behind HTTPS;
    the gateway itself only speaks HTTP.
 7. **WS tokens in query strings** are accepted for CLI convenience (`?token=`); prefer the cookie.
 

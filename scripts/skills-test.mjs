@@ -57,7 +57,7 @@ const text = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
 // A separate module instance (query string) builds a full state without touching the instance the
 // app will use, so the app's own load() → migrate() path is what the assertions exercise.
 const coreEarly = await import('../src/core.js?seed-only');
-const KEY = 'swarmos-state-v1';
+const KEY = 'mmm-state-v1';
 const seeded = coreEarly.seed();
 const oldState = {
   ...seeded,
@@ -366,7 +366,7 @@ await check('JSON manifests, YAML manifests and registry indexes all import', as
 await check('a portable package keeps its typed relationships', async () => {
   const a = await importer.analyseImport({ text: PACKAGE_JSON, filename: 'policy.skill.json' });
   assert(a.ok, 'package analysed');
-  eq(a.format, 'swarmos-package', 'package format');
+  eq(a.format, 'mmm-package', 'package format');
   eq(a.relations.length, 1, 'relation kept');
   eq(a.relations[0].type, 'depends_on', 'typed edge');
   const out = importView.installPending || null; // UI not involved here
@@ -532,7 +532,7 @@ await check('export produces a portable package without secrets or run data', as
   assert(pkg.notes.includes('Declarations only'), 'limits stated');
   const round = await importer.analyseImport({ text: json, filename: 'export.json' });
   assert(round.ok, 'our own export re-imports');
-  eq(round.format, 'swarmos-package', 'round trip format');
+  eq(round.format, 'mmm-package', 'round trip format');
 });
 
 await check('the copilot can describe the new skills surfaces', async () => {

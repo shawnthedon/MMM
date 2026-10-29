@@ -179,7 +179,7 @@ await check('zoom survives a re-render (and is part of the persisted workspace)'
   nav.rerender();
   await sleep(60);
   eq(text(q('#kb-zoom-val')), '130%', 'rerender keeps the value');
-  const saved = JSON.parse(win.localStorage.getItem('swarmos.v2') || win.localStorage.getItem('swarmos-state') || '{}');
+  const saved = JSON.parse(win.localStorage.getItem('mmm.v2') || win.localStorage.getItem('mmm-state') || '{}');
   const stored = saved.board?.zoom ?? saved.state?.board?.zoom;
   assert(stored === undefined || stored === 1.3, `persisted zoom should be 1.3, saw ${stored}`);
   kb.fitZoom();

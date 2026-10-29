@@ -71,8 +71,8 @@
       "dev-open (refused in production)"
     ],
     "credentials": [
-      "session cookie (HttpOnly, SameSite=Strict) + x-swarmos-csrf for mutations",
-      "scope-limited `swk_` bearer tokens"
+      "session cookie (HttpOnly, SameSite=Strict) + x-mmm-csrf for mutations",
+      "scope-limited `mmm_` bearer tokens"
     ],
     "roles": [
       "Observer",
@@ -85,6 +85,6 @@
       "GET /healthz",
       "POST /api/v1/auth/login"
     ],
-    "notes": "Every other route declares a permission; denials are audited. POST /api/v1/dev/seed is Owner-only and blocked in production unless SWARMOS_ALLOW_SEED=1."
+    "notes": "Every other route declares a permission; denials are audited. POST /api/v1/dev/seed is Owner-only and blocked in production unless MMM_ALLOW_SEED=1."
   }
 }

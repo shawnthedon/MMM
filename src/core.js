@@ -1,4 +1,4 @@
-/* ============ SwarmOS core: state, seed, utils, icons ============ */
+/* ============ MMM core: state, seed, utils, icons ============ */
 
 import { cloneSkills, cloneRelations, SKILLS } from './skillsData.js';
 import { cloneComms } from './commsChannels.js';
@@ -90,7 +90,7 @@ export function seed() {
   return {
     rev: 0,
     settings: {
-      workspaceName: 'SwarmLab',
+      workspaceName: 'MMM HQ',
       theme: 'dark',
       density: 'comfortable',
       autonomyLevel: 2,
@@ -307,7 +307,7 @@ export function seed() {
       ts: mins((23 - i) * 60), cost: 0.4 + Math.abs(Math.sin(i * 0.7)) * 2.2, tokens: Math.floor(8000 + Math.abs(Math.cos(i * 0.5)) * 30000),
     })),
     telegram: {
-      linked: true, botName: '@SwarmOS_ControlBot', allowlist: ['@maya (owner)', '@devon (admin)'],
+      linked: true, botName: '@MMM_ControlBot', allowlist: ['@maya (owner)', '@devon (admin)'],
       topics: { approvals: true, failures: true, deploys: true, budget: true, digest: true },
       messages: [
         { from: 'bot', ts: mins(6), text: '⚠️ Approval needed\nvercel.deploy · production · web-app\nFrom: SRE-Bot · risk: MEDIUM' },
@@ -316,14 +316,14 @@ export function seed() {
       ],
     },
     terminalLines: [
-      { kind: 'dim', text: 'SwarmOS shell v0.1.0-proto · type `help` for commands' },
+      { kind: 'dim', text: 'MMM shell v0.1.0-proto · type `help` for commands' },
     ],
     pendingQueue: [],
   };
 }
 
 /* ---------- store ---------- */
-const KEY = 'swarmos-state-v1';
+const KEY = 'mmm-state-v1';
 let state = load();
 const listeners = new Set();
 

@@ -54,7 +54,7 @@ Still open (smaller, ordered):
    process so retries survive a gateway restart schedule.
 4. **Provider rate-limit headers** — parse `Retry-After` / `x-ratelimit-*` instead of only our counter.
 5. **Template selection** for WhatsApp outside the 24-hour window (adapter already supports it).
-6. **Key rotation** for `SWARMOS_SECRET` (a key ring with versioned ciphertext).
+6. **Key rotation** for `MMM_SECRET` (a key ring with versioned ciphertext).
 
 ## 3. Local (on-device AI) — phases 2–6
 
