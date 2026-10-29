@@ -583,7 +583,7 @@ async function sendChat(text) {
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('The model returned an empty response.');
     setState((st) => {
       const current = st.threads.find((t) => t.id === thId);
-      if (current) current.messages.push({ id: uid('m'), from: 'agent', agent: current.title.replace(/^[#💬]\\s*/, '') || 'Assistant', text: reply, ts: now() });
+      if (current) current.messages.push({ id: uid('m'), from: 'agent', agent: current.title.replace(/^[#💬]\s*/, '') || 'Assistant', text: reply, ts: now() });
     }, 'chat-reply');
   } catch (error) {
     const message = error?.message || 'Model request failed.';
