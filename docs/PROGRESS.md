@@ -322,7 +322,7 @@ after the rename; `data/` is now gitignored and no longer tracked.
 
 Added [`FEATURE_COMPLETION_ROADMAP.md`](FEATURE_COMPLETION_ROADMAP.md): the feature-level companion to
 the production roadmap. It audits all 18 routed screens (plus the approvals list, Copilot overlay,
-training and the usage ledger) against what actually backs them, and gives 21 module playbooks with
+training and the usage ledger) against what actually backs them, and gives 23 module playbooks with
 beginner-level steps, real code for this repo, a test per module and 95 documentation links.
 
 Key audit finding: **migration 001 already creates and seeds 15 tables, but only 4 have routes.**
@@ -332,3 +332,26 @@ work is "expose an existing table + add the runtime", not "design a backend". Al
 Telegram Bridge is entirely local even though a real Telegram adapter already exists in
 `apps/gateway/src/comms.js`, and agent rows persist fictional history (`runs`, `success_rate`,
 `cost_today` are seed constants nothing recomputes).
+
+---
+
+## 🧬 2026-10-29 — Self-modification and code evolution (M23)
+
+Every agent is now *capable* of controlled self-modification. Authority stays with the gateway: a
+per-agent policy (five levels, default **L1 recommend**), an isolated workspace that never touches the
+repository, a sandbox with a rebuilt environment and a command allowlist, real test runs, independent
+peer review, approval separated from deployment, versioned promotion with rollback, automatic rollback
+when the health check fails, quotas that stop runaway loops, and a ten-stage audit trail.
+
+- Backend: `apps/gateway/src/evolution/` + `migrations/005_evolution.sql`; 18 routes; WS topic `evolution`.
+- Screen: `#/evolution` (`src/evolution.js`, `src/evolution.css`) — agent tabs, policy editor for Owners,
+  observations, experiments, ten-stage bar, diff, test output, reviews, comparison **with its stated
+  limits**, approval and timeline. Mobile-first, 44 px targets, no fabricated activity.
+- Permissions: `evolution:read` Observer · `run` Operator · `review`/`approve` Reviewer · `deploy` Admin ·
+  `policy` Owner.
+- Evidence: `npm run test:evolution` — **20 passed** (`SELF-MODIFICATION ACCEPTANCE`), AC1–AC18, against a
+  real gateway on a temporary `DATA_DIR` with real sandboxed `node` runs;
+  `npm run test:evolution:ui` — **9 passed**.
+- Honest limits: the sandbox is **process isolation, not a container** (no network isolation) and the API
+  and screen both say so; there is no model-driven patch author yet; reproduction is files + manifest,
+  not an image digest. Full list: [`evolution/SELF_MODIFICATION.md`](evolution/SELF_MODIFICATION.md) §10.

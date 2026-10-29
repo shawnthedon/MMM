@@ -18,6 +18,7 @@ import './skillsMatrix.js';
 import './skillsImportView.js';
 import './comms.js';
 import './browser.js';
+import './evolution.js';
 import './local.js';
 import './voice.js';
 import { refreshComms, releaseComms, canReadGatewayComms } from './commsGateway.js';

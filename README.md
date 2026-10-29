@@ -225,9 +225,10 @@ npm run lint        # code style (after Phase-1 tooling)
 | --- | --- |
 | 📐 [Design Spec](docs/DESIGN_SPEC.md) | Full 12-module spec, governance, data model, providers |
 | 🌐 [Agent Browser](docs/browser/AGENT_BROWSER.md) | Autonomous browsing with watchdog, bounded recovery, checkpoints and evidence — plus exactly what it will not do |
+| 🧬 [Self-Modification](docs/evolution/SELF_MODIFICATION.md) | Controlled code evolution for every agent: autonomy levels, protected boundaries, the process sandbox and what it does **not** isolate, reviews, approvals, versions, rollback and audit |
 | ✅ [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) | Functional build: 19 phases, seed data & restore guide |
 | 🏷 [Rename: SwarmOS → MMM](docs/ops/RENAME_MMM.md) | Every identifier that changed, and the one-time upgrade steps |
-| 🧩 [Feature Completion Roadmap](docs/FEATURE_COMPLETION_ROADMAP.md) | **What to build next, screen by screen.** Every simulated/demo/missing part with file references, beginner steps, code, tests and 95 links |
+| 🧩 [Feature Completion Roadmap](docs/FEATURE_COMPLETION_ROADMAP.md) | **What to build next, screen by screen.** Every simulated/demo/missing part with file references, beginner steps, code, tests and 101 links |
 | 🚀 [Production Roadmap](docs/PRODUCTION_ROADMAP.md) | **Start here.** Ordered plan out of demo mode into live operation: demo inventory + rectification, NFR checklist, TODO list, beginner recipes, resource links |
 | 🗺 [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | Non-functional track to production + 100+ resource links |
 | 🔄 [Read Sync](docs/copilot/read-sync.md) | How module screens read the gateway and how demo vs live data is labelled |

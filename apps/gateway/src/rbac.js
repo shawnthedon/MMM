@@ -23,9 +23,12 @@ export const PERMISSIONS = Object.freeze({
   'token:issue': 'Observer',
   'comms:read': 'Observer',
   'browser:read': 'Observer',
+  'evolution:read': 'Observer',
   // review surface
   'approval:request': 'Observer',
   'approval:decide': 'Reviewer',
+  'evolution:review': 'Reviewer',
+  'evolution:approve': 'Reviewer',
   'audit:read': 'Reviewer',
   'audit:verify': 'Reviewer',
   // operational surface
@@ -34,19 +37,22 @@ export const PERMISSIONS = Object.freeze({
   'swarm:write': 'Operator',
   'comms:write': 'Operator',
   'browser:run': 'Operator',
+  'evolution:run': 'Operator',
   // administration
+  'evolution:deploy': 'Admin',
   'principal:read': 'Admin',
   'principal:write': 'Admin',
   'token:revoke:any': 'Admin',
   'system:diagnostics': 'Admin',
   // owner only
   'principal:write:privileged': 'Owner',
+  'evolution:policy': 'Owner',
   'dev:seed': 'Owner',
 });
 
-const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read'];
-const REVIEW = ['audit:read', 'audit:verify'];
-const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run'];
+const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read', 'evolution:read'];
+const REVIEW = ['audit:read', 'audit:verify', 'evolution:review', 'evolution:approve'];
+const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run', 'evolution:run'];
 
 /** Explicit role → permission sets (the authoritative check). */
 export const ROLE_PERMISSIONS = Object.freeze({
@@ -57,7 +63,7 @@ export const ROLE_PERMISSIONS = Object.freeze({
   Operator: [...READ_ONLY, 'approval:request', ...OPERATE],
   // Both operational and review powers, plus principal administration.
   Admin: [...READ_ONLY, 'approval:request', 'approval:decide', ...REVIEW, ...OPERATE,
-    'principal:read', 'principal:write', 'token:revoke:any', 'system:diagnostics'],
+    'principal:read', 'principal:write', 'token:revoke:any', 'system:diagnostics', 'evolution:deploy'],
   Owner: Object.keys(PERMISSIONS),
 });
 
