@@ -177,6 +177,21 @@ check('the radius scale matches the RELAY component table', () => {
   assert(/\.cp-fab-ico \{[^}]*border-radius: 9999px/.test(read('src/copilot.css')), 'the Copilot launcher is not circular');
 });
 
+check('the stage microphone stays small and beside the type-instead link', () => {
+  const copilot = read('src/copilot.css');
+  const base = copilot.match(/\.cp-mic \{([\s\S]*?)\}/);
+  assert(base, 'the stage microphone rule is missing');
+  const width = Number((base[1].match(/width:\s*(\d+)px/) || [])[1]);
+  assert(width >= 44, `the mic must stay a 44px touch target, got ${width}px`);
+  assert(width <= 64, `the mic is too large for the stage again (${width}px); it covers the hologram`);
+  const row = copilot.match(/\.cp-voice-row \{([\s\S]*?)\}/);
+  assert(row, 'the mic no longer shares a row with the type-instead link');
+  assert(/display:\s*flex/.test(row[1]), 'the voice row is not a flex row');
+  assert(!/flex-direction:\s*column/.test(row[1]), 'the voice row must be horizontal');
+  const large = copilot.match(/@media \(min-width: 720px\)[\s\S]*?\.cp-mic \{ width: (\d+)px/);
+  assert(!large || Number(large[1]) <= 72, `the wide-screen mic must not grow past 72px, got ${large && large[1]}px`);
+});
+
 check('motion and focus affordances are honoured', () => {
   assert(/:focus-visible \{ outline: 2px solid/.test(styles), 'no global focus ring');
   assert(/@media \(prefers-reduced-motion: reduce\)/.test(styles), 'no reduced-motion support');
