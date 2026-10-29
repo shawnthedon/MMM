@@ -556,33 +556,43 @@ function renderMsg(m, th) {
     </div>`;
 }
 
-function simulateReply(thId) {
-  const agentName = getState().threads.find((t) => t.id === thId)?.title.replace(/^[#💬]\s*/, '') || 'Agent';
-  setTimeout(() => {
-    const replies = [
-      `On it. I'll fold that into the current run and report back with artifacts.`,
-      `Good call — dispatching as a task with a review gate. Estimated cost: $0.42.`,
-      `Done — wrote the output to artifacts/. Want me to push a summary to the Telegram digest?`,
-      `Noted. I'm raising a follow-up question to the planner node before proceeding.`,
-    ];
-    setState((st) => {
-      const th = st.threads.find((t) => t.id === thId);
-      if (th) th.messages.push({ id: uid('m'), from: 'agent', agent: agentName, text: replies[Math.floor(Math.random() * replies.length)], ts: now() });
-    }, 'chat-reply');
-    import('./main.js').then((m) => m.rerender());
-  }, 900 + Math.random() * 900);
-}
-
-function sendChat(text) {
-  if (!text.trim()) return;
+async function sendChat(text) {
+  const clean = String(text || '').trim();
+  if (!clean) return;
   const s = getState();
-  const thId = window.__chatThread || s.threads[0].id;
+  const thId = window.__chatThread || s.threads[0]?.id;
+  const th = s.threads.find((t) => t.id === thId);
+  if (!th) { toast('Chat thread not found', 'bad'); return; }
+
+  const history = (th.messages || [])
+    .filter((m) => ['me', 'agent'].includes(m.from) && typeof m.text === 'string' && m.text.trim())
+    .slice(-18)
+    .map((m) => ({ role: m.from === 'me' ? 'user' : 'assistant', content: m.text.slice(0, 12000) }));
+  history.push({ role: 'user', content: clean.slice(0, 12000) });
+
   setState((st) => {
-    const th = st.threads.find((t) => t.id === thId);
-    if (th) { th.messages.push({ id: uid('m'), from: 'me', text, ts: now() }); th.unread = 0; }
+    const current = st.threads.find((t) => t.id === thId);
+    if (current) { current.messages.push({ id: uid('m'), from: 'me', text: clean, ts: now() }); current.unread = 0; }
   }, 'chat-send');
   import('./main.js').then((m) => m.rerender());
-  simulateReply(thId);
+
+  try {
+    const { api } = await import('./api.js');
+    const result = await api.chatCompletion(history);
+    const reply = result.body?.message;
+    if (typeof reply !== 'string' || !reply.trim()) throw new Error('The model returned an empty response.');
+    setState((st) => {
+      const current = st.threads.find((t) => t.id === thId);
+      if (current) current.messages.push({ id: uid('m'), from: 'agent', agent: current.title.replace(/^[#💬]\\s*/, '') || 'Assistant', text: reply, ts: now() });
+    }, 'chat-reply');
+  } catch (error) {
+    const message = error?.message || 'Model request failed.';
+    setState((st) => {
+      const current = st.threads.find((t) => t.id === thId);
+      if (current) current.messages.push({ id: uid('m'), from: 'system', text: `No AI response was generated: ${message}. Configure and sign in to a working model gateway, then try again.`, ts: now() });
+    }, 'chat-error');
+  }
+  import('./main.js').then((m) => m.rerender());
 }
 
 on('chat-open', (el, ds) => {
