@@ -20,6 +20,7 @@ export const routes = [
   { id: 'plugins', label: 'Plugins', icon: 'plug', title: 'Plugin Marketplace' },
   { id: 'comms', label: 'Comms', icon: 'broadcast', title: 'Comms' },
   { id: 'browser', label: 'Agent Browser', icon: 'globe', title: 'Agent Browser' },
+  { id: 'evolution', label: 'Self-Improvement', icon: 'spark', title: 'Self-Improvement' },
   { id: 'local', label: 'Local', icon: 'cpu', title: 'Local AI' },
   { id: 'voice', label: 'Voice Studio', icon: 'mic', title: 'Voice Studio' },
   // Kept as routes for titles/highlighting, but not shown in the All-modules grid (see HIDDEN).
@@ -246,8 +247,10 @@ function moreSheet(navigate) {
   // It is flagged so nobody mistakes it for a finished runtime.
   // 'Local' is preflight-only and 'Agent Browser' needs an engine installed on the gateway host;
   // both are flagged so nobody mistakes them for something that works out of the box.
-  const isNew = (id) => id === 'local' || id === 'browser';
-  const newNote = (id) => (id === 'browser' ? ' — new, needs a browser engine on the gateway' : ' — new, preflight only');
+  const isNew = (id) => id === 'local' || id === 'browser' || id === 'evolution';
+  const newNote = (id) => (id === 'browser' ? ' — new, needs a browser engine on the gateway'
+    : id === 'evolution' ? ' — new, sandboxed and approval-gated'
+      : ' — new, preflight only');
   openSheet({
     title: 'All modules',
     body: `<div class="row" style="gap:8px;margin-bottom:12px">

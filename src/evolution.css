@@ -1,0 +1,251 @@
+/* ============ Self-Improvement — mobile-first layout ============
+ * Base styles are for the smallest screen; every enhancement is a min-width query. No max-width
+ * queries (the responsive suite forbids them), no hard-coded colours, nothing clipped at 320px and
+ * every control is a ≥44px touch target.
+ */
+
+.evo-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg, 14px);
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.evo-note > div { min-width: 0; }
+.evo-note.warn { background: color-mix(in srgb, var(--state-warning) 5%, transparent); border-color: color-mix(in srgb, var(--state-warning) 35%, transparent); }
+.evo-note.bad { background: color-mix(in srgb, var(--state-error) 5%, transparent); border-color: color-mix(in srgb, var(--state-error) 35%, transparent); }
+.evo-note.ok { background: color-mix(in srgb, var(--state-success) 5%, transparent); border-color: color-mix(in srgb, var(--state-success) 30%, transparent); }
+.evo-note svg { flex: none; margin-top: 2px; color: var(--text-muted); }
+
+/* ---------- agent tabs ---------- */
+.evo-agents {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+  scroll-snap-type: x proximity;
+}
+.evo-agent {
+  position: relative;
+  flex: none;
+  min-height: 44px;
+  min-width: 150px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  text-align: left;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+.evo-agent.on { border-color: color-mix(in srgb, var(--accent-primary) 55%, transparent); }
+.evo-agent:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.evo-agent-name { display: block; font-size: 0.85rem; font-weight: 600; overflow-wrap: anywhere; }
+.evo-agent-level { display: block; font-size: 0.7rem; color: var(--text-muted); }
+.evo-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--state-success);
+}
+
+/* ---------- layout ---------- */
+.evo-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.evo-col { display: grid; gap: 12px; align-content: start; min-width: 0; }
+@media (min-width: 960px) {
+  .evo-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; }
+}
+
+/* ---------- policy card ---------- */
+.evo-policy { display: block; }
+.evo-policy-head { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.evo-facts { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
+@media (min-width: 520px) { .evo-facts { grid-template-columns: 1fr 1fr; } }
+.evo-fact {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+.evo-fact .small { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- steps (native details) ---------- */
+.evo-step, .card.evo-step {
+  display: block;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.evo-step > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  list-style: none;
+}
+.evo-step > summary::-webkit-details-marker { display: none; }
+.evo-step > summary:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
+.evo-step[open] > summary { border-bottom: 1px solid var(--border-subtle); }
+.evo-step > *:not(summary) { padding-left: 12px; padding-right: 12px; }
+.evo-step > *:not(summary):last-child { padding-bottom: 12px; }
+
+.evo-section {
+  margin: 14px 12px 6px;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ---------- forms ---------- */
+.evo-form { display: grid; gap: 10px; padding-top: 10px; }
+.evo-form label { display: grid; gap: 4px; font-size: 0.75rem; color: var(--text-muted); }
+.evo-form .input { min-height: 44px; }
+.evo-form textarea.input { min-height: 66px; }
+.evo-form .btn { min-height: 44px; }
+.evo-check { display: flex !important; align-items: flex-start; gap: 8px; font-size: 0.78rem; color: var(--text-muted); }
+.evo-check input { width: 18px; height: 18px; margin-top: 2px; }
+.evo-mono { font-family: var(--font-mono); font-size: 0.78rem; }
+.evo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; padding: 0 12px; }
+.evo-step .evo-actions { padding-left: 12px; padding-right: 12px; }
+.evo-actions .btn { min-height: 44px; }
+
+/* ---------- experiment tiles ---------- */
+.evo-list-wrap { display: grid; gap: 8px; }
+.evo-exp {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.evo-exp.on { border-color: color-mix(in srgb, var(--accent-primary) 55%, transparent); }
+.evo-exp:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.evo-exp-top { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.evo-exp-time { margin-left: auto; }
+.evo-exp-foot { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.evo-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- detail ---------- */
+.evo-detail { display: grid; gap: 12px; }
+.evo-title { margin: 6px 0 0; font-size: 1rem; overflow-wrap: anywhere; }
+.evo-blocker {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--state-error) 35%, transparent);
+  background: color-mix(in srgb, var(--state-error) 5%, transparent);
+}
+.evo-blocker.warn { border-color: color-mix(in srgb, var(--state-warning) 35%, transparent); background: color-mix(in srgb, var(--state-warning) 5%, transparent); }
+.evo-blocker svg { flex: none; margin-top: 2px; }
+
+/* ---------- stage bar ---------- */
+.evo-stages {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 0;
+  counter-reset: none;
+}
+.evo-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.evo-stage-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--border-default); }
+.evo-stage.done { color: var(--text-primary); border-color: color-mix(in srgb, var(--state-success) 45%, transparent); }
+.evo-stage.done .evo-stage-dot { background: var(--state-success); }
+.evo-stage.current { color: var(--text-primary); border-color: color-mix(in srgb, var(--accent-primary) 60%, transparent); }
+.evo-stage.current .evo-stage-dot { background: var(--accent-primary); }
+
+/* ---------- lists, diffs, output ---------- */
+.evo-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.evo-list li {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  min-width: 0;
+}
+.evo-list li:first-child { border-top: 0; }
+.evo-list-warn li { color: var(--text-muted); }
+.evo-path { font-family: var(--font-mono); font-size: 0.75rem; overflow-wrap: anywhere; }
+
+.evo-diff, .evo-output {
+  margin: 10px 0 0;
+  padding: 10px;
+  max-height: 340px;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: pre;
+  overscroll-behavior-x: contain;
+}
+.evo-output { max-height: 200px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- timeline ---------- */
+.evo-timeline { display: grid; gap: 6px; margin-top: 8px; max-height: 300px; overflow-y: auto; }
+.evo-row { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
+.evo-row:last-child { border-bottom: 0; }
+.evo-dot { width: 8px; height: 8px; border-radius: 999px; margin-top: 6px; flex: none; background: var(--text-muted); }
+.evo-dot.ok { background: var(--state-success); }
+.evo-dot.warn { background: var(--state-warning); }
+.evo-dot.bad { background: var(--state-error); }
+
+.evo-empty {
+  display: grid;
+  gap: 6px;
+  place-items: start;
+  padding: 18px 4px;
+  color: var(--text-muted);
+}
+.evo-foot { margin-top: 14px; max-width: 72ch; }

@@ -14,7 +14,7 @@ This is the **feature-level** companion to [`PRODUCTION_ROADMAP.md`](PRODUCTION_
 | Document | Answers | Shape |
 | --- | --- | --- |
 | [`PRODUCTION_ROADMAP.md`](PRODUCTION_ROADMAP.md) | *“In what order do I take this from demo to production, and how do I run it once it is there?”* | Phases L0–L8, NFR checklist (SEC/REL/PERF/A11Y/OBS/DEP/DATA), ops recipes |
-| **This document** | *“This screen does not work. What exactly is missing, and how do I build the missing part?”* | 21 module playbooks (M01–M21), each with steps, code, tests, evidence |
+| **This document** | *“This screen does not work. What exactly is missing, and how do I build the missing part?”* | 23 module playbooks (M01–M23), each with steps, code, tests, evidence |
 | [`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md) | *“What was originally planned?”* | Functional phases 0–18 (historical) |
 | [`IMPLEMENTATION_ROADMAP.md`](IMPLEMENTATION_ROADMAP.md) | *“What is a good non-functional target?”* | NFR theory + M1–M9 milestones |
 
@@ -151,7 +151,7 @@ bottom block is real engineering.
 
 ## 2. The truth table — every screen and surface
 
-19 routed screens, plus four surfaces that are not routes (the approvals list inside Home, the
+20 routed screens, plus four surfaces that are not routes (the approvals list inside Home, the
 Copilot overlay, Training, and the usage ledger behind Analytics).
 
 Legend: **✅ real** · **🟠 persisted but not served** · **🎭 simulated** · **❌ absent**.
@@ -181,6 +181,7 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | 20 | **Training** | — | ❌ | No screen, no backend, no job runner. Correctly reports `blocked` | `capabilities.js` |
 | 21 | **Local AI** | `#/local` | ❌ | Phase 2 spike only; model manager, offline text, image phases not started | `src/local.js`, `docs/local/` |
 | 23 | **Agent Browser** | `#/browser` | ✅ | Real end to end: gateway-owned tasks, one action per tick, watchdog, bounded recovery, checkpoints, evidence. **Requires Chromium on the gateway host** — until it is installed the screen reports `unconfigured` and offers no start button | `apps/gateway/src/browser/`, `src/browser.js` |
+| 24 | **Self-Improvement** | `#/evolution` | ✅ | Real end to end: per-agent policy, isolated candidate, real sandboxed test runs, independent review, approval, versioned promotion and rollback, audit. **The sandbox is process isolation, not a container, and says so.** No model writes the patch for you yet | `apps/gateway/src/evolution/`, `src/evolution.js` |
 | 22 | **Settings** | `#/settings` | 🎭 | Trust-weight sliders change a *preview number* only; notification toggles do nothing; retention is display text; “4 templates active”, “AEAD-sealed vault”, “default-deny · proxy” are static strings | `src/views2.js:930-1000` |
 
 > **Note on honesty already present.** The header chip, the provenance notes and the capability
@@ -1337,6 +1338,50 @@ annotation, and no cost accounting tied to browser minutes.
 
 ---
 
+### M23 · Self-modification and code evolution (controlled, not a command)
+
+**Today.** Implemented and proven end to end. Every agent is *capable* of self-modification; authority
+is held by the gateway, never by the agent's instructions.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| Autonomy model | `evolution/policy.js` | Five levels (recommend → modify+test → auto-stage → bounded deploy → supervised continuous), each a fixed capability set. Default **level 1** for every agent, including new specialists. |
+| Protected boundaries | `policy.js` (`PROTECTED_PATHS`, `SENSITIVE_PATHS`) | Permissions, auth, the audit-log layer, the request pipeline, migrations, `package.json`, CI, `.env*`, the shared test harness — recommend-only for an agent. Sensitive but allowed paths can never auto-deploy on a scripted test alone. |
+| Path safety | `policy.normalisePath`, `checkWriteScope` | No absolute paths, no traversal, no control characters; every write must match the agent's scope; 40 files / 256 KB each / 4 MB / 3 000 diff lines. |
+| Test integrity | `policy.checkTestIntegrity` | A candidate cannot pass by deleting, skipping or weakening the test that catches the defect — findings are blocking. |
+| Sandbox | `evolution/sandbox.js` | Rebuilt environment (no secrets, no `DATA_DIR`, no ambient credentials), command allowlist, wall-clock `SIGKILL`, 256 MB heap, 64 KB output cap. Reports honestly: `isolation: 'process'`, with an explicit **not enforced** list. |
+| Workspace | `evolution/workspace.js` | Baseline + working copy under `DATA_DIR/experiments/<id>/`; the repository is never modified by the gateway. |
+| Cycle | `evolution/runner.js` | Ten stages: observe → diagnose → plan → isolated copy → rewrite → test → peer review → compare → promote → monitor. Every transition records actor, reason and evidence. |
+| Review & approval | `runner.review`, `effectiveReviews` | A different agent reviews; self-review and self-approval are refused; a revised verdict supersedes the earlier one instead of accumulating. Approving never deploys. |
+| Versions | `workspace.publishVersion/activateVersion` | `DATA_DIR/runtime/<agent>/<version>/files/` + `current.json`; the last known-good version survives the whole experiment; rollback is a pointer move that keeps the audit trail and states what it cannot reverse (migrations, side effects). |
+| Health & recovery | `runner.healthCheck` | A failing health check stops promotion and rolls back automatically; every outcome is recorded. |
+| Limits | `policy.js`, runner quotas | `maxExperimentsPerDay`, `maxTestRuns`, `maxRuntimeMs` (hard cap 15 min) stop runaway experiments and retry loops with a typed error. |
+| Storage | `apps/gateway/migrations/005_evolution.sql` | `evolution_policies`, `evolution_grants`, `evolution_observations`, `evolution_experiments`, `evolution_versions` and the event trail. |
+| API | `apps/gateway/server.js` | Capabilities, agents, policy, grants, observations, versions, health, rollback, experiments and 13 named steps. WS topic `evolution`. |
+| Screen | `src/evolution.js`, `src/evolution.css` | Agent tabs, policy card with an Owner-only level editor, observations, new experiment, sandbox limits, versions & rollback, experiment list, and a detail view with the ten-stage bar, diagnosis, plan, diff, test output, reviews, comparison **with its limitations**, approval and timeline. Mobile-first, 44 px targets, no fabricated activity. |
+
+**Acceptance tests (spec AC1–AC18)** — `npm run test:evolution` (20 checks; a real gateway on a temporary
+`DATA_DIR` and real sandboxed `node` runs against `agents/demo-writer/`, whose suite genuinely fails until
+the defect is fixed). Screen: `npm run test:evolution:ui` (9 checks).
+
+**The gap.** The sandbox is process isolation, not a container or microVM; there is no model-driven patch
+author (a human or an agent operator supplies the edit and the platform validates it); reproduction is
+files + manifest rather than an image digest; there is no cost accounting per experiment, and health
+checks are command-based rather than real production probes.
+
+**Next steps**
+
+1. Container/microVM per experiment, then change `isolation` to `container` in `describeSandbox()` — the
+   API and the screen follow automatically, because they read that field.
+2. Pin the container image digest and lockfile hash in `manifest.json` so AC18 means bit-for-bit.
+3. Optional model-driven patch author behind the same ten gates — the gates must not move.
+4. Meter sandbox minutes per agent and add a spend ceiling alongside the time ceiling.
+5. Real health probes (error rate, latency window) to replace command-only checks.
+
+**URLs:** A.27.
+
+---
+
 ## 6. Master implementation checklist
 
 Tick a box only when its **evidence** exists (test output, SQL row, recorded call). Order matters
@@ -1482,6 +1527,24 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 - [ ] Per-principal domain allowlist
 - [ ] Evidence moved to object storage
 - [ ] Downloads captured, hashed and listed
+
+### M23 · Self-modification
+- [x] Five-level autonomy model, default level 1 for every agent and every new specialist
+- [x] Protected boundaries: the safeguards, auth, RBAC, audit layer, migrations, CI, secrets
+- [x] Isolated workspace; the repository is never modified by the gateway
+- [x] Sandbox with rebuilt environment, command allowlist, timeout, heap and output caps
+- [x] Test-integrity check that blocks deleting, skipping or weakening the failing test
+- [x] Ten-stage cycle with a recorded reason and actor at every transition
+- [x] Independent review, refusal of self-review and self-approval, superseding verdicts
+- [x] Versioned promotion with rollback and preserved audit; irreversible changes flagged
+- [x] Health check that stops promotion and rolls back automatically
+- [x] Quotas that stop runaway experiments and retry loops
+- [x] Mobile-first screen that reports the real status and the limits of the evidence
+- [ ] Container or microVM isolation (today: process; the API says so)
+- [ ] Container image digest + lockfile hash in the manifest for exact reproduction
+- [ ] Model-driven patch author behind the existing gates
+- [ ] Sandbox spend metering and a cost ceiling
+- [ ] Real production health probes
 
 ---
 
@@ -1705,6 +1768,14 @@ an unfinished one.
 ### A.26 Resilience primitives used by the runner
 - MDN `AbortController` — https://developer.mozilla.org/en-US/docs/Web/API/AbortController
 - Node timers, `unref()` and why the ticker must not hold the process open — https://nodejs.org/api/timers.html
+
+### A.27 Sandboxing, isolation and supply-chain honesty
+- Node.js child process API (`spawn`, `detached`, signal handling) — https://nodejs.org/api/child_process.html
+- Node.js `--max-old-space-size` and memory limits — https://nodejs.org/api/cli.html#--max-old-space-sizememorylimit
+- OWASP Top 10 for LLM applications (prompt injection, excessive agency) — https://owasp.org/www-project-top-10-for-large-language-model-applications/
+- SLSA supply-chain levels (why an image digest matters for reproduction) — https://slsa.dev/spec/v1.0/levels
+- Git `diff` format (`--unified`) — https://git-scm.com/docs/git-diff
+- NIST SP 800-218 secure software development framework — https://csrc.nist.gov/pubs/sp/800/218/final
 
 > Deployment, CI, backups, TLS, metrics, alerts and the rest of the operational stack are **not**
 > repeated here — they are in [`PRODUCTION_ROADMAP.md` Appendix A](PRODUCTION_ROADMAP.md).

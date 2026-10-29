@@ -207,7 +207,10 @@ function agentDetail(id) {
         <textarea class="input" data-model="_agentprompt">${esc(a.prompt)}</textarea>
       </div>
       <div class="kv"><span class="k">Autonomy level</span><span class="strong">L${a.autonomy} ${['ask-always', 'guided', 'supervised', 'guarded-auto', 'full-auto'][a.autonomy]}</span></div>
-      <div class="kv"><span class="k">Self-improvement</span><span class="strong">${esc(getState().settings.selfImprove)}</span></div>
+      <div class="kv"><span class="k">Self-improvement</span>
+        <button class="btn sm" data-act="nav" data-to="evolution/${a.id}">${icon('spark', 15)} Policy, experiments &amp; rollback</button>
+      </div>
+      <div class="tiny muted">Autonomy level, authorised scope, diffs, test evidence, reviews and approvals for this agent live on the Self-Improvement panel. The gateway enforces them.</div>
     </div>
 
     <div class="section-title">Tools & skills</div>

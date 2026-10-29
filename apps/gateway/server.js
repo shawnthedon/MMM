@@ -17,6 +17,7 @@ import { db, migrate, logEvent, audit, verifyAuditChain, DATA_DIR, DB_DRIVER } f
 import { seed } from './src/seed.js';
 import * as comms from './src/comms.js';
 import { runner as browserRunner, browserCapability, setBrowserBroadcast } from './src/browser/index.js';
+import { evolution, setEvolutionBroadcast, ensurePoliciesForAllAgents } from './src/evolution/index.js';
 import * as auth from './src/auth.js';
 import {
   can,
@@ -136,6 +137,7 @@ const clients = new Set();
 function subscriptionFilter(topic, principal) {
   if (topic === 'approvals') return can(principal, 'approval:read');
   if (topic === 'browser') return can(principal, 'browser:read');
+  if (topic === 'evolution') return can(principal, 'evolution:read');
   if (topic === 'audit') return can(principal, 'audit:read');
   return can(principal, 'read');
 }
@@ -439,6 +441,7 @@ route('POST', /^\/api\/v1\/agents$/, { permission: 'agent:write', mutating: true
     .run(id, b.name, b.role || '', b.framework || 'LangGraph', b.model || 'anthropic/claude-sonnet-4',
       b.fallback || 'deepseek/deepseek-v3', b.status || 'idle', b.trust ?? 50, b.autonomy ?? 2, 0.85, 0, 0,
       Date.now(), JSON.stringify(b.tools || []), JSON.stringify(b.skills || []), b.prompt || '', '{}', ctx.principal.id);
+  try { evolution.ensurePolicy(id); } catch { /* policy is created lazily on first use */ }
   const ev = logEvent('agent', `Agent ${b.name} created via API by ${ctx.principal.name}`, id);
   audit(ctx.principal.id, ctx.principal.via, 'agent.create', { id, name: b.name }, 'allow', 'ok');
   broadcast('agents', { type: 'agent.created', entity: id, event: ev });
@@ -654,6 +657,145 @@ route('GET', /^\/api\/v1\/audit$/, { permission: 'audit:read' }, (ctx) => {
     body: db.prepare('SELECT seq, ts, principal_id, actor_via, event, policy_decision, result, args_redacted, hash FROM audit_log ORDER BY seq DESC LIMIT ?').all(limit),
   };
 });
+
+/* =========================================================================================
+ * Self-modification — the improvement cycle, its gates and its evidence
+ * =======================================================================================*/
+const evo = (fn) => async (ctx) => {
+  try {
+    return { code: 200, body: await fn(ctx) };
+  } catch (error) {
+    const code = error && typeof error.code === 'string' ? error.code : '';
+    const status = code === 'not-found' ? 404
+      : code === 'protected' ? 403
+        : ['self-review', 'self-approval', 'level', 'disabled', 'quota', 'approval-required', 'blocked', 'wrong-stage', 'terminal'].includes(code) ? 409
+          : code === 'bad-path' ? 400
+            : 400;
+    if (code === 'level' || code === 'self-approval' || code === 'self-review' || code === 'protected') {
+      audit(ctx.principal.id, ctx.principal.via, 'evolution.denied', { path: ctx.req.url, reason: code }, 'deny', 'denied');
+    }
+    return { code: status, body: { error: error.message, code: code || 'error', ...(error.refused ? { refused: error.refused } : {}) } };
+  }
+};
+
+route('GET', /^\/api\/v1\/evolution\/capabilities$/, { permission: 'evolution:read' }, async () => ({ code: 200, body: evolution.capabilities() }));
+
+route('GET', /^\/api\/v1\/evolution\/agents$/, { permission: 'evolution:read' }, evo(() => ({ agents: evolution.listAgents() })));
+
+route('GET', /^\/api\/v1\/evolution\/agents\/([\w-]+)\/policy$/, { permission: 'evolution:read' }, evo((ctx) => evolution.ensurePolicy(ctx.match[1])));
+
+route('PATCH', /^\/api\/v1\/evolution\/agents\/([\w-]+)\/policy$/, { permission: 'evolution:policy', mutating: true }, evo((ctx) => {
+  const out = evolution.setPolicy(ctx.match[1], ctx.body || {}, ctx.principal.id);
+  return out;
+}));
+
+route('GET', /^\/api\/v1\/evolution\/agents\/([\w-]+)\/grants$/, { permission: 'evolution:read' }, evo((ctx) => ({ grants: evolution.grantsFor(ctx.match[1]) })));
+
+route('POST', /^\/api\/v1\/evolution\/grants$/, { permission: 'evolution:policy', mutating: true }, evo((ctx) => {
+  const grant = evolution.createGrant({
+    agentId: ctx.body?.agentId,
+    ownerAgentId: ctx.body?.ownerAgentId || '*',
+    scope: ctx.body?.scope || [],
+    reason: ctx.body?.reason || '',
+    expiresAt: ctx.body?.expiresAt || null,
+  }, ctx.principal.id);
+  return grant;
+}));
+
+route('DELETE', /^\/api\/v1\/evolution\/grants\/([\w-]+)$/, { permission: 'evolution:policy', mutating: true }, evo((ctx) => evolution.revokeGrant(ctx.match[1], ctx.principal.id)));
+
+route('GET', /^\/api\/v1\/evolution\/agents\/([\w-]+)\/observations$/, { permission: 'evolution:read' }, evo((ctx) => ({ observations: evolution.listObservations(ctx.match[1]) })));
+
+route('POST', /^\/api\/v1\/evolution\/agents\/([\w-]+)\/observations$/, { permission: 'evolution:run', mutating: true }, evo((ctx) => {
+  const out = evolution.recordObservation(ctx.match[1], {
+    source: ctx.body?.source,
+    kind: ctx.body?.kind || '',
+    detail: ctx.body?.detail,
+    evidence: ctx.body?.evidence || {},
+    measured: ctx.body?.measured !== false,
+  }, ctx.principal.id);
+  broadcast('evolution', { type: 'observation.recorded', agentId: ctx.match[1], id: out.id });
+  return out;
+}));
+
+route('GET', /^\/api\/v1\/evolution\/agents\/([\w-]+)\/versions$/, { permission: 'evolution:read' }, evo((ctx) => ({
+  versions: evolution.listVersions(ctx.match[1]),
+  active: evolution.activeVersion(ctx.match[1]),
+})));
+
+route('POST', /^\/api\/v1\/evolution\/agents\/([\w-]+)\/health$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.healthCheck(ctx.match[1], { actor: ctx.principal.id })));
+
+route('POST', /^\/api\/v1\/evolution\/agents\/([\w-]+)\/rollback$/, { permission: 'evolution:deploy', mutating: true }, evo((ctx) =>
+  evolution.rollback(ctx.match[1], { actor: ctx.principal.id, reason: ctx.body?.reason || '' })));
+
+route('GET', /^\/api\/v1\/evolution\/experiments$/, { permission: 'evolution:read' }, (ctx) => ({
+  code: 200,
+  body: { experiments: evolution.listExperiments({ agentId: ctx.query.agentId || '', limit: Number(ctx.query.limit) || 40 }) },
+}));
+
+route('POST', /^\/api\/v1\/evolution\/experiments$/, { permission: 'evolution:run', mutating: true }, evo((ctx) => evolution.createExperiment({
+  agentId: ctx.body?.agentId,
+  title: ctx.body?.title,
+  problem: ctx.body?.problem,
+  objective: ctx.body?.objective || '',
+  observationIds: ctx.body?.observationIds || [],
+  files: ctx.body?.files || [],
+  plan: ctx.body?.plan || {},
+  actor: ctx.principal.id,
+})));
+
+route('GET', /^\/api\/v1\/evolution\/experiments\/([\w-]+)$/, { permission: 'evolution:read' }, (ctx) => {
+  const experiment = evolution.getExperiment(ctx.match[1]);
+  return experiment ? { code: 200, body: experiment } : { code: 404, body: { error: 'not found' } };
+});
+
+route('GET', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/file$/, { permission: 'evolution:read' }, evo((ctx) =>
+  evolution.readFileForReview(ctx.match[1], ctx.query.path || '')));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/diagnose$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.diagnose(ctx.match[1], ctx.body || {}, ctx.principal.id)));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/plan$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.planExperiment(ctx.match[1], ctx.body || {}, ctx.principal.id)));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/workspace$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.createWorkingCopy(ctx.match[1], ctx.principal.id)));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/edit$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.editFile(ctx.match[1], { path: ctx.body?.path, content: ctx.body?.content, reason: ctx.body?.reason }, ctx.principal.id)));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/delete-file$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.deleteFile(ctx.match[1], { path: ctx.body?.path, reason: ctx.body?.reason }, ctx.principal.id)));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/test$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.testExperiment(ctx.match[1], { command: ctx.body?.command, actor: ctx.principal.id })));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/review$/, { permission: 'evolution:review', mutating: true }, evo((ctx) =>
+  evolution.reviewExperiment(ctx.match[1], {
+    reviewer: ctx.body?.reviewer,
+    reviewerKind: ctx.body?.reviewerKind || 'agent',
+    verdict: ctx.body?.verdict,
+    findings: ctx.body?.findings || [],
+  }, ctx.principal.id)));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/compare$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.compareExperiment(ctx.match[1], ctx.principal.id)));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/request-approval$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.requestApproval(ctx.match[1], { actor: ctx.principal.id, note: ctx.body?.note || '' })));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/approve$/, { permission: 'evolution:approve', mutating: true }, evo((ctx) =>
+  evolution.approve(ctx.match[1], { decision: ctx.body?.decision, note: ctx.body?.note || '', principal: ctx.principal.id }, ctx.principal.id)));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/stage$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.promote(ctx.match[1], { target: 'stage', actor: ctx.principal.id })));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/deploy$/, { permission: 'evolution:deploy', mutating: true }, evo((ctx) =>
+  evolution.promote(ctx.match[1], { target: 'deploy', actor: ctx.principal.id })));
+
+route('POST', /^\/api\/v1\/evolution\/experiments\/([\w-]+)\/cancel$/, { permission: 'evolution:run', mutating: true }, evo((ctx) =>
+  evolution.cancel(ctx.match[1], ctx.principal.id, ctx.body?.reason || '')));
 
 /* =========================================================================================
  * Agent Browser — long-running autonomous browsing with a watchdog and evidence
@@ -877,7 +1019,7 @@ export function createGateway() {
           return;
         }
         if (msg?.type === 'subscribe' && Array.isArray(msg.topics)) {
-          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'system', 'audit', '*'].includes(t));
+          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'system', 'audit', '*'].includes(t));
           const refused = wanted.filter((t) => t !== '*' && !subscriptionFilter(t, client.principal));
           client.topics = new Set(wanted.filter((t) => !refused.includes(t)));
           ws.send(JSON.stringify({ topic: 'system', type: 'subscribed', topics: [...client.topics], refused, ts: Date.now() }));
@@ -900,6 +1042,11 @@ export function createGateway() {
   // Browser tasks: the fan-out first, then the ticker that advances them, then re-attach whatever was
   // running when the process last stopped (it resumes from its checkpoint, after inspecting the page).
   setBrowserBroadcast(broadcast);
+  setEvolutionBroadcast(broadcast);
+  // Every agent — seeded, imported or created yesterday — gets a self-improvement policy. The default
+  // is level 1: inspect and recommend, never write.
+  let evolutionPolicies = { agents: 0, created: 0 };
+  try { evolutionPolicies = ensurePoliciesForAllAgents(); } catch { /* migrations not ready in some tests */ }
   const browserTicker = browserRunner.startTicker();
   if (process.env.MMM_BROWSER_RESUME !== '0') {
     browserRunner.resumeInterrupted().catch(() => {});
@@ -913,6 +1060,7 @@ export function createGateway() {
     authWarning: mode.warning,
     queueTicker,
     browserTicker,
+    evolutionPolicies,
     /** Test seam: route provider calls to a local mock instead of the network. */
     setFetch(fn) { gatewayFetch = fn; comms.setServiceFetch(fn); },
   };
