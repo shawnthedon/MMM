@@ -498,3 +498,42 @@ a fake usage curve and invented events — on every screen, forever. It is **del
 - Honest remaining: Analytics still carries typed-in tiles (`▲ 8%`, `87% success`, `median 4m`) — that is
   session 11 and needs a ledger; no swarm is executed or persisted, which is session 4 and needs a
   scheduler.
+
+---
+
+## 🐝 2026-11-01 — Swarm plans are rows now, and the schema refuses to lie (M28)
+
+`swarms` has existed since `001_init.sql` with a `status` column nothing wrote and a `nodes` blob nothing
+read. Session 3 + 4 of the roadmap turn it into the app's first module where the **database** enforces the
+honesty rule instead of a comment in the UI.
+
+- **Schema** (`009_swarms.sql`): adds `executed`, `updated_at`, `run_note`. Rows claiming `live`,
+  `running` or `paused` are reset to `planned`, and any progress or spend on an unexecuted row is zeroed —
+  a plan nothing ran cannot have either.
+- **Module** (`apps/gateway/src/swarms.js`): `listSwarms`, `getSwarm`, `createSwarm`, `updateSwarm`,
+  `setSwarmStatus`, `deleteSwarm`, one `runtimeStatus()` that states “nothing schedules, starts or advances
+  one” on every payload. The accepted payload is an allowlist, so `executed: true` in a request is a `400`
+  rather than a silently dropped field, and `progress` / `budget.spent` are **computed from `executed`**
+  rather than read from a column that could be stale.
+- **Status is a plan decision, not process control**: `planned` ⇄ `cancelled`, then `archived` (one-way).
+  `live`, `running`, `paused` and `completed` are a `409` whose message names what would have to exist
+  first. The screen's buttons say *Mark cancelled*, *Re-open plan*, *Archive*, *Delete*.
+- **Routes**: `GET/POST /swarms`, `GET/PATCH/DELETE /swarms/:id`, `POST /swarms/:id/status`. Reads need
+  `read`, writes `swarm:write`, every mutation audits (no objective text in the trail), and changes
+  broadcast on the `swarms` WebSocket topic.
+- **Client**: `swarms` moved from `LOCAL_SLICES` to `GATEWAY_SLICES` — fetched with the rest, adapted
+  once, kept out of `localStorage`, restored on sign-out; a gateway without the routes keeps the slice on
+  demo provenance instead of failing the refresh. The screen reads the store; “Deploy” became “New plan”.
+- **Deleted**: the fabricated “Resource allocation” panel on the record screen (`tokens/s 78%`,
+  `$6/h cap`, `2.2k/5k calls`, `4/6 slots`) — typed-in numbers on a module that cannot allocate anything.
+  The seed and `fixtures/swarms.json` now create plans, not runs.
+- Evidence: `npm run test:swarms` — **17 passed** against a real gateway (refusals for `executed: true`,
+  four claimed-status 409s, cancel/re-open, one-way archive, Observer read/write split, audit rows, a WS
+  `swarm.created`, survival across a restart, seed and fixture checks); `npm run test:swarms:ui` — **8
+  passed**; `npm run test:swarms:browser` — **8 passed** in real Chromium (save a plan from the real sheet
+  → it exists in `GET /swarms` → cancel → reload → still cancelled; no start/pause/stop control; six
+  seconds with an unchanged DOM; no sideways scroll at 320 px, which is how a wrapping chip bug was found
+  and fixed). `npm test` and `npm run build` green.
+- Honest limit: **nothing executes a swarm.** No scheduler, no worker, no per-node budget enforcement —
+  `budget.cap` is a number in a row, not a limit anything applies. That is the next step, and the 409s
+  are already written to guard it.

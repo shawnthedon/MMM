@@ -65,7 +65,7 @@
 
 | | Module | | Module |
 | :---: | --- | :---: | --- |
-| 🤖 | **Agent Manager** — profiles, team + position, goal, trust; full-height team panel on a phone, 900 px dock on a desktop | 🐝 | **Teams & Swarms** — real teams and membership; a swarm is a **plan** and says so: nothing schedules or executes one |
+| 🤖 | **Agent Manager** — profiles, team + position, goal, trust; full-height team panel on a phone, 900 px dock on a desktop | 🐝 | **Teams & Swarms** — real teams, real members, and **swarm plans stored on the gateway** (create, cancel, archive, delete); nothing executes one and the API refuses any status that claims it |
 | 📋 | **Kanban Board** — drag & drop, @agent dispatch | ⚡ | **Skills Hub** — 24-skill marketplace, multi-format import, [Skills Matrix](docs/copilot/skills-hub.md) |
 | 🧠 | **Model catalogue** — 26 providers listed, **no provider client installed** | 🧩 | **Plugin catalogue** — MCP entries listed, **no MCP client installed** |
 | 💬 | **Chat** — real transcript on the gateway; says plainly that no model runtime answers yet | 📡 | **Comms** — Telegram · WhatsApp · Discord · Slack · SMS · Browser gateways |
@@ -125,8 +125,14 @@ Click the **graph icon** beside Import, or the one in any skill drawer, to open 
 typed edges (depends on, complements, conflicts with, …), an accessible table view, cycle-safe editing
 with undo, and export. See [Skills Hub & Matrix](docs/copilot/skills-hub.md).
 
-### 🐝 Deploy a swarm
-**Teams & Swarms → Deploy** → write the objective → pick team + budget cap → **Deploy**. Open the swarm to watch the **live DAG** and resource bars.
+### 🐝 Save a swarm plan
+**Teams & Swarms → New plan** → write the objective → pick team, topology and budget cap → **Save record**.
+The plan is a gateway row: it appears in the list, survives a restart, and can be marked cancelled,
+re-opened, archived or deleted. Open it to see its facts and the planned node order.
+
+> ⚠️ **Nothing executes it.** There is no scheduler or worker in this build, so a plan has no progress and
+> no spend — the API refuses `live`/`running`/`paused`/`completed` with the reason, the row carries
+> `executed: false`, and the screen says *not executed*. `budget.cap` is stored, not enforced.
 
 ### ✦ Drive it with the Copilot
 Tap the centre **✦ Copilot** button and pick a mode — **Ask · Operate · Build · Knowledge · Training · Voice · Activity**:

@@ -45,8 +45,12 @@ export function seed({ reset = false } = {}) {
     counts.teams = j('teams.json').length;
 
     for (const w of j('swarms.json')) {
-      db.prepare('INSERT OR REPLACE INTO swarms (id,team_id,name,objective,status,progress,budget,nodes,channel,started_at,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-        .run(w.id, w.teamId, w.name, w.objective, w.status, w.progress, JSON.stringify(w.budget), JSON.stringify(w.nodes), w.channel, w.startedAt, 'seed');
+      // Seeded swarms are plans too: `executed` is a column now, and a seed must not claim a run that
+      // never happened (the fixtures were reset in the same change that added the column).
+      db.prepare(`INSERT OR REPLACE INTO swarms (id,team_id,name,objective,status,progress,budget,nodes,channel,started_at,created_by,executed,updated_at,run_note)
+                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(w.id, w.teamId, w.name, w.objective, 'planned', 0, JSON.stringify({ ...(w.budget || {}), spent: 0 }),
+          JSON.stringify(w.nodes), w.channel, w.startedAt, 'seed', 0, w.startedAt, 'seeded plan — nothing executes it');
     }
     counts.swarms = j('swarms.json').length;
 

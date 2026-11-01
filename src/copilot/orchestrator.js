@@ -116,7 +116,7 @@ async function liveStatusAnswer() {
     return answer(
       [
         `Agents: ${sum.running ?? '?'} running / ${sum.agents ?? '?'} total.`,
-        `Swarms: ${sum.swarmsLive ?? '?'} live · Teams: ${sum.teams ?? '?'}.`,
+        `Swarm plans: ${sum.swarms ?? 0} saved · ${sum.swarmsExecuted ?? 0} ever executed · Teams: ${sum.teams ?? '?'}.`,
         `Tasks: ${sum.tasks ?? '?'} · Approvals pending: ${sum.approvalsPending ?? '?'}.`,
         `Principals active: ${sum.principals ?? '?'}.`,
         `Signed in as ${auth.principal?.name} (${auth.principal?.role}) via ${auth.principal?.via}.`,
