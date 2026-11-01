@@ -92,7 +92,7 @@
     "test:models": "node --no-warnings scripts/models-gateway-test.mjs",
     "test:models:ui": "node --import ./scripts/register-css-stub.mjs scripts/models-ui-test.mjs",
     "test:models:browser": "node scripts/models-browser-test.mjs",
-    "install:browser-runtime": "npm install --no-save --package-lock=false puppeteer-core@25.16.0 @sparticuz/chromium@153.0.0"
+    "install:browser-runtime": "npm install --no-save --package-lock=false puppeteer-core@25.11.0 @sparticuz/chromium@153.0.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.6.2",
