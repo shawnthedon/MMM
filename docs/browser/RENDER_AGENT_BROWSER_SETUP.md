@@ -5,7 +5,7 @@ The Agent Browser needs a real Chromium executable and `puppeteer-core` on the *
 ## Runtime versions
 
 - Node.js: `22.22.0` (pinned by `.node-version` and `package.json`)
-- `puppeteer-core`: `25.16.0`
+- `puppeteer-core`: `25.11.0`
 - `@sparticuz/chromium`: `153.0.0`
 
 The gateway driver uses the Chromium package's own launch arguments and headless mode when that binary is selected.
