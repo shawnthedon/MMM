@@ -643,6 +643,52 @@ name.
   board or create an agent yet. Drafts, swarm plans, Agent Browser JSON and open-source voice are units 2–5
   and are not built; the panel does not imply otherwise.
 
+## 🧩 2026-11-01 — The Copilot drafts a workflow, and saving it stores a plan that nothing runs (M32)
+
+Unit 3 of the Copilot upgrade. A workflow in MMM **is** a swarm plan, so this unit adds no schema: it adds
+the *draft* layer over the fields `createSwarm` already accepts, with the same state machine and the same
+gate as unit 2.
+
+- **One validator, never stricter than the save** (`packages/shared/swarmPlanDraft.js`): `normalisePlan`,
+  `validatePlan`, `toSwarmBody`, `summarisePlan`, `planInstruction`, `parsePlanReply`. Every refusal in
+  `swarms.js` has a finding here (no objective, unknown team, a cap that is not a number, a cap above the
+  limit, more than 24 nodes) — and the two things `createSwarm` *accepts* (duplicate node ids, no node
+  order) are warnings, not errors. A draft validator stricter than the save it predicts would make an
+  approval theatre, and that is asserted case by case against `POST /swarms`, not claimed.
+- **Schema** (`013_swarm_plan_drafts.sql`): its own table, because activating a plan draft writes a
+  `swarms` row while activating an agent draft runs `insertAgent` — two acts, two tables, one state
+  vocabulary imported from `agentDraft.js`. No `executed`/`progress`/`status` column: those live on
+  `swarms`, where this build only ever writes planned/0.
+- **Gateway** (`apps/gateway/src/swarmPlanDrafts.js`): `fromConversation` asks the funnel with
+  `purpose: 'copilot.plan'`, so the ledger can tell a plan from an agent draft; an unreadable reply stores
+  the refusal turn and **no** plan draft. `submit` writes a real `approvals` row with action
+  `swarm.plan.save` whose evidence says "starts nothing". Saving is `swarm:write` **and** an allowed
+  approval this principal did not decide, and the row goes in through `createSwarm` — one write path.
+- **Routes**: `GET/POST /copilot/plans`, `GET/PATCH /:id`, `POST /:id/submit`, `/:id/activate`
+  (`swarm:write`), `/:id/archive`; all seven in `packages/shared/api-routes.json`. The rate limit covers
+  only the model path — a plan object from a form calls no provider, and throttling it would be a limit on
+  typing.
+- **Panel** (`src/copilot/plans.js`, `panel.js`): `wantsPlan()` is checked *before* `wantsDraft()`, because
+  "create a swarm of agents that researches" contains words that would otherwise become one agent. The card
+  shows the objective, node count, cap, the first nodes in order, the findings, and the sentence that
+  saving stores a planned swarm with zero progress and zero spend. `Save as a plan` is offered only to
+  `swarm:write`; a Reviewer sees the gate and is never offered it. A reload rebuilds the card from
+  `GET /copilot/plans` via `payload.draftKind`, so the card is a view of a row.
+- Evidence: `npm run test:plans` — **24 passed** (no key → 409 and nothing created; a real reply → the
+  validator's state; seven execution claims dropped and reported; five gateway refusals mirrored and
+  compared against `POST /swarms`; duplicate ids a warning because the save accepts them; submit → a real
+  approvals row; save refused before the decision, refused for the decider, allowed for another principal
+  and stored as **one** planned swarm with `executed:false`, `progress:0`, `spent:0`; a second save 409;
+  denial, scope and restart). `npm run test:plans:ui` — **10 passed**. `npm run test:plans:browser` —
+  **10 passed** in real Chromium at 320 px (key sealed, request typed, metered `copilot.plan` row, gate
+  decided by a Reviewer who cannot save, Owner saves one planned swarm, Swarms screen shows it without
+  claiming a run, 44 px targets, no page errors). `npm test` (44 suites) and `npm run build` green.
+  Design + limits: [`copilot/swarm-plan-drafts.md`](copilot/swarm-plan-drafts.md).
+- Honest limit: **saving stores a plan; nothing runs it.** No scheduler, worker, queue or cancellation
+  exists, `swarms.runtimeStatus()` rides on every payload saying so, and a node that names a missing agent
+  is a warning because nothing checks it at run time. Agent Browser JSON and open-source voice are units
+  4–5 and are not built.
+
 ## 🧩 2026-11-01 — The Copilot drafts an agent, and a different human decides (M31)
 
 Unit 2 of the Copilot upgrade. A conversation can now produce an **agent draft**: a definition with an

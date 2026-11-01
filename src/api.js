@@ -255,6 +255,15 @@ export const api = {
   draftSubmit: (id) => request(`/api/v1/copilot/drafts/${encodeURIComponent(id)}/submit`, { method: 'POST', body: {} }),
   draftActivate: (id) => request(`/api/v1/copilot/drafts/${encodeURIComponent(id)}/activate`, { method: 'POST', body: {} }),
   draftArchive: (id) => request(`/api/v1/copilot/drafts/${encodeURIComponent(id)}/archive`, { method: 'POST', body: {} }),
+  // Swarm-plan drafts: the same gate, applied to a plan (a workflow is a swarm plan in this build).
+  planList: () => request('/api/v1/copilot/plans'),
+  planGet: (id) => request(`/api/v1/copilot/plans/${encodeURIComponent(id)}`),
+  planFromText: (body) => request('/api/v1/copilot/plans', { method: 'POST', body, timeoutMs: 90000 }),
+  planFromObject: (body) => request('/api/v1/copilot/plans', { method: 'POST', body }),
+  planUpdate: (id, body) => request(`/api/v1/copilot/plans/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
+  planSubmit: (id) => request(`/api/v1/copilot/plans/${encodeURIComponent(id)}/submit`, { method: 'POST', body: {} }),
+  planSave: (id) => request(`/api/v1/copilot/plans/${encodeURIComponent(id)}/activate`, { method: 'POST', body: {} }),
+  planArchive: (id) => request(`/api/v1/copilot/plans/${encodeURIComponent(id)}/archive`, { method: 'POST', body: {} }),
 
   providers: () => request('/api/v1/providers'),
   provider: (id) => request(`/api/v1/providers/${encodeURIComponent(id)}`),

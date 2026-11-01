@@ -16,6 +16,7 @@ import { holoStageIn, copilotModeIn, copilotOut, fabPulse, motionEnabled, toastI
 import { sfx } from '../sound.js';
 import * as convo from './conversation.js';
 import * as drafts from './drafts.js';
+import * as plans from './plans.js';
 
 const session = {
   open: false,
@@ -714,10 +715,79 @@ function draftCardHTML(card) {
   </div>`;
 }
 
+/* ---------- swarm-plan drafts ----------
+ * A workflow is a swarm plan, so the card shows what saving it would store — an objective, a node order,
+ * a cap — and the same two facts as an agent card: the state it is really in, and that nothing runs.
+ */
+function planCardHTML(card) {
+  const d = card.draft || {};
+  const plan = d.plan || {};
+  const findings = Array.isArray(d.findings) ? d.findings : [];
+  const sevTone = { error: 'bad', setup: 'warn', warning: 'warn', info: 'info', blocked: 'bad' };
+  const actions = typeof card.actions === 'function' ? card.actions() : card.actions || [];
+  const nodeCount = Array.isArray(plan.nodes) ? plan.nodes.length : 0;
+  return `<div class="cp-card cp-plan cp-draft" data-plan-id="${esc(d.id || '')}" data-plan-state="${esc(d.state || '')}">
+    <div class="cp-card-head">
+      <span class="cp-card-title">${esc(plan.name || 'Untitled plan')}</span>
+      <span class="cp-badge ${DRAFT_TONE[d.state] || 'info'}" data-plan-label>${esc(d.stateLabel || d.state || 'draft')}</span>
+    </div>
+    <div class="cp-card-body">
+      ${plan.objective ? `<div class="small">${esc(plan.objective)}</div>` : ''}
+      <div class="cp-plan-meta tiny muted">
+        <span>${esc(String(nodeCount || 'default'))} ${nodeCount === 1 ? 'node' : 'nodes'}</span>
+        <span>cap ${esc(String(plan.budgetCap))}</span>
+        ${plan.channel ? `<span>${esc(plan.channel)}</span>` : ''}
+        ${plan.teamId ? `<span>team ${esc(plan.teamId)}</span>` : ''}
+        ${d.swarmId ? `<span>swarm ${esc(d.swarmId)}</span>` : ''}
+      </div>
+      ${
+        nodeCount
+          ? `<div class="cp-plan-nodes tiny muted">${plan.nodes
+              .slice(0, 8)
+              .map((n) => `<span class="cp-plan-node">${esc(n.label || n.id)}</span>`)
+              .join(' → ')}</div>`
+          : ''
+      }
+      ${
+        findings.length
+          ? `<div class="cp-section">What the validator says</div>${findings
+              .slice(0, 6)
+              .map((f) => `<div class="cp-draft-finding"><span class="cp-badge ${sevTone[f.severity] || 'info'}">${esc(f.severity)}</span>
+                <div class="grow"><div class="small">${esc(f.title)}</div><div class="tiny muted">${esc(f.detail || '')}</div></div></div>`)
+              .join('')}`
+          : ''
+      }
+      <div class="cp-draft-note tiny muted">Saving this plan stores a swarm row with status “planned”, no progress and
+        no spend. No scheduler or worker exists in this build, so nothing starts it.</div>
+      ${card.error ? `<div class="cp-notice bad" role="alert">${icon('shield', 15)}<div>${esc(card.error)}</div></div>` : ''}
+      ${card.note ? `<div class="cp-notice info" role="status">${icon('info', 15)}<div>${esc(card.note)}</div></div>` : ''}
+      ${
+        actions.length
+          ? `<div class="cp-draft-actions">${actions
+              .map((a) => `<button class="cp-chip ${a.tone === 'primary' ? 'ok' : ''}" data-cp="${esc(a.act)}" data-plan="${esc(d.id || '')}">${esc(a.label)}</button>`)
+              .join('')}</div>`
+          : `<div class="tiny muted">No action is available to your role in this state.</div>`
+      }
+    </div>
+  </div>`;
+}
+
 /**
  * The sentence that asks for a draft. Deliberately narrow: "make the tests pass" must not silently turn
  * into a definition, and a question ("how do agents work?") must stay a question.
  */
+/**
+ * The sentence that asks for a workflow. A workflow in this build *is* a swarm plan, so this is the
+ * sibling of `wantsDraft`: checked first, because "build a plan for the research team" contains no
+ * word that would make it an agent, but "create a swarm of agents" contains both and must not silently
+ * become one agent.
+ */
+function wantsPlan(text) {
+  const lc = String(text || '').toLowerCase();
+  if (/\b(how do|what is|what are|why|explain|tell me about|should i|can i|does)\b/.test(lc)) return false;
+  return /\b(create|design|make|build|draft|add|set up|new|write|plan|orchestrate)\b[^.!?]{0,40}\b(plan|workflow|swarm|pipeline)\b/.test(lc);
+}
+
 function wantsDraft(text) {
   const lc = String(text || '').toLowerCase();
   // "how do agents work?" is a question; "create an agent that triages" is a request. The guard comes
@@ -737,6 +807,7 @@ function cardHTML(card, msg) {
     case 'capability': return capabilityCardHTML(card);
     case 'activity': return activityCardHTML(card);
     case 'draft': return draftCardHTML(card);
+    case 'plan': return planCardHTML(card);
     default: return `<div class="cp-card"><div class="cp-card-body">${md(card.text || '')}</div></div>`;
   }
 }
@@ -976,6 +1047,10 @@ async function sendLive(raw) {
   pushMessage({ id: localId, role: 'user', text: raw, mode: session.mode, live: true });
   setDraft('');
   paint();
+  if (wantsPlan(raw)) {
+    await sendPlanTurn(raw, localId);
+    return;
+  }
   if (wantsDraft(raw)) {
     await sendDraftTurn(raw, localId);
     return;
@@ -1064,6 +1139,42 @@ async function sendDraftTurn(raw, localId) {
   paint();
 }
 
+/** The actions offered for a plan draft — the row says what is possible, the role says what is offered. */
+const planActions = (plan) => (plan ? plans.actionsFor(plan) : []);
+
+/**
+ * A turn that asks for a workflow. Same shape as `sendDraftTurn`, different artefact: the gateway turns
+ * the sentence into a swarm plan *draft*, and the panel renders what it validated — never a plan it
+ * assembled itself.
+ */
+async function sendPlanTurn(raw, localId) {
+  const out = await plans.createFromText(raw, { route: session.route });
+  session.pending = false;
+  if (out.userMessage) {
+    const idx = session.history.findIndex((m) => m.id === localId);
+    if (idx >= 0) session.history[idx] = { ...convo.toPanelMessage(out.userMessage), mode: session.mode };
+  }
+  if (out.draft) {
+    pushMessage({
+      role: 'copilot', text: out.reply?.text || '', mode: session.mode, live: true,
+      usage: out.reply?.payload || { draftId: out.draft.id, draftKind: 'swarm-plan' },
+      card: { type: 'plan', draft: out.draft, actions: () => planActions(out.draft) },
+    });
+  } else if (out.reply?.text) {
+    pushMessage({ role: 'copilot', text: out.reply.text, mode: session.mode, live: true });
+  } else {
+    session.lastError = out.error || 'the plan draft failed';
+    pushMessage({
+      role: 'copilot',
+      text: out.reason === 'no-model' ? out.error : `That plan did not go through: ${out.error}`,
+      mode: session.mode, live: true, failed: true,
+    });
+    if (out.reason === 'no-model') await convo.load({ silent: true });
+  }
+  paint();
+}
+
+/** The actions offered for a plan draft — the row says what is possible, the role says what is offered. */
 /** The actions the panel offers for a draft. Derived from the row, never from optimistic state. */
 function draftActions(draft) {
   if (!draft) return [];
@@ -1086,18 +1197,37 @@ function draftActions(draft) {
  * gateway still holds — which is the difference between "the draft exists" and "the draft was a picture".
  */
 async function attachDraftCards() {
-  if (!drafts.available()) return;
-  const out = await drafts.load();
-  if (!out.ok) return;
-  const byId = new Map((out.drafts || []).map((d) => [d.id, d]));
   let changed = false;
-  for (const msg of session.history) {
-    const id = msg.usage?.draftId;
-    if (!id || msg.card?.type === 'draft') continue;
-    const draft = byId.get(id);
-    if (!draft) continue;
-    msg.card = { type: 'draft', draft, actions: () => draftActions(draft) };
-    changed = true;
+  if (drafts.available()) {
+    const out = await drafts.load();
+    if (out.ok) {
+      const byId = new Map((out.drafts || []).map((d) => [d.id, d]));
+      for (const msg of session.history) {
+        const id = msg.usage?.draftId;
+        if (!id || msg.card?.type === 'draft') continue;
+        // A plan draft is a different row in a different table; its card is rebuilt below.
+        if (msg.usage?.draftKind === 'swarm-plan') continue;
+        const draft = byId.get(id);
+        if (!draft) continue;
+        msg.card = { type: 'draft', draft, actions: () => draftActions(draft) };
+        changed = true;
+      }
+    }
+  }
+  if (plans.available()) {
+    const out = await plans.load();
+    if (out.ok) {
+      const byId = new Map((out.plans || []).map((p) => [p.id, p]));
+      for (const msg of session.history) {
+        if (msg.usage?.draftKind !== 'swarm-plan') continue;
+        const id = msg.usage?.draftId;
+        if (!id || msg.card?.type === 'plan') continue;
+        const plan = byId.get(id);
+        if (!plan) continue;
+        msg.card = { type: 'plan', draft: plan, actions: () => planActions(plan) };
+        changed = true;
+      }
+    }
   }
   if (changed) paint();
 }
@@ -1111,6 +1241,54 @@ function replaceDraftCard(id, draft, extra = {}) {
   if (!msg || !draft) return;
   msg.card = { ...msg.card, draft, actions: () => draftActions(draft), ...extra };
   paint();
+}
+
+function planMessage(id) {
+  return session.history.find((m) => m.card?.type === 'plan' && m.card.draft?.id === id) || null;
+}
+
+function replacePlanCard(id, draft, extra = {}) {
+  const msg = planMessage(id);
+  if (!msg || !draft) return;
+  msg.card = { ...msg.card, draft, actions: () => planActions(draft), ...extra };
+  paint();
+}
+
+/**
+ * The four acts a plan card can perform. Each one renders the server's next state or the server's
+ * refusal — the card never advances itself, because a card that advances itself is a card that lies when
+ * the request fails.
+ */
+async function runPlanAction(act, id) {
+  if (!id) return;
+  const current = planMessage(id)?.card.draft || null;
+  if (act === 'plan-submit') {
+    const out = await plans.submit(id);
+    if (!out.ok) return replacePlanCard(id, out.draft || current, { error: out.error });
+    toast('Submitted — a Reviewer must allow it before the plan can be saved', 'ok');
+    return replacePlanCard(id, out.draft, { error: '', note: 'Waiting for a decision on the Approvals screen. Saving it stores a planned swarm and starts nothing.' });
+  }
+  if (act === 'plan-save') {
+    const out = await plans.save(id);
+    if (!out.ok) return replacePlanCard(id, out.draft || current, { error: out.error });
+    toast(`Plan saved as ${out.swarm?.id || 'a swarm'} — status planned, nothing was started`, 'ok');
+    return replacePlanCard(id, out.draft, { error: '', note: 'Saved: the swarm exists as a plan with zero progress and zero spend. No scheduler in this build can start it.' });
+  }
+  if (act === 'plan-archive') {
+    const out = await plans.archive(id);
+    if (!out.ok) return replacePlanCard(id, current, { error: out.error });
+    return replacePlanCard(id, out.draft, { error: '', note: 'Archived — the row is kept and still readable.' });
+  }
+  if (act === 'plan-open-approvals') {
+    closeCopilot();
+    toast('The gate is on the Approvals screen — a Reviewer decides it there.', 'info');
+    try { shellActions.navigate?.('agents'); } catch { /* the shell owns routing */ }
+    return;
+  }
+  if (act === 'plan-open-swarm' && current?.swarmId) {
+    closeCopilot();
+    try { shellActions.navigate?.(`swarms/${current.swarmId}`); } catch { /* the shell owns routing */ }
+  }
 }
 
 async function runDraftAction(act, id) {
@@ -1474,6 +1652,13 @@ function onClick(e) {
     case 'draft-open-approvals':
     case 'draft-open-agent':
       runDraftAction(act, t.dataset.draft);
+      break;
+    case 'plan-submit':
+    case 'plan-save':
+    case 'plan-archive':
+    case 'plan-open-approvals':
+    case 'plan-open-swarm':
+      runPlanAction(act, t.dataset.plan);
       break;
     case 'open-models': {
       closeCopilot();

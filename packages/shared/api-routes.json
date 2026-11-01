@@ -68,7 +68,14 @@
       "DRAFT_UPDATE": "PATCH /api/v1/copilot/drafts/:id  body:{spec}",
       "DRAFT_SUBMIT": "POST /api/v1/copilot/drafts/:id/submit",
       "DRAFT_ACTIVATE": "POST /api/v1/copilot/drafts/:id/activate",
-      "DRAFT_ARCHIVE": "POST /api/v1/copilot/drafts/:id/archive"
+      "DRAFT_ARCHIVE": "POST /api/v1/copilot/drafts/:id/archive",
+      "PLANS": "GET /api/v1/copilot/plans",
+      "PLAN_ONE": "GET /api/v1/copilot/plans/:id",
+      "PLAN_CREATE": "POST /api/v1/copilot/plans  body:{text} | {plan}",
+      "PLAN_UPDATE": "PATCH /api/v1/copilot/plans/:id  body:{plan}",
+      "PLAN_SUBMIT": "POST /api/v1/copilot/plans/:id/submit",
+      "PLAN_SAVE": "POST /api/v1/copilot/plans/:id/activate  (swarm:write)",
+      "PLAN_ARCHIVE": "POST /api/v1/copilot/plans/:id/archive"
     }
   },
   "planned": [
