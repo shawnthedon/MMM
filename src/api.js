@@ -99,6 +99,17 @@ export function setCsrfToken(token) {
 
 export const getCsrfToken = () => csrfToken;
 
+/**
+ * Absolute URL for a streaming response. `fetch` cannot consume SSE incrementally in every browser
+ * we support, so `EventSource` is used — and it needs a URL, not a path.
+ */
+export function streamUrl(path) {
+  const origin = !config.url ? '' : config.url === '/' ? '' : config.url;
+  if (origin) return `${origin}${path}`;
+  const loc = globalThis.location;
+  return loc ? `${loc.origin}${path}` : path;
+}
+
 /** Raw request helper: no retries, no hidden fallbacks. */
 async function request(path, { method = 'GET', body, headers = {}, timeoutMs = 8000, signal } = {}) {
   if (!isApiMode()) {
@@ -222,6 +233,26 @@ export const api = {
   runCommsQueue: () => request('/api/v1/comms/queue', { method: 'POST', body: {} }),
   saveCommsSettings: (body) => request('/api/v1/comms/settings', { method: 'PUT', body }),
   commsMessages: (params = '') => request(`/api/v1/comms/messages${params}`),
+  terminal: () => request('/api/v1/terminal'),
+  terminalWorkspaces: () => request('/api/v1/terminal/workspaces'),
+  createTerminalWorkspace: (body) => request('/api/v1/terminal/workspaces', { method: 'POST', body }),
+  terminalSessions: () => request('/api/v1/terminal/sessions'),
+  createTerminalSession: (body) => request('/api/v1/terminal/sessions', { method: 'POST', body }),
+  terminalSession: (id) => request(`/api/v1/terminal/sessions/${encodeURIComponent(id)}`),
+  closeTerminalSession: (id) => request(`/api/v1/terminal/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  terminalCwd: (id, cwd) => request(`/api/v1/terminal/sessions/${encodeURIComponent(id)}/cwd`, { method: 'POST', body: { cwd } }),
+  terminalEnv: (id, env) => request(`/api/v1/terminal/sessions/${encodeURIComponent(id)}/env`, { method: 'POST', body: { env } }),
+  terminalExec: (id, command, opts = {}) => request(`/api/v1/terminal/sessions/${encodeURIComponent(id)}/exec`, { method: 'POST', body: { command, ...opts }, timeoutMs: 20000 }),
+  terminalRun: (id) => request(`/api/v1/terminal/runs/${encodeURIComponent(id)}`),
+  terminalOutput: (id, since = 0) => request(`/api/v1/terminal/runs/${encodeURIComponent(id)}/output?since=${since}`),
+  terminalInput: (id, text) => request(`/api/v1/terminal/runs/${encodeURIComponent(id)}/input`, { method: 'POST', body: { text } }),
+  terminalSignal: (id, signal = 'SIGINT') => request(`/api/v1/terminal/runs/${encodeURIComponent(id)}/signal`, { method: 'POST', body: { signal } }),
+  terminalHistory: (sessionId) => request(`/api/v1/terminal/history${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''}`),
+  terminalScripts: (sessionId) => request(`/api/v1/terminal/scripts?sessionId=${encodeURIComponent(sessionId)}`),
+  terminalGrants: () => request('/api/v1/terminal/grants'),
+  grantTerminal: (body) => request('/api/v1/terminal/grants', { method: 'POST', body }),
+  revokeTerminalGrant: (agentId, workspaceId) => request(`/api/v1/terminal/grants/${encodeURIComponent(agentId)}/${encodeURIComponent(workspaceId)}`, { method: 'DELETE' }),
+  agentTerminalRun: (body) => request('/api/v1/terminal/agent-runs', { method: 'POST', body }),
   threads: () => request('/api/v1/threads'),
   thread: (id) => request(`/api/v1/threads/${encodeURIComponent(id)}`),
   createThread: (body) => request('/api/v1/threads', { method: 'POST', body }),

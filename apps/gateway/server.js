@@ -20,6 +20,7 @@ import { runner as browserRunner, browserCapability, setBrowserBroadcast } from 
 import { evolution, setEvolutionBroadcast, ensurePoliciesForAllAgents } from './src/evolution/index.js';
 import * as teams from './src/teams.js';
 import * as chat from './src/chat.js';
+import * as terminal from './src/terminal/index.js';
 import * as auth from './src/auth.js';
 import {
   can,
@@ -141,6 +142,7 @@ function subscriptionFilter(topic, principal) {
   if (topic === 'browser') return can(principal, 'browser:read');
   if (topic === 'evolution') return can(principal, 'evolution:read');
   if (topic === 'chat') return can(principal, 'chat:read');
+  if (topic === 'terminal') return can(principal, 'terminal:read');
   if (topic === 'audit') return can(principal, 'audit:read');
   return can(principal, 'read');
 }
@@ -595,6 +597,261 @@ route('DELETE', /^\/api\/v1\/teams\/([\w-]+)\/members\/([\w-]+)$/, { permission:
   }
 });
 
+/* ---- Terminal: real processes on the gateway host (see src/terminal/index.js) ----
+ * The browser cannot execute anything, so execution lives here. Every route is permissioned, every
+ * run is audited, and the destructive set stops at an approval gate rather than a warning.
+ */
+const terminalFail = (error) => {
+  const code = error?.code || 'error';
+  const status = code === 'not-found' ? 404
+    : code === 'conflict' ? 409
+      : code === 'forbidden' ? 403
+        : code === 'not-allowed' ? 403
+          : code === 'bad-path' ? 400
+            : 400;
+  return { code: status, body: { error: error.message, code } };
+};
+
+route('GET', /^\/api\/v1\/terminal$/, { permission: 'terminal:read' }, () => ({ code: 200, body: terminal.describe() }));
+
+route('GET', /^\/api\/v1\/terminal\/workspaces$/, { permission: 'terminal:read' }, () => ({ code: 200, body: { workspaces: terminal.listWorkspaces() } }));
+
+route('POST', /^\/api\/v1\/terminal\/workspaces$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
+  try {
+    const b = ctx.body || {};
+    const name = String(b.name || '').trim();
+    if (!name) return { code: 400, body: { error: 'a workspace needs a name' } };
+    // Creating a workspace creates a directory inside a configured root — never at an arbitrary path.
+    const workspace = terminal.ensureWorkspace({
+      name,
+      rootId: b.rootId || null,
+      relPath: b.relPath || name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      principal: ctx.principal.id,
+    });
+    broadcast('terminal', { type: 'terminal.workspace', id: workspace.id });
+    return { code: 201, body: { workspace } };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/terminal\/sessions$/, { permission: 'terminal:read' }, (ctx) => ({
+  code: 200,
+  body: { sessions: terminal.listSessions({ principal: ctx.principal }) },
+}));
+
+route('POST', /^\/api\/v1\/terminal\/sessions$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
+  try {
+    const session = terminal.createSession({
+      principal: ctx.principal,
+      workspaceId: ctx.body?.workspaceId || null,
+      cwd: ctx.body?.cwd || '.',
+      env: ctx.body?.env || {},
+    });
+    broadcast('terminal', { type: 'terminal.session', id: session.id });
+    return { code: 201, body: { session } };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/terminal\/sessions\/([\w-]+)$/, { permission: 'terminal:read' }, (ctx) => {
+  try {
+    return { code: 200, body: { session: terminal.getSession(ctx.match[1]) } };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/terminal\/sessions\/([\w-]+)$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
+  try {
+    const out = terminal.closeSession(ctx.match[1], ctx.principal);
+    broadcast('terminal', { type: 'terminal.session.closed', id: ctx.match[1] });
+    return { code: 200, body: out };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/terminal\/sessions\/([\w-]+)\/cwd$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
+  try {
+    return { code: 200, body: { session: terminal.changeDirectory(ctx.match[1], ctx.body?.cwd || '.', ctx.principal) } };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/terminal\/sessions\/([\w-]+)\/env$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
+  try {
+    return { code: 200, body: { session: terminal.setSessionEnv(ctx.match[1], ctx.body?.env || {}, ctx.principal) } };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+/** Run a command. 202 for a started run, 200 when it was refused or is waiting for approval. */
+route('POST', /^\/api\/v1\/terminal\/sessions\/([\w-]+)\/exec$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
+  try {
+    const command = String(ctx.body?.command || ctx.body?.line || '').trim();
+    if (!command) return { code: 400, body: { error: 'a command is required' } };
+    const out = terminal.runCommand(ctx.match[1], command, { principal: ctx.principal, timeoutMs: ctx.body?.timeoutMs ?? null });
+    return { code: out.refused ? 200 : out.run.status === 'awaiting_approval' ? 202 : 202, body: out };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/terminal\/runs\/([\w-]+)$/, { permission: 'terminal:read' }, (ctx) => {
+  try {
+    return { code: 200, body: { run: terminal.getRun(ctx.match[1]) } };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/output$/, { permission: 'terminal:read' }, (ctx) => {
+  try {
+    return { code: 200, body: terminal.runOutput(ctx.match[1], { since: Number(ctx.query.since || 0) }) };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+/**
+ * Server-sent events. The route takes the response over (`handled: true`), replays everything after
+ * `?since=` from the in-memory buffer, then streams as the child writes. When the run ends it emits a
+ * final `exit` event and closes, so a client never sits on a promise that will not resolve.
+ */
+route('GET', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/stream$/, { permission: 'terminal:read' }, (ctx) => {
+  const runId = ctx.match[1];
+  const res = ctx.res;
+  let run;
+  try {
+    run = terminal.getRun(runId);
+  } catch (error) {
+    return terminalFail(error);
+  }
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-store',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  const send = (event, data) => {
+    try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* client gone */ }
+  };
+  send('run', run);
+
+  const since = Number(ctx.query.since || 0);
+  const replay = terminal.runOutput(runId, { since });
+  for (const chunk of replay.chunks) send('chunk', chunk);
+  if (replay.replay === 'tail') {
+    if (replay.stdout) send('chunk', { seq: 1, stream: 'out', text: replay.stdout, ts: Date.now() });
+    if (replay.stderr) send('chunk', { seq: 2, stream: 'err', text: replay.stderr, ts: Date.now() });
+    send('exit', { status: run.status, code: run.exitCode, signal: run.signal, replay: 'tail' });
+    res.end();
+    return { handled: true };
+  }
+
+  const unsubscribe = terminal.subscribeRun(runId, (chunk) => {
+    if (chunk.stream === 'exit') {
+      send('exit', { status: chunk.status, code: chunk.code, signal: chunk.signal });
+      cleanup();
+      try { res.end(); } catch { /* ignore */ }
+      return;
+    }
+    send('chunk', chunk);
+  });
+  if (!unsubscribe) {
+    send('exit', { status: run.status, code: run.exitCode, signal: run.signal, replay: 'tail' });
+    res.end();
+    return { handled: true };
+  }
+  const heartbeat = setInterval(() => { try { res.write(': keep-alive\n\n'); } catch { /* ignore */ } }, 15000);
+  heartbeat.unref?.();
+  function cleanup() {
+    clearInterval(heartbeat);
+    try { unsubscribe(); } catch { /* ignore */ }
+  }
+  ctx.req.on('close', cleanup);
+  return { handled: true };
+});
+
+route('POST', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/input$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
+  try {
+    return { code: 200, body: terminal.sendInput(ctx.match[1], ctx.body?.text ?? '') };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+/** Ctrl+C. SIGINT goes to the process group, so npm's own children die with it. */
+route('POST', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/signal$/, { permission: 'terminal:signal', mutating: true }, (ctx) => {
+  try {
+    const signal = String(ctx.body?.signal || 'SIGINT').toUpperCase();
+    return { code: 200, body: terminal.signalRun(ctx.match[1], signal, { principal: ctx.principal }) };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/terminal\/history$/, { permission: 'terminal:read' }, (ctx) => ({
+  code: 200,
+  body: { history: terminal.history({ sessionId: ctx.query.sessionId || null, principal: ctx.principal, limit: 100 }) },
+}));
+
+route('GET', /^\/api\/v1\/terminal\/scripts$/, { permission: 'terminal:read' }, (ctx) => {
+  try {
+    const sessionId = ctx.query.sessionId;
+    if (!sessionId) return { code: 400, body: { error: 'sessionId is required' } };
+    const session = terminal.getSession(sessionId);
+    return { code: 200, body: { cwd: session.cwd, project: session.project, ...terminal.listScripts(session.cwdPath) } };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+/** Agent grants: an Owner says which agent may run in which workspace. Nothing is implicit. */
+route('GET', /^\/api\/v1\/terminal\/grants$/, { permission: 'terminal:read' }, () => ({ code: 200, body: { grants: terminal.listGrants() } }));
+
+route('POST', /^\/api\/v1\/terminal\/grants$/, { permission: 'terminal:grant', mutating: true }, (ctx) => {
+  try {
+    const grants = terminal.grantAgent({ agentId: ctx.body?.agentId, workspaceId: ctx.body?.workspaceId, grantedBy: ctx.principal.id });
+    broadcast('terminal', { type: 'terminal.grant' });
+    return { code: 201, body: { grants } };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/terminal\/grants\/([\w-]+)\/([\w-]+)$/, { permission: 'terminal:grant', mutating: true }, (ctx) => {
+  const grants = terminal.revokeAgent({ agentId: ctx.match[1], workspaceId: ctx.match[2], revokedBy: ctx.principal.id });
+  return { code: 200, body: { grants } };
+});
+
+/**
+ * What an agent calls. Same policy, same approval gate, but it waits and hands back the result so the
+ * agent can read stderr and retry instead of guessing.
+ */
+route('POST', /^\/api\/v1\/terminal\/agent-runs$/, { permission: 'terminal:run', mutating: true }, async (ctx) => {
+  try {
+    const agentId = String(ctx.body?.agentId || '');
+    const command = String(ctx.body?.command || '').trim();
+    if (!agentId || !command) return { code: 400, body: { error: 'agentId and command are required' } };
+    const result = await terminal.runForAgent({
+      agentId,
+      command,
+      workspaceId: ctx.body?.workspaceId || null,
+      cwd: ctx.body?.cwd || '.',
+      timeoutMs: ctx.body?.timeoutMs ?? null,
+      principal: ctx.principal,
+    });
+    return { code: 200, body: result };
+  } catch (error) {
+    return terminalFail(error);
+  }
+});
+
 /* ---- Chat: a transcript store (see src/chat.js) ----
  * No route here generates a reply. Every read carries `runtime: { configured: false }` so the screen
  * cannot show a conversation as if an agent had answered.
@@ -772,6 +1029,14 @@ route('POST', /^\/api\/v1\/approvals\/([\w-]+)\/(allow|deny)$/, { permission: 'a
   const ev = logEvent('approval', `${gate.action} ${status} by ${ctx.principal.name} · ${gate.target}`, gate.id);
   audit(ctx.principal.id, ctx.principal.via, `approval.${ctx.match[2]}`, { id: gate.id, action: gate.action, target: gate.target }, 'allow', 'ok');
   broadcast('approvals', { type: 'approval.resolved', entity: gate.id, event: ev });
+  // A terminal run that was waiting on this gate starts now — by the decider's decision, not by a
+  // timer. A denied gate leaves the run parked, and the screen says so.
+  if (gate.action === 'terminal.run') {
+    try {
+      if (status === 'allowed') terminal.startApprovedRun(gate.id, { principal: ctx.principal });
+      else terminal.cancelApproval(gate.id, { principal: ctx.principal });
+    } catch { /* the run stays awaiting_approval rather than silently disappearing */ }
+  }
   return { code: 200, body: db.prepare('SELECT * FROM approvals WHERE id=?').get(gate.id) };
 });
 
@@ -1162,6 +1427,8 @@ async function handleRequest(req, res) {
     const out = (await routeMatch.handler({
       req, res, match, query, body, rawBody, principal, requestId: rid,
     })) || { code: 200, body: {} };
+    // A streaming route owns the response: it has already written headers and will keep writing.
+    if (out && out.handled === true) return;
     // Providers expect plain text on a verification handshake, not a JSON-encoded string.
     if (out.text !== undefined) {
       res.writeHead(out.code ?? 200, {
@@ -1247,7 +1514,7 @@ export function createGateway() {
           return;
         }
         if (msg?.type === 'subscribe' && Array.isArray(msg.topics)) {
-          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'chat', 'system', 'audit', '*'].includes(t));
+          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'chat', 'terminal', 'system', 'audit', '*'].includes(t));
           const refused = wanted.filter((t) => t !== '*' && !subscriptionFilter(t, client.principal));
           client.topics = new Set(wanted.filter((t) => !refused.includes(t)));
           ws.send(JSON.stringify({ topic: 'system', type: 'subscribed', topics: [...client.topics], refused, ts: Date.now() }));
@@ -1271,6 +1538,8 @@ export function createGateway() {
   // running when the process last stopped (it resumes from its checkpoint, after inspecting the page).
   setBrowserBroadcast(broadcast);
   setEvolutionBroadcast(broadcast);
+  // Terminal status fan-out: the screen follows runs without polling every run separately.
+  terminal.onTerminalEvent((payload) => broadcast('terminal', payload));
   // Every agent — seeded, imported or created yesterday — gets a self-improvement policy. The default
   // is level 1: inspect and recommend, never write.
   let evolutionPolicies = { agents: 0, created: 0 };
