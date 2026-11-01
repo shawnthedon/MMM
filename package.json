@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "type": "module",
-  "description": "MMM \u2014 mobile-first AI Agent Orchestration Dashboard. Deploy agent teams & swarms, skills, MCP plugins, multi-model routing, trust & governance. Installable PWA.",
+  "description": "MMM — mobile-first AI Agent Orchestration Dashboard. Deploy agent teams & swarms, skills, MCP plugins, multi-model routing, trust & governance. Installable PWA.",
   "homepage": "https://zippy-ivory-4ei6zjy.vercel.app",
   "repository": {
     "type": "git",
@@ -91,7 +91,8 @@
     "test:swarms:browser": "node scripts/swarms-browser-test.mjs",
     "test:models": "node --no-warnings scripts/models-gateway-test.mjs",
     "test:models:ui": "node --import ./scripts/register-css-stub.mjs scripts/models-ui-test.mjs",
-    "test:models:browser": "node scripts/models-browser-test.mjs"
+    "test:models:browser": "node scripts/models-browser-test.mjs",
+    "install:browser-runtime": "npm install --no-save --package-lock=false puppeteer-core@25.16.0 @sparticuz/chromium@153.0.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.6.2",
@@ -106,5 +107,8 @@
     "animejs": "^4.5.0",
     "better-sqlite3": "^12.11.1",
     "ws": "^8.22.0"
+  },
+  "engines": {
+    "node": ">=22.22.0 <23.0.0"
   }
 }
