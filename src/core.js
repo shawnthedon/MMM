@@ -67,6 +67,7 @@ export const icons = {
   // Canonical Skills Matrix glyph: three linked nodes. Reused for every matrix shortcut.
   graph: svg(P('M12 3a2.2 2.2 0 1 0 0 4.4A2.2 2.2 0 0 0 12 3zM5 16.6a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4zM19 16.6a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4zM11 7.6 6.4 15.4M13 7.6l4.6 7.8M7.2 18.8h9.6')),
   upload: svg(P('M12 20V8M7 12l5-5 5 5M4 4h16')),
+  archive: svg(P('M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4')),
   broadcast: svg(P('M12 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM8.5 10.5a5 5 0 0 0 0 7M15.5 10.5a5 5 0 0 1 0 7M5.5 7.5a9 9 0 0 0 0 13M18.5 7.5a9 9 0 0 1 0 13')),
   globe: svg(P('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.4 3.8 5.5 3.8 9S14.5 18.6 12 21c-2.5-2.4-3.8-5.5-3.8-9S9.5 5.4 12 3z')),
   phone: svg(P('M7 3h10v18H7zM10.5 18h3')),

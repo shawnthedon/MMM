@@ -163,7 +163,7 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | 2 | **Agents** | `#/agents` | 🟠 | Cards are real and persist, and **team, team position and goal are real columns** (`agents.team_id`, `agents.team_position`, `agents.goal`); every *number* is still a seed constant — `status: 'running'` is a label, `successRate`, `costToday`, `runs`, `lastActive`, `memory` are never computed | `001_init.sql` (agents), `006_team_membership.sql`, `fixtures/agents.json` |
 | 3 | **Agent Designer** | `#/designer` | 🟠 | Saves through `createAgent()` → `POST /api/v1/agents` (real), but validation is client-side only and there is no versioning, evaluation or rollback | `src/designer.js:648` |
 | 4 | **Teams** | `#/teams` | ✅ | Real end to end: create, rename, delete, add/remove member, reorder by position, through gateway routes with RBAC and audit. Membership lives once, on `agents.team_id` + `agents.team_position` (`team_members` retired by `006`). Deleting a team **unassigns** its members and says so. The panel is a full-height sheet on a phone and a 900 px docked panel above that | `apps/gateway/src/teams.js`, `server.js`, `src/team-panel.js`, `src/views1.js`, `src/agents.css` |
-| 5 | **Teams & Swarms** | `#/swarms` | 🎭 | A swarm is a **plan**: the fixture ships `status: 'planned'`, `executed: false`, every node `planned`, spend `0`, and the screen says “not executed” in the list, the record and the detail view. The `$6.40` estimate, the `Math.random()` ticker and the fake Pause/Cancel controls are deleted. Nothing schedules, executes or persists a swarm | `src/views1.js`, `src/core.js` |
+| 5 | **Teams & Swarms** | `#/teams` | 🟠 | **Teams are real** (CRUD, membership, ordering). **Swarm plans are now real rows too** (M28): create, edit, cancel/re-open, archive, delete, per-plan budget cap, WS topic `swarms`, audit per mutation, persistence across a restart. A plan is `executed: false` with zero progress and zero spend, and the API *refuses* a status that would claim a run. What is still missing is the thing that would execute one | `apps/gateway/src/swarms.js`, `src/views1.js`, `009_swarms.sql` |
 | 6 | **Tasks / Kanban** | `#/tasks` | ✅ | Real CRUD through the gateway; moves confirm before writing; drag, wires and zoom are client-side by design | `src/kanban.js`, `src/views2.js` |
 | 7 | **Approvals** | `#/approvals` | ✅ | Real gates, separation of duties (you cannot approve your own), audited decisions | `server.js`, `scripts/gateway-auth-test.mjs` |
 | 8 | **Skills Hub** | `#/skills` | 🎭 | 24-entry catalogue + 6 installed skills are local; import/validation/quarantine is genuinely good code but client-side; “activate” changes a local flag | `src/skillsData.js`, `src/skillsImport.js` |
@@ -1554,6 +1554,50 @@ that is session 4, and it needs a scheduler.
 
 ---
 
+### M28 · Swarm plans on the gateway
+
+**Today.** Shipped. `swarms` has existed since 001 with a `status` nothing wrote and a `nodes` blob nothing
+read. It is now the app's first module where the *schema itself* refuses to lie.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| Schema | `apps/gateway/migrations/009_swarms.sql` | Adds `executed`, `updated_at` and `run_note`. Rows claiming `live`/`running`/`paused` are reset to `planned`, and any progress or spend on an unexecuted row is zeroed — a plan nothing ran cannot have either. |
+| Module | `apps/gateway/src/swarms.js` | `listSwarms`, `getSwarm`, `createSwarm`, `updateSwarm`, `setSwarmStatus`, `deleteSwarm`, one `runtimeStatus()`. The accepted payload is an allowlist, so `executed: true` is a `400` rather than a silently dropped field. `progress` and `budget.spent` are computed from `executed`, never read from the column. |
+| Status | `swarms.js` | Only `planned` ⇄ `cancelled`, then `archived` (one-way). `live`, `running`, `paused`, `completed` are a `409` whose message names what would have to exist first. |
+| Routes | `server.js` | `GET/POST /swarms`, `GET/PATCH/DELETE /swarms/:id`, `POST /swarms/:id/status`. Reads need `read`, writes `swarm:write`, every mutation audits, and the `swarms` WS topic carries `swarm.created|updated|status|deleted`. |
+| Client | `src/datastore.js`, `src/api.js` | `swarms` moved from `LOCAL_SLICES` to `GATEWAY_SLICES`: fetched with the rest, adapted once (`adaptSwarm`), excluded from `localStorage`, restored on sign-out. A gateway without the routes keeps the slice on **demo** provenance instead of failing the refresh. |
+| Screen | `src/views1.js` | The list, the record and the sheet read the store; “Deploy” is “New plan”, and the record shows real plan facts (team, cap, saved-by, source). Status buttons are *Mark cancelled · Re-open plan · Archive · Delete* — plan decisions, not process control. |
+| Deleted | `src/views1.js` | The fabricated “Resource allocation” bars (`tokens/s 78%`, `$6/h cap`, `2.2k/5k calls`, `4/6 slots`) — typed-in numbers on a module that cannot allocate anything. |
+
+**Acceptance tests.** `npm run test:swarms` — 17 checks against a real gateway: an empty list that still
+carries `runtime`, an Operator saving a plan that comes back `planned` / `executed: false` / zero spend, a
+create body that tries `executed: true` refused with no row written, an unknown team refused as 404, four
+status claims refused as 409 with the reason, cancel ⇄ re-open persisted, archive one-way, an Observer
+allowed to read and refused to write, audit rows for create/update/status that carry **no objective text**,
+a `swarm.created` event on the WS topic, survival across a gateway restart, delete then 404, the seed
+writing plans rather than runs, and a fixture check so the JSON cannot start claiming a run again.
+`npm run test:swarms:ui` — 8 checks: live provenance and the live-list rendering, the record's facts,
+exactly one POST with the typed objective and cap and no execution fields, a refusal that keeps the sheet
+open and shows the gateway's reason, a status button that sends the status it carries, and the demo path
+still saving a local plan with zero spend. `npm run test:swarms:browser` — 8 checks in real Chromium: sign
+in, save a plan from the real sheet, see it on screen and in `GET /swarms`, cancel it, reload and find it
+still cancelled, no start/pause/stop control anywhere, **six seconds with an unchanged DOM**, and no
+sideways scroll at 320 px (which is how the wrapping chip bug above was found).
+
+**The gap.** Nothing executes a swarm. That is the whole point of the wording, and it is also the honest
+limit: there is no scheduler, no worker, no per-node budget enforcement and no agent runtime, so a plan is
+a saved intention. `budget.cap` is a number in a row, not a limit anything enforces.
+
+**Next steps**
+
+1. A runner that claims a `planned` swarm, sets `executed` honestly, and writes node transitions — then
+   the 409s in `setSwarmStatus` become the guard rail they were written to be.
+2. Budget enforcement: refuse a node start when `spent + estimate > cap`.
+3. Approval gate before a plan is queued, reusing the `npm ci` gate shape.
+4. Per-team rate limits, so two teams cannot saturate one host.
+
+---
+
 ## 6. Master implementation checklist
 
 Tick a box only when its **evidence** exists (test output, SQL row, recorded call). Order matters
@@ -1773,7 +1817,17 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 - [x] Analytics MCP tile/chart removed; Export computes its CSV from the rows
 - [x] Copilot text no longer describes a ticker
 - [ ] Analytics' remaining typed-in tiles (session 11)
-- [ ] Swarm execution (session 4)
+
+### M28 · Swarm plans on the gateway
+- [x] `swarms` rows served with `runtime` on every payload (an empty list still says what a swarm is)
+- [x] Create/update/status/delete persist, audit and broadcast on the `swarms` topic
+- [x] `executed` is a column; a request cannot set it and a stale row cannot fake progress or spend
+- [x] `live`/`running`/`paused`/`completed` refused with a reason; `planned` ⇄ `cancelled`, → `archived`
+- [x] The slice is gateway-owned (persistence, provenance, sign-out restore) and falls back to demo when a gateway has no routes
+- [x] The screen reads the store; “Deploy” is “New plan”, and the fabricated resource bars are gone
+- [x] Fixtures and the dev seed create plans, not runs
+- [ ] A runner that executes a plan (sets `executed` honestly)
+- [ ] Budget enforcement per node, and an approval before queueing
 
 ---
 
@@ -1785,8 +1839,8 @@ One session ≈ one sitting. Each is independently shippable.
 | --- | --- | --- | --- |
 | 1 | ~~**Stop the lies that cost nothing**~~ ✅ M27 | The four static security claims replaced with live/true text; Models is a catalogue · not configured; Plugins says there is no MCP client and holds no credential field; `callsToday` deleted | `test:honesty` 13 · real browser 8 |
 | 2 | ~~**Kill the ticker**~~ ✅ M27 | `tick()`, `toggle-sim`, `settings.simulate` deleted; swarm rows are plans labelled `not executed`; the `$6.40` literal and the fake Pause/Cancel are gone | `rg "Math.random" src/main.js` empty · 6 s in a real browser with an unchanged DOM |
-| 3 | **Swarms: read path** | `swarms` table → routes → slice → WS → real list | new `test:swarms` |
-| 4 | **Swarms: write path** | Deploy persists; pause/resume/cancel; delete the `$6.40` literal | two-browser test |
+| 3 | ~~**Swarms: read path**~~ ✅ M28 | `swarms` rows → routes → slice → WS → real list, with `runtime` on the payload | `test:swarms` 17 · `test:swarms:ui` 8 · real browser 8 |
+| 4 | ~~**Swarms: write path**~~ ✅ M28 | Create/edit/status/delete persist; the `$6.40` literal is gone and `execute` is refused with a reason | the same three suites, plus a restart |
 | 5 | **Teams** | Teams CRUD + membership; swarms reads the team | `test:teams` |
 | 6 | ~~**Chat persists**~~ ✅ M25 | threads/messages routes; `simulateReply` deleted; `runtime: { configured: false }` in every payload | `test:chat` 16 · `test:chat:ui` 10 · real browser 5 |
 | 6b | ~~**Terminal runs real commands**~~ ✅ M26 | spawn behind a policy; SSE streaming; Ctrl+C; approval gate; agent runs | `test:terminal` 28 · `test:terminal:ui` 12 · real browser 15 |

@@ -6,17 +6,18 @@
  *   degraded  — a gateway session exists but the last refresh failed; demo fixtures are shown
  *               and labelled as such (never a stale mix)
  *
- * Agents, tasks, approvals, events and teams exist on the gateway. Teams are names and topology
- * only: membership is `agents.team_id`, fetched in the same pull, so there is one value to read.
- * Swarms and usage stay local and are labelled demo.
+ * Agents, tasks, approvals, events, teams, threads and swarm *plans* exist on the gateway. Teams are
+ * names and topology only: membership is `agents.team_id`, fetched in the same pull, so there is one
+ * value to read. A swarm is a saved plan — `executed: false`, no progress, no spend — and the server
+ * says so on every row, so the screen never has to infer it. Usage stays local and is labelled demo.
  */
 import { getState, replaceSlices, setProvenance, getProvenance, isLive, setPersistFilter, resetDemo, setState, uid, now } from './core.js';
 import { api, ApiError, isApiMode, gatewayUrl } from './api.js';
 import { getAuth, getAuthVersion, subscribeAuth, isAuthenticated, refreshSession } from './auth.js';
 import { demoCommsForPersistence } from './commsGateway.js';
 
-export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events', 'teams', 'threads'];
-export const LOCAL_SLICES = ['swarms', 'usage'];
+export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events', 'teams', 'threads', 'swarms'];
+export const LOCAL_SLICES = ['usage'];
 
 const listeners = new Set();
 /* Panels that want their own live refresh (the Self-Improvement cycle) subscribe here instead of
@@ -41,6 +42,9 @@ let refreshTimer = null;
 let refreshInFlight = null;
 let syncGeneration = 0;
 let ownerVersion = null;
+/** Server sentence about swarm plans ("nothing executes one"); null while the slice is demo. */
+let swarmsRuntimeNote = null;
+export const getSwarmsRuntime = () => swarmsRuntimeNote;
 
 /* ---------- formatting adapters (server columns → app shape) ---------- */
 const arr = (value) => (Array.isArray(value) ? value : []);
@@ -98,6 +102,38 @@ export function adaptTeam(row) {
     topology: row.topology || 'Hierarchical',
     health: row.health || 'good',
     description: row.description || '',
+    source: 'gateway',
+  };
+}
+
+/** A swarm row from the gateway. `executed` decides progress and spend, never the stored columns. */
+export function adaptSwarm(row) {
+  const budget = maybeJson(row.budget, {});
+  const nodes = arr(maybeJson(row.nodes, []));
+  const executed = Boolean(row.executed);
+  return {
+    id: row.id,
+    teamId: row.teamId || row.team_id || null,
+    name: row.name || 'Untitled plan',
+    objective: row.objective || '',
+    status: row.status || 'planned',
+    executed,
+    progress: executed ? num(row.progress) : 0,
+    budget: { cap: num(budget.cap), spent: executed ? num(budget.spent) : 0 },
+    nodes: nodes.map((n) => ({
+      id: String(n.id || ''),
+      label: String(n.label || ''),
+      agent: String(n.agent || ''),
+      status: executed ? String(n.status || 'planned') : 'planned',
+      spent: executed ? num(n.spent) : 0,
+      elapsed: executed ? String(n.elapsed || '—') : '—',
+    })),
+    channel: row.channel || 'app',
+    startedAt: num(row.startedAt ?? row.started_at),
+    updatedAt: num(row.updatedAt ?? row.updated_at ?? row.startedAt ?? row.started_at),
+    createdBy: row.createdBy || row.created_by || 'system',
+    note: row.note || row.run_note || '',
+    runtime: row.runtime || null,
     source: 'gateway',
   };
 }
@@ -268,6 +304,7 @@ function adopt(data, { requestId = null } = {}) {
   // A gateway that predates the chat routes returns no array here. That is a real state, and the
   // screen has to say "this gateway serves no transcript" rather than show demo threads as live.
   const threads = Array.isArray(data.threads) ? data.threads.map(adaptThread) : null;
+  const swarms = Array.isArray(data.swarms) ? data.swarms.map(adaptSwarm) : null;
 
   // Set ownership before publishing rows to subscribers or persistence.
   // Slices without a server store stay local and keep their demo provenance.
@@ -276,13 +313,17 @@ function adopt(data, { requestId = null } = {}) {
     tasks: 'gateway',
     approvals: 'gateway',
     events: 'gateway',
-    swarms: 'demo',
+    swarms: swarms ? 'gateway' : 'demo',
     teams: 'gateway',
     threads: threads ? 'gateway' : 'demo',
     usage: 'demo',
   });
   const chatRuntime = threads ? adaptChatRuntime(data.chatRuntime) : getState().chatRuntime;
-  replaceSlices({ agents, tasks, approvals, events, teams, chatRuntime, ...(threads ? { threads } : {}) }, 'data:gateway');
+  swarmsRuntimeNote = swarms ? (data.swarmsRuntime || null) : null;
+  replaceSlices(
+    { agents, tasks, approvals, events, teams, chatRuntime, ...(threads ? { threads } : {}), ...(swarms ? { swarms } : {}) },
+    'data:gateway',
+  );
   // Reflect the real gateway in the demo `gateway` object so header dots are not lies.
   replaceSlices(
     {
@@ -317,6 +358,7 @@ export function releaseGatewayData({ reason = 'signed-out' } = {}) {
     }, 'data:release');
     demoSnapshot = null;
   }
+  swarmsRuntimeNote = null;
   setProvenance({ agents: 'demo', tasks: 'demo', approvals: 'demo', events: 'demo', swarms: 'demo', teams: 'demo', threads: 'demo', usage: 'demo' });
   Object.assign(sync, { status: isApiMode() ? 'degraded' : 'demo', error: reason === 'signed-out' ? null : sync.error, at: Date.now(), ws: 'off' });
   emit();
@@ -329,7 +371,7 @@ export function reloadDemoData() {
 }
 
 async function fetchAll() {
-  const [agents, tasks, approvals, events, teams, threads] = await Promise.all([
+  const [agents, tasks, approvals, events, teams, threads, swarms] = await Promise.all([
     api.agents(),
     api.tasks(),
     api.approvals(),
@@ -339,6 +381,9 @@ async function fetchAll() {
     // A gateway without the chat routes must not fail the whole refresh; `threads: null` below
     // keeps the slice on demo provenance and the screen says so.
     api.threads().catch(() => null),
+    // A gateway older than the swarm routes returns 404 here. That must not fail the whole refresh, and
+    // it must not make demo fixtures look live: `swarms: null` keeps the slice on demo provenance.
+    api.swarms().catch(() => null),
   ]);
   return {
     agents: agents.body,
@@ -348,6 +393,8 @@ async function fetchAll() {
     teams: teams.body?.teams || [],
     threads: threads?.body?.threads ?? null,
     chatRuntime: threads?.body?.runtime ?? null,
+    swarms: Array.isArray(swarms?.body?.swarms) ? swarms.body.swarms : null,
+    swarmsRuntime: swarms?.body?.runtime ?? null,
     requestId: agents.requestId,
   };
 }
@@ -460,7 +507,7 @@ export function connectLive() {
     reconnectAttempt = 0;
     setWs('open');
     try {
-      ws.send(JSON.stringify({ type: 'subscribe', topics: ['agents', 'tasks', 'approvals', 'system', 'evolution', 'chat'] }));
+      ws.send(JSON.stringify({ type: 'subscribe', topics: ['agents', 'tasks', 'approvals', 'system', 'evolution', 'chat', 'swarms'] }));
     } catch {
       /* ignore: the server will just use its default subscription */
     }
@@ -494,7 +541,7 @@ export function connectLive() {
       evolutionListeners.forEach((fn) => { try { fn(msg); } catch { /* a panel must not break the socket */ } });
       return;
     }
-    if (['agents', 'tasks', 'approvals', 'system', 'chat'].includes(msg?.topic)) scheduleRefresh();
+    if (['agents', 'tasks', 'approvals', 'system', 'chat', 'swarms'].includes(msg?.topic)) scheduleRefresh();
   };
   ws.onerror = () => {
     /* onclose handles the state machine */
@@ -678,6 +725,41 @@ export async function reorderTeam(teamId, order) {
   scheduleRefresh(200);
   return out.body;
 }
+
+/* ---------- swarm plans ----------
+ * Nothing here starts anything: these helpers save, edit, re-label and delete a plan. `executed` comes
+ * back from the server as `false`, and a client that asked for anything else is refused upstream.
+ */
+export async function createSwarmPlan(draft) {
+  const out = await api.createSwarm(draft);
+  const row = adaptSwarm(out.body.swarm);
+  if (isLive('swarms')) upsert('swarms', row);
+  scheduleRefresh(250);
+  return row;
+}
+
+export async function updateSwarmPlan(id, patch) {
+  const out = await api.updateSwarm(id, patch);
+  const row = adaptSwarm(out.body.swarm);
+  if (isLive('swarms')) upsert('swarms', row);
+  return row;
+}
+
+export async function setSwarmPlanStatus(id, status) {
+  const out = await api.setSwarmStatus(id, status);
+  const row = adaptSwarm(out.body.swarm);
+  if (isLive('swarms')) upsert('swarms', row);
+  scheduleRefresh(250);
+  return row;
+}
+
+export async function deleteSwarmPlan(id) {
+  const out = await api.deleteSwarm(id);
+  replaceSlices({ swarms: (getState().swarms || []).filter((s) => s.id !== id) }, 'data:swarm-delete');
+  scheduleRefresh(200);
+  return out.body;
+}
+
 
 export async function deleteAgent(id) {
   const out = await api.deleteAgent(id);

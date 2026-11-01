@@ -107,6 +107,19 @@ globalThis.fetch = async (url, options = {}) => {
       runtime: { configured: false, generatesReplies: false, driver: 'none', note: 'No model runtime is configured on this gateway. Messages are stored; no reply is generated.' },
     });
   }
+  // Swarm plans are a gateway slice now; a plan is `executed: false` and says so on the row.
+  if (path === '/api/v1/swarms' && method === 'GET') {
+    return json({
+      swarms: [{
+        id: 'sw-gw-1', teamId: 'tm-research', name: 'gateway-plan', objective: 'Plan from the gateway',
+        status: 'planned', executed: false, progress: 0, budget: { cap: 4, spent: 0 },
+        nodes: [{ id: 'n1', label: 'planner', status: 'planned', spent: 0, elapsed: '—' }],
+        channel: 'app', startedAt: 1_700_000_500_000, updatedAt: 1_700_000_500_000, createdBy: 'owner',
+      }],
+      total: 1, truncated: false,
+      runtime: { executed: false, scheduler: false, note: 'A swarm is a saved plan. Nothing in MMM schedules, starts or advances one.' },
+    });
+  }
   if (path.startsWith('/api/v1/audit')) return json([]);
   return json({ error: 'not found' }, 404);
 };
@@ -177,7 +190,11 @@ await check('signing in adopts the gateway rows for agents, tasks, approvals and
 
   assert(!s.agents.some((a) => demoAgentNames.includes(a.name)), 'demo agents must be gone, not merged');
   for (const slice of data.GATEWAY_SLICES) eq(core.getProvenance()[slice], 'gateway', `${slice} provenance`);
-  eq(core.getProvenance().swarms, 'demo', 'swarms stay local (no gateway endpoint)');
+  eq(core.getProvenance().swarms, 'gateway', 'swarm plans come from the gateway like every other slice');
+  eq(s.swarms.length, 1, 'one plan');
+  eq(s.swarms[0].executed, false, 'and it says it never ran');
+  eq(s.swarms[0].budget.spent, 0, 'with nothing spent');
+  eq(data.getSwarmsRuntime().scheduler, false, 'the server’s own sentence about a scheduler travels with the rows');
   eq(s.threads[0].title, 'Gateway thread', 'the transcript is the gateway’s, not a fixture');
   eq(s.chatRuntime.generatesReplies, false, 'and it says it cannot answer');
 });

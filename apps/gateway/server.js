@@ -19,6 +19,7 @@ import * as comms from './src/comms.js';
 import { runner as browserRunner, browserCapability, setBrowserBroadcast } from './src/browser/index.js';
 import { evolution, setEvolutionBroadcast, ensurePoliciesForAllAgents } from './src/evolution/index.js';
 import * as teams from './src/teams.js';
+import * as swarms from './src/swarms.js';
 import * as chat from './src/chat.js';
 import * as terminal from './src/terminal/index.js';
 import * as auth from './src/auth.js';
@@ -426,7 +427,10 @@ route('GET', /^\/api\/v1\/summary$/, { permission: 'summary:read' }, () => {
       agents: one('SELECT COUNT(*) n FROM agents WHERE deleted_at IS NULL'),
       running: one("SELECT COUNT(*) n FROM agents WHERE status='running'"),
       teams: one('SELECT COUNT(*) n FROM teams'),
-      swarmsLive: one("SELECT COUNT(*) n FROM swarms WHERE status='live'"),
+      // No swarm is ever `live`: a plan has no runner. The count that is meaningful is how many plans
+      // exist, so the summary says that rather than a number that must always be zero.
+      swarms: one('SELECT COUNT(*) n FROM swarms'),
+      swarmsExecuted: one('SELECT COUNT(*) n FROM swarms WHERE executed=1'),
       tasks: one('SELECT COUNT(*) n FROM tasks'),
       approvalsPending: one("SELECT COUNT(*) n FROM approvals WHERE status='pending'"),
       skillsPending: one("SELECT COUNT(*) n FROM skills WHERE status='pending'"),
@@ -594,6 +598,73 @@ route('DELETE', /^\/api\/v1\/teams\/([\w-]+)\/members\/([\w-]+)$/, { permission:
     return { code: 200, body: result };
   } catch (error) {
     return teamFail(error);
+  }
+});
+
+/* ---- Swarms: saved plans, never a running thing (see src/swarms.js) ----
+ * Every response carries `runtime`, and every mutation is refused if it would claim execution. The
+ * topic is `swarms`, filtered on `read`, so a client that may list plans is told when one changes.
+ */
+const swarmFail = (error) => {
+  const code = error?.code || 'error';
+  const status = code === 'not-found' ? 404 : code === 'conflict' ? 409 : 400;
+  return { code: status, body: { error: error.message, code } };
+};
+
+route('GET', /^\/api\/v1\/swarms$/, { permission: 'read' }, (ctx) => {
+  try {
+    return { code: 200, body: swarms.listSwarms({ teamId: ctx.query.teamId || null }) };
+  } catch (error) {
+    return swarmFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/swarms\/([\w-]+)$/, { permission: 'read' }, (ctx) => {
+  try {
+    return { code: 200, body: { swarm: swarms.getSwarm(ctx.match[1]), runtime: swarms.runtimeStatus() } };
+  } catch (error) {
+    return swarmFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/swarms$/, { permission: 'swarm:write', mutating: true }, (ctx) => {
+  try {
+    const swarm = swarms.createSwarm(ctx.body || {}, ctx.principal.id);
+    broadcast('swarms', { type: 'swarm.created', entity: swarm.id });
+    return { code: 201, body: { swarm } };
+  } catch (error) {
+    return swarmFail(error);
+  }
+});
+
+route('PATCH', /^\/api\/v1\/swarms\/([\w-]+)$/, { permission: 'swarm:write', mutating: true }, (ctx) => {
+  try {
+    const swarm = swarms.updateSwarm(ctx.match[1], ctx.body || {}, ctx.principal.id);
+    broadcast('swarms', { type: 'swarm.updated', entity: swarm.id });
+    return { code: 200, body: { swarm } };
+  } catch (error) {
+    return swarmFail(error);
+  }
+});
+
+/** A status change is a plan decision, not process control: planned ⇄ cancelled, → archived. */
+route('POST', /^\/api\/v1\/swarms\/([\w-]+)\/status$/, { permission: 'swarm:write', mutating: true }, (ctx) => {
+  try {
+    const swarm = swarms.setSwarmStatus(ctx.match[1], ctx.body?.status, ctx.principal.id);
+    broadcast('swarms', { type: 'swarm.status', entity: swarm.id, status: swarm.status });
+    return { code: 200, body: { swarm } };
+  } catch (error) {
+    return swarmFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/swarms\/([\w-]+)$/, { permission: 'swarm:write', mutating: true }, (ctx) => {
+  try {
+    const result = swarms.deleteSwarm(ctx.match[1], ctx.principal.id);
+    broadcast('swarms', { type: 'swarm.deleted', entity: result.id });
+    return { code: 200, body: result };
+  } catch (error) {
+    return swarmFail(error);
   }
 });
 
@@ -1514,7 +1585,7 @@ export function createGateway() {
           return;
         }
         if (msg?.type === 'subscribe' && Array.isArray(msg.topics)) {
-          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'chat', 'terminal', 'system', 'audit', '*'].includes(t));
+          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'chat', 'terminal', 'swarms', 'system', 'audit', '*'].includes(t));
           const refused = wanted.filter((t) => t !== '*' && !subscriptionFilter(t, client.principal));
           client.topics = new Set(wanted.filter((t) => !refused.includes(t)));
           ws.send(JSON.stringify({ topic: 'system', type: 'subscribed', topics: [...client.topics], refused, ts: Date.now() }));

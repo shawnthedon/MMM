@@ -4,11 +4,11 @@
     "teamId": "tm-research",
     "name": "market-intel-swarm",
     "objective": "Map the EU AI-agent market: top 20 vendors, pricing, positioning.",
-    "status": "live",
-    "progress": 0.62,
+    "status": "planned",
+    "progress": 0,
     "budget": {
-      "cap": 10,
-      "spent": 3.41
+      "cap": 10.0,
+      "spent": 0
     },
     "startedAt": 1792200079399,
     "channel": "telegram",
@@ -17,50 +17,51 @@
         "id": "n1",
         "label": "planner",
         "agent": "ag-researcher",
-        "status": "done",
-        "spent": 0.42,
-        "elapsed": "0:48"
+        "status": "planned",
+        "spent": 0,
+        "elapsed": "\u2014"
       },
       {
         "id": "n2",
         "label": "research-a",
         "agent": "ag-researcher",
-        "status": "done",
-        "spent": 1.12,
-        "elapsed": "3:10"
+        "status": "planned",
+        "spent": 0,
+        "elapsed": "\u2014"
       },
       {
         "id": "n3",
         "label": "research-b",
         "agent": "ag-content",
-        "status": "running",
-        "spent": 0.98,
-        "elapsed": "4:02"
+        "status": "planned",
+        "spent": 0,
+        "elapsed": "\u2014"
       },
       {
         "id": "n4",
         "label": "analyze",
         "agent": "ag-analyst",
-        "status": "running",
-        "spent": 0.61,
-        "elapsed": "2:12"
+        "status": "planned",
+        "spent": 0,
+        "elapsed": "\u2014"
       },
       {
         "id": "n5",
         "label": "writer",
         "agent": "ag-content",
-        "status": "queued",
+        "status": "planned",
         "spent": 0,
-        "elapsed": "—"
+        "elapsed": "\u2014"
       },
       {
         "id": "n6",
         "label": "assembler",
         "agent": "ag-researcher",
-        "status": "queued",
+        "status": "planned",
         "spent": 0,
-        "elapsed": "—"
+        "elapsed": "\u2014"
       }
-    ]
+    ],
+    "executed": false
   }
 ]

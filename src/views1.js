@@ -6,7 +6,10 @@ import {
 } from './core.js';
 import { openSheet, closeAllSheets, toast, confirmModal, on, actions } from './shell.js';
 import { sourceTagHTML, sourceBannerHTML } from './sourceui.js';
-import { isLive, getStatus, createAgent, updateAgent, createTask, updateTask, deleteAgent } from './datastore.js';
+import {
+  isLive, getStatus, createAgent, updateAgent, createTask, updateTask, deleteAgent,
+  createSwarmPlan, updateSwarmPlan, setSwarmPlanStatus, deleteSwarmPlan, getSwarmsRuntime,
+} from './datastore.js';
 import { isApiMode } from './api.js';
 import { openTeamPanel } from './team-panel.js';
 import './agents.css';
@@ -496,7 +499,7 @@ views.teams = {
     return `
       <div class="page-head row between">
         <div><h1>Teams & Swarms</h1><div class="sub">Compose teams · swarm records ${sourceTagHTML('swarms')}</div></div>
-        <button class="btn primary sm" data-act="new-swarm">${icon('plus', 16)} Deploy</button>
+        <button class="btn primary sm" data-act="new-swarm">${icon('plus', 16)} New plan</button>
       </div>
       <div class="banner warn">${icon('shield', 16)}<div><strong>No swarm has ever executed anything.</strong>
         These are records: no scheduler, worker or agent process reads them, and their progress does not
@@ -506,8 +509,8 @@ views.teams = {
         <button class="list-card" data-act="open-swarm" data-id="${w.id}" style="width:100%;text-align:left">
           <div class="avatar" style="background:${w.status === 'live' ? 'color-mix(in srgb, var(--running) 25%, var(--elevated))' : 'var(--elevated)'};color:var(--brand)">${icon('swarm', 18)}</div>
           <div class="grow">
-            <div class="row"><span class="strong small">${esc(w.name)}</span>
-              <span class="chip tiny ${w.status === 'live' ? 'run' : ''}">${esc(w.status)}</span>
+            <div class="row wrap" style="gap:6px"><span class="strong small">${esc(w.name)}</span>
+              <span class="chip tiny">${esc(w.status)}</span>
               <span class="chip tiny warn" data-swarm-executed="no">not executed</span></div>
             <div class="tiny muted ellipsis">${esc(w.objective)}</div>
             <div class="progress" style="margin-top:6px"><i style="width:${Math.round(w.progress * 100)}%"></i></div>
@@ -534,26 +537,46 @@ views.teams = {
 };
 
 function swarmMonitor(id) {
-  const w = getState().swarms.find((x) => x.id === id);
+  const s = getState();
+  const w = s.swarms.find((x) => x.id === id);
   if (!w) return `<div class="empty">Swarm not found</div>`;
   const pos = { n1: [70, 18], n2: [70, 110], n3: [210, 110], n4: [70, 202], n5: [210, 202], n6: [140, 294] };
   const edges = [['n1', 'n2'], ['n1', 'n3'], ['n2', 'n4'], ['n2', 'n5'], ['n3', 'n5'], ['n4', 'n6'], ['n5', 'n6']];
   const color = (st) => (st === 'done' ? 'var(--state-success)' : st === 'running' ? 'var(--accent-secondary)' : st === 'error' ? 'var(--state-error)' : 'var(--text-muted)');
+  const team = s.teams?.find((t) => t.id === w.teamId);
+  const live = isLive('swarms');
   return `
     <button class="btn sm" data-act="nav" data-to="teams">${icon('left', 14)} Swarms</button>
     <div class="card" style="margin-top:12px">
       <div class="row between">
         <div><h2 style="font-size:17px">${esc(w.name)}</h2><div class="tiny muted">${esc(w.objective)}</div></div>
-        <span class="chip tiny">${esc(w.status)} record</span>
+        <span class="chip tiny" data-swarm-status="${esc(w.status)}">${esc(w.status)}</span>
       </div>
       <div class="row between" style="margin-top:10px">
-        <span class="tiny muted">saved ${Math.round((now() - w.startedAt) / 60000)}m ago · never run</span>
-        <span class="tiny strong">${fmtMoney(w.budget.spent)} / ${fmtMoney(w.budget.cap)}</span>
+        <span class="tiny muted">saved ${fmtTime(w.startedAt)} · never run</span>
+        <span class="tiny strong">${fmtMoney(w.budget.spent)} / ${fmtMoney(w.budget.cap)} cap</span>
       </div>
-      <div class="progress" style="margin-top:6px"><i style="width:${Math.round(w.progress * 100)}%"></i></div>
       <div class="banner warn" style="margin-top:12px">${icon('shield', 16)}<div><strong>Not executed.</strong>
-        No process is running, so there is nothing to pause or cancel. This record is a plan with a budget;
-        a scheduler is what would make it real.</div></div>
+        ${esc(getSwarmsRuntime()?.note || 'No scheduler or worker exists in this build, so a plan has no progress and no spend.')}
+        ${live ? '' : 'This plan is stored in this browser only.'}</div></div>
+
+      <div class="row wrap" style="margin-top:12px;gap:8px">
+        ${w.status === 'planned' ? `<button class="btn sm grow" data-act="swarm-status" data-id="${w.id}" data-status="cancelled">${icon('stop', 13)} Mark cancelled</button>` : ''}
+        ${w.status === 'cancelled' ? `<button class="btn sm grow" data-act="swarm-status" data-id="${w.id}" data-status="planned">${icon('undo', 13)} Re-open plan</button>` : ''}
+        ${w.status !== 'archived' ? `<button class="btn sm grow" data-act="swarm-status" data-id="${w.id}" data-status="archived">${icon('archive', 13)} Archive</button>` : ''}
+        <button class="btn sm grow danger" data-act="swarm-delete" data-id="${w.id}">${icon('trash', 13)} Delete</button>
+      </div>
+    </div>
+
+    <div class="section-title">Plan facts</div>
+    <div class="card">
+      <div class="kv"><span class="k">Team</span><span class="strong">${esc(team?.name || w.teamId || 'none')}</span></div>
+      <div class="kv"><span class="k">Planned nodes</span><span class="strong">${(w.nodes || []).length}</span></div>
+      <div class="kv"><span class="k">Budget cap</span><span class="strong">${fmtMoney(w.budget.cap)}</span></div>
+      <div class="kv"><span class="k">Spent</span><span class="strong">${fmtMoney(0)} — nothing ran</span></div>
+      <div class="kv"><span class="k">Channel</span><span class="strong">${esc(w.channel)}</span></div>
+      <div class="kv"><span class="k">Saved by</span><span class="strong">${esc(w.createdBy || '—')}</span></div>
+      <div class="kv"><span class="k">Source</span><span class="strong">${live ? 'gateway row' : 'this browser (demo)'}</span></div>
     </div>
 
     <div class="section-title">Dependency graph (planned)</div>
@@ -573,12 +596,9 @@ function swarmMonitor(id) {
     </svg></div></div>
 
     <div class="section-title">Resource allocation</div>
-    <div class="card">
-      ${[['tokens/s', 78, '60k cap'], ['cost rate', 32, '$6/h cap'], ['plugin quota', 44, '2.2k/5k calls'], ['parallel slots', 66, '4/6 slots']].map(([k, v, c]) => `
-        <div style="margin-bottom:10px">
-          <div class="row between tiny"><span class="muted">${k}</span><span class="strong">${v}% · ${c}</span></div>
-          <div class="progress ${v > 85 ? 'bad' : v > 70 ? 'warn' : ''}"><i style="width:${v}%"></i></div>
-        </div>`).join('')}
+    <div class="card tiny muted" style="line-height:1.8">
+      Nothing is allocated: no runner holds a slot, a token budget or a cost rate for this plan. A scheduler
+      would report those numbers; typed-in percentages are not a substitute.
     </div>
 
     <div class="section-title">Nodes</div>
@@ -593,7 +613,7 @@ function swarmMonitor(id) {
 export function swarmDeploySheet(teamId) {
   const s = getState();
   openSheet({
-    title: 'Deploy swarm',
+    title: 'New swarm plan',
     body: `
       <div class="field"><label>Objective</label>
         <textarea class="input" id="sw-obj" placeholder="e.g. Map the EU AI-agent market…">Explore the Q4 agent-framework landscape and draft a comparison report.</textarea>
@@ -616,17 +636,39 @@ export function swarmDeploySheet(teamId) {
     foot: `<button class="btn grow" data-sheet-close>Cancel</button>
            <button class="btn grow grad" data-act="swarm-deploy-go">Save record</button>`,
   });
-  on('swarm-deploy-go', () => {
+  on('swarm-deploy-go', async () => {
     const sheet = document.querySelector('.sheet.open');
-    const obj = sheet.querySelector('#sw-obj').value.trim() || 'Untitled objective';
+    const obj = sheet.querySelector('#sw-obj').value.trim();
     const cap = Number(sheet.querySelector('#sw-budget').value) || 8;
     const teamId2 = sheet.querySelector('#sw-team').value;
+    const topology = sheet.querySelector('#sw-topo').value;
+    if (!obj) { toast('An objective is required', 'bad'); return; }
+    const draft = { objective: obj, name: obj.toLowerCase().replace(/[^a-z0-9]+/g, '-').split('-').slice(0, 3).join('-'), teamId: teamId2, budgetCap: cap, topology, channel: 'app' };
+
+    // Gateway mode: the plan is a row, or it is nothing. Demo mode: the same shape, local, labelled demo.
+    if (isApiMode()) {
+      if (permissionDenied('swarm:write')) { toast('Your role cannot save swarm plans', 'bad'); return; }
+      const btn = document.querySelector('[data-act="swarm-deploy-go"]');
+      if (btn) btn.setAttribute('disabled', 'disabled');
+      try {
+        const row = await createSwarmPlan(draft);
+        closeAllSheets();
+        toast('Plan saved on the gateway — nothing is executing', 'ok');
+        import('./main.js').then((m) => m.navigate(`teams/${row.id}`));
+      } catch (error) {
+        toast(`Gateway refused: ${error.message}`, 'bad');
+        if (btn) btn.removeAttribute('disabled');
+      }
+      return;
+    }
+
+    const id = uid('sw');
     setState((st) => {
       st.swarms.unshift({
-        id: uid('sw'), teamId: teamId2, name: obj.toLowerCase().replace(/[^a-z0-9]+/g, '-').split('-').slice(0, 3).join('-'),
+        id, teamId: teamId2, name: draft.name,
         // `executed: false` is the honest field: nothing read this row, nothing advanced it, and no money
         // was spent — so `status` is 'planned', not 'live', and `spent` is 0 rather than a plausible 0.1.
-        objective: obj, status: 'planned', executed: false, progress: 0, budget: { cap, spent: 0 }, startedAt: now(), channel: 'app',
+        objective: obj, status: 'planned', executed: false, progress: 0, budget: { cap, spent: 0 }, startedAt: now(), updatedAt: now(), channel: 'app',
         nodes: [
           { id: 'n1', label: 'planner', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
           { id: 'n2', label: 'research-a', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
@@ -636,11 +678,11 @@ export function swarmDeploySheet(teamId) {
           { id: 'n6', label: 'assembler', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
         ],
       });
-      logEvent('swarm', `Swarm record saved (not executed) · ${obj.slice(0, 60)}`);
+      logEvent('swarm', `Swarm plan saved (not executed) · ${obj.slice(0, 60)}`);
     }, 'deploy-swarm');
-    import('./shell.js').then((m) => m.closeAllSheets());
-    toast('Swarm record saved — nothing is executing', 'ok');
-    import('./main.js').then((m) => m.navigate('teams'));
+    closeAllSheets();
+    toast('Swarm plan saved in this browser — nothing is executing', 'ok');
+    import('./main.js').then((m) => m.navigate(`teams/${id}`));
   });
 }
 
@@ -1060,6 +1102,57 @@ on('open-swarm', (el, ds) => import('./main.js').then((m) => m.navigate(`teams/$
 on('open-task', (el, ds) => taskSheet(ds.id));
 on('new-agent', () => agentWizard());
 on('new-swarm', (el, ds) => swarmDeploySheet(ds.team));
+
+/* A plan's status is a record label, not process control: planned ⇄ cancelled, then archived. Nothing
+ * here starts or stops a process, and the gateway refuses a status that would claim one. */
+on('swarm-status', async (el, ds) => {
+  const label = { cancelled: 'mark cancelled', planned: 're-open', archived: 'archive' }[ds.status] || ds.status;
+  if (isApiMode()) {
+    if (permissionDenied('swarm:write')) { toast('Your role cannot change swarm plans', 'bad'); return; }
+    el?.setAttribute('disabled', 'disabled');
+    try {
+      await setSwarmPlanStatus(ds.id, ds.status);
+      toast(`Plan ${label}d on the gateway — nothing was running`, 'ok');
+      import('./main.js').then((m) => m.rerender());
+    } catch (error) {
+      toast(`Gateway refused: ${error.message}`, 'bad');
+      el?.removeAttribute('disabled');
+    }
+    return;
+  }
+  setState((st) => {
+    const w = st.swarms.find((x) => x.id === ds.id);
+    if (w) { w.status = ds.status; w.updatedAt = now(); }
+    logEvent('swarm', `Plan ${label}d (nothing was running)`);
+  }, 'swarm-status');
+  toast(`Plan ${label}d in this browser`, 'ok');
+  import('./main.js').then((m) => m.rerender());
+});
+
+on('swarm-delete', (el, ds) => {
+  const w = getState().swarms.find((x) => x.id === ds.id);
+  confirmModal({
+    title: 'Delete this plan?',
+    body: `${esc(w?.name || 'This plan')} is a saved plan — nothing ever ran, so nothing is lost but the record.`,
+    confirmText: 'Delete plan', danger: true,
+    onConfirm: async () => {
+      if (isApiMode()) {
+        if (permissionDenied('swarm:write')) { toast('Your role cannot delete swarm plans', 'bad'); return; }
+        try {
+          await deleteSwarmPlan(ds.id);
+          toast('Plan deleted on the gateway', 'ok');
+          import('./main.js').then((m) => m.navigate('teams'));
+        } catch (error) {
+          toast(`Gateway refused: ${error.message}`, 'bad');
+        }
+        return;
+      }
+      setState((st) => { st.swarms = st.swarms.filter((x) => x.id !== ds.id); logEvent('swarm', 'Plan deleted'); }, 'swarm-delete');
+      toast('Plan deleted in this browser', 'ok');
+      import('./main.js').then((m) => m.navigate('teams'));
+    },
+  });
+});
 on('new-task', () => taskCreateSheet());
 
 on('toggle-agent', async (el, ds) => {
