@@ -168,11 +168,11 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | 7 | **Approvals** | `#/approvals` | ✅ | Real gates, separation of duties (you cannot approve your own), audited decisions | `server.js`, `scripts/gateway-auth-test.mjs` |
 | 8 | **Skills Hub** | `#/skills` | 🎭 | 24-entry catalogue + 6 installed skills are local; import/validation/quarantine is genuinely good code but client-side; “activate” changes a local flag | `src/skillsData.js`, `src/skillsImport.js` |
 | 9 | **Skills Matrix** | `#/matrix` | 🎭 | Relationship editing is local state only | `src/views2.js` |
-| 10 | **Model catalogue** | `#/models` | 🎭 | 26 seeded providers, presented as a catalogue: “not configured”, 0 calls made by this app, every row `not configured`, routing policies labelled *illustrative / not enforced*. The fake on/off switch, `Active providers`, `Spend MTD` and the typed budget bars are deleted. **No provider client, no key store, no streaming** | `src/views2.js`, `fixtures/providers.json` |
+| 10 | **Model gateway** | `#/models` | ✅ | Real end to end: an Owner seals a provider key (AES-256-GCM, never returned — a 16-hex fingerprint and a `••••abcd` hint come back instead), one OpenAI-compatible adapter makes a real request, and every attempt lands in `model_calls` as `ok` / `blocked` / `error` with tokens, an **estimated** cost and a latency. The daily and per-call caps are enforced **before** the request leaves the process. `spend_mtd` is dropped from the schema — spend is `SUM(cost_usd) WHERE status='ok'` and nothing else. Prompts and replies are never stored; redirects are never followed; nothing streams yet | `apps/gateway/src/models.js`, `apps/gateway/src/secrets.js`, `010_model_calls.sql`, `src/views2.js`, `src/datastore.js` |
 | 11 | **Plugins / MCP** | `#/plugins` | 🎭 | A catalogue that says so: “no MCP client is installed in this build”, rows read *not connected*, the install action opens “what it needs” instead of flipping a flag, `callsToday` is gone and the credential field is deleted (a secret the app cannot store must not be collected). The proxy / `scoped tokens` banner is gone | `src/views2.js` |
 | 12 | **Chat** | `#/chat` | ✅ | Real transcript end to end: threads and messages persist on the gateway, survive a reload and a restart, and the read receipt is a write. **Nothing answers**: there is no model runtime, the API says so in every read (`runtime.configured: false`) and the screen prints it. A request body cannot claim an agent spoke. Writes are idempotent by `clientId` | `apps/gateway/src/chat.js`, `server.js`, `src/views2.js`, `src/datastore.js` |
 | 13 | **Copilot** | overlay | 🟠 | Real UI, real consent flow, real capability registry; answers are deterministic retrieval over local state; actions are labelled `demo` | `src/copilot/*` |
-| 14 | **Analytics** | `#/analytics` | 🎭 | Still mostly typed-in — `+ 12`, `87% success`, `▲ 8%`, `median 4m` remain (**session 11**). Fixed here: the MCP tile reads `—` / *not measured · no client* instead of a seed counter, the MCP bar chart is gone, and Export writes a CSV computed from the rows on screen instead of a constant string containing `spend_today,17.93` | `src/views2.js` |
+| 14 | **Analytics** | `#/analytics` | 🟠 | Money and tokens are now the **model ledger**: “Spend today” is `model_calls` for the day (labelled estimated), the chart is cost and tokens per day from `GET /usage`, and Export writes that same number. The typed-in `+ 12`, `87% success`, `▲ 8% vs yesterday`, `median resolve 4m` and the `+6.2% / −18%` self-improvement figures are deleted — the self-improvement panel now says it is not measured. Still seed: agent leaderboard `successRate`/`trust`/`costToday` | `src/views2.js`, `apps/gateway/src/models.js` |
 | 15 | **Artifacts / Files** | `#/artifacts` | 🎭 | File list is seed; “Upload” writes into local state; storage reads `248 MB / 2 GB` as a string; `files` table exists unused | `src/views2.js:816-880` |
 | 16 | **Terminal** | `#/terminal` | ✅ | Real end to end: **real child processes** on the gateway host — `node`, `npm`, `npx`, no shell — with live stdout/stderr over SSE, exact exit codes, Ctrl+C, multiple sessions, a persistent cwd, an approval gate for destructive npm commands, and an audit row per run. Authorised agents run commands through the same path and read back the output. **Local-first: no cloud dependency, and an offline `npm install` only works for packages already on disk** | `apps/gateway/src/terminal/`, `src/terminal.js`, `src/terminal.css` |
 | 17 | **Comms** | `#/comms` | ⚠️ | Genuinely server-side: encrypted channel configs, delivery rows, retry queue, signature-gated inbound. **Never verified against a live provider** | `apps/gateway/src/comms.js`, `docs/comms/` |
@@ -862,18 +862,69 @@ allowlist is refused, and a crashed server surfaces 502 rather than hanging.
 
 ---
 
-### M09 · Model Gateway — 26 providers, zero calls
+### M09 · Model gateway ✅ M29 — one adapter, a sealed key and a ledger
 
-**Today.** A catalogue of 26 providers with `status`, `models`, `latency`, `spendMTD`. Toggling one
+**Today.** Shipped. The catalogue described a gateway; the gateway now exists, scoped to what can be
+proven. What it does **not** do is still stated on the screen: no streaming, no retries, no routing by
+policy, no invoices.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| Key material | `apps/gateway/src/secrets.js` | One owner for `MMM_SECRET` → `<DATA_DIR>/.mmm-key` → legacy `.comms-key`. HKDF-SHA256 with a **per-purpose** domain separator (`provider-key-v1`, `comms-config-v1`), AES-256-GCM in `v1.<iv>.<tag>.<body>`. `fingerprint`, `hint` (`••••abcd`), `unseal` returning `null` on tampering. |
+| Schema | `apps/gateway/migrations/010_model_calls.sql` | `providers` gains `key_fingerprint`, `key_hint`, `default_model`, `configured_at/by`, `updated_at`; **`spend_mtd` is dropped**; new `model_calls` ledger (`status ok|blocked|error`, tokens, `cost_usd`, `cost_estimated`, `latency_ms`, `request_id`, `reply_chars`). Seeds the 26-row catalogue as *names to configure* — `status='off'`, no money. |
+| Module | `apps/gateway/src/models.js` | `listProviders` / `getProvider` / `saveProviderKey` / `clearProviderKey` / `callModel` / `usageSummary` / `recentCalls` / `getBudget` / `setBudget`. `status` is `configured` only when a key is sealed; spend is a SUM over the ledger; `runtimeStatus()` says adapter, streaming `false`, cost basis `estimated`, key source. |
+| Call | `models.js` | Refuses **before** the network: unconfigured, no model id, empty prompt, budget crossed (`blocked`, zero cost). Then a real `fetch` with `redirect:'manual'`, a timeout, a 256 KB response cap, and every outcome recorded. A provider `500` is a `502` with its reason; a redirect is never followed; a tampered key is a `409` asking for re-entry. |
+| Endpoint policy | `models.js` | http(s) only, no credentials in the URL, no query or fragment, plain http only for loopback, key length/whitespace validated. |
+| Routes | `server.js` | `GET /providers`, `GET /providers/:id`, `PUT|DELETE /providers/:id/key`, `POST /providers/:id/call`, `GET /usage`, `GET /model-calls`, `PUT /budget`. `model:read` (all roles), `model:call` (Operator+), `model:key` (**Owner only**). WS topic `models`. |
+| Client | `src/api.js`, `src/datastore.js` | `providers` is a `GATEWAY_SLICES` member; `getModelsLedger()` carries the gateway's `usage`, `budget`, `runtime` and recent calls. A gateway without the routes keeps the slice on **demo** provenance. |
+| Screen | `src/views2.js` | Reads the ledger: spend today (estimated), budget left, tokens, refused/failed counts, per-provider spend and call count, an install/replace/remove-key sheet, a **Test call** sheet that shows the reply, tokens, estimated cost and latency, an editable budget, and the ledger rows (`ok` / `refused` at zero cost). Without a gateway it says nothing is callable and offers no control. |
+
+**Acceptance tests.** `npm run test:models` — 22 checks against a real gateway and a real local
+OpenAI-compatible server: a fresh gateway starts with every provider `unconfigured` and zero spend, a
+call with no key is refused and recorded `blocked` at zero cost, only an Owner may install a key, the key
+is sealed and the response carries a fingerprint + hint, and the **key never appears** in any read, the
+audit trail, the event feed or the SQLite bytes on disk. Then a real HTTP call with the provider's token
+counts and an estimated cost, `prompt`/`reply` text absent from the ledger **and the database file**, a
+budget refusal that reaches the provider zero times, a per-call cap above the daily cap rejected, a
+provider `500` → `502` with no spend, a redirect not followed (the target is never contacted), a timeout
+with the limit that was applied, oversized/malformed/empty bodies refused, a tampered sealed key → `409`
+then recovery, an Observer able to read but not spend or configure, a sealed key surviving a restart, and
+key removal returning the provider to `unconfigured`. `npm run test:models:ui` — 11 checks: ledger
+figures and live provenance, a configured row showing a hint and offering a call while an unconfigured
+one does not, the ledger with a refusal at zero cost, a key sent exactly once and never rendered again, a
+refused key that keeps the sheet open, a real call that renders the reply and an estimated cost, a `402`
+that says nothing was billed and appears in the ledger, the budget round-trip, a read-only role seeing no
+key/call/budget controls, and the no-gateway path claiming nothing. `npm run test:models:browser` — 9
+checks in real Chromium against a real gateway **and a real loopback provider**: no call control before a
+key exists, a key sealed through the sheet with the key absent from the DOM afterwards, the gateway
+storing a sealed value and returning a fingerprint, one real request reaching the provider with
+`Authorization: Bearer …` and coming back metered, the on-screen ledger matching `GET /usage`, a zero
+budget refusing the next call with the provider contacted zero times, the sealed key surviving a reload,
+removal returning the provider to `unconfigured`, and no sideways scroll at 320 px.
+
+**The gap.** No streaming, so a long completion blocks until it finishes; no retries or fallback; routing
+policies are prose, not behaviour; prices are a table in code, not a `model_prices` with
+`effective_from`; the `llm` capability is not flipped because nothing else in the app calls this funnel
+yet. Cost is an estimate and the screen says so — the provider's invoice is the real number.
+
+**Next steps**
+
+1. Streaming with abort-on-disconnect, so a closed tab stops paying for tokens.
+2. `model_prices` as data with `effective_from`, and reconcile the estimate against a provider invoice.
+3. Routing: resolve `model_policies` → provider → fallback in `callModel`, with a resolver route.
+4. Have Chat and Copilot use this funnel, so `runtime.configured` becomes true and replies persist with
+   model id, tokens and cost.
+
+---
+
+### M09 (original brief) · Model Gateway — 26 providers, zero calls
+
+**Then.** A catalogue of 26 providers with `status`, `models`, `latency`, `spendMTD`. Toggling one
 flips a local boolean. `providers.key_sealed` and `providers.endpoint` already exist in the schema and
 are never used.
 
-**The gap.** No provider client, no key storage, no streaming, no metering, no budget enforcement, no
-routing. The page is a catalogue pretending to be a router.
-
-**Done means.** One provider works end to end: key sealed server-side, a real completion recorded with
-provider-reported tokens, cost written to the ledger, budget enforced **before** the call, and the key
-provably absent from the built bundle.
+**Kept for the record**, because steps 1–4 and the test shape below are what M29 built. Steps 5–8 are
+still open — see “The gap” above.
 
 **Steps.**
 
@@ -1660,15 +1711,15 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 - [ ] Dangerous tools go through a gate
 - [ ] Copy updated or `callsToday` removed until true
 
-### M09 · Models ⛓ (blocks M01 execution, M10, M11, M12)
-- [ ] One provider adapter with pure `buildRequest`/`parse`
-- [ ] Key sealed server-side; never returned; never `VITE_*`
-- [ ] `modelCall()` funnel: budget → call → usage → audit
-- [ ] Budget enforcement **before** the network call
+### M09 · Models ✅ M29
+- [x] One provider adapter, OpenAI-compatible, one code path
+- [x] Key sealed server-side; never returned; never `VITE_*`; absent from the DB bytes and the audit chain
+- [x] `callModel()` funnel: validate → budget → call → ledger → audit
+- [x] Budget enforcement **before** the network call (`402` + `blocked` row, nothing sent)
 - [ ] Streaming with abort-on-disconnect
 - [ ] `model_prices` as data with `effective_from`
-- [ ] `llm` capability flipped only with a recorded call
-- [ ] `grep -r "sk-" dist/` empty
+- [ ] `llm` capability flipped only with a recorded call (nothing else calls the funnel yet)
+- [x] `grep -r "sk-" dist/` empty (the key only ever exists inside `callModel`'s request headers)
 
 ### M10 · Chat
 - [ ] Threads/messages routes (+ idempotent `clientId`)
@@ -1681,11 +1732,12 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 - [ ] Actions call real routes; last step reflects the HTTP result
 - [ ] Blocked actions end `blocked` with the server's reason
 
-### M12 · Analytics
-- [ ] `usage_events` ledger (M09)
-- [ ] `GET /api/v1/analytics/series/:metric` with an allowlist
-- [ ] Every literal removed; `not tracked` where unknown
-- [ ] Export generated from the same query
+### M12 · Analytics 🟠 (money + tokens done in M29)
+- [x] The ledger is `model_calls` (M29); `GET /api/v1/usage?days=` aggregates it
+- [x] Spend and token series come from the query, and so does Export
+- [x] The `+ 12` / `87%` / `▲ 8%` / `median 4m` / `+6.2%` / `−18%` literals are gone
+- [ ] A `/analytics/series/:metric` route with an allowlist (still one route for models only)
+- [ ] Agent leaderboard numbers (`successRate`, `trust`, `costToday`) computed from runs, not seeded
 
 ### M13 · Files
 - [ ] `GET/POST /api/v1/files`, content download, soft delete
@@ -1844,11 +1896,11 @@ One session ≈ one sitting. Each is independently shippable.
 | 5 | **Teams** | Teams CRUD + membership; swarms reads the team | `test:teams` |
 | 6 | ~~**Chat persists**~~ ✅ M25 | threads/messages routes; `simulateReply` deleted; `runtime: { configured: false }` in every payload | `test:chat` 16 · `test:chat:ui` 10 · real browser 5 |
 | 6b | ~~**Terminal runs real commands**~~ ✅ M26 | spawn behind a policy; SSE streaming; Ctrl+C; approval gate; agent runs | `test:terminal` 28 · `test:terminal:ui` 12 · real browser 15 |
-| 7 | **Provider key + one real call** | Seal a key, one adapter, `modelCall()`, `usage_events` | recorded call + `dist/` grep |
-| 8 | **Metering + budgets** | Daily cap enforced pre-call; Models page shows real spend | budget refusal test |
+| 7 | ~~**Provider key + one real call**~~ ✅ M29 | Sealed key (`secrets.js`), one OpenAI-compatible adapter, `callModel()`, the `model_calls` ledger | `test:models` 22 · `test:models:browser` 9 · the key absent from every read, the audit chain and the SQLite bytes |
+| 8 | ~~**Metering + budgets**~~ ✅ M29 | Daily and per-call caps enforced **before** the request; the Models screen shows the ledger's spend, marked estimated | `402` refusal test · provider contacted zero times · `test:models:ui` 11 · real Chromium 9 |
 | 9 | **Agents run** | `agent_runs` + worker + recomputed stats + honest seed | `test:agent-runs` |
 | 10 | **Telegram Bridge on the real transport** | Screen rebuilt on comms routes; one live message | provider message id |
-| 11 | **Analytics + export** | Ledger aggregates, literals gone, CSV from the query | tile = SQL |
+| 11 | ~~**Analytics + export**~~ ✅ M29 (money/tokens) | Spend and token tiles + series read `GET /usage`; the fabricated deltas and self-improvement percentages are deleted; Export writes the same number | `test:models:ui` · `test:honesty` 13 |
 | 12 | **Files** | Upload/download/checksum/quota | hash round-trip |
 
 After session 12 the app has no simulated *data* left; what remains (skills execution, MCP, training,
@@ -2100,6 +2152,60 @@ re-litigate a decision that cost a bug to learn.
 | How do you add a real sandbox? | Wrap the command in `bwrap` (or `nsjail`) with only the workspace bind-mounted and no network, then report the sandbox in the capability payload. The policy and the UI need no change. | `@anthropic-ai/sandbox-runtime`, `bubblewrap` |
 | Where do terminal conventions come from? | ANSI/ECMA-48 for escape sequences, `node-pty` if you later want a real TTY, and `xterm.js` if you want to render one. | `node-pty`, `xterm.js` |
 
+### A.32 Model gateway: sealed keys, one adapter, and a ledger that cannot flatter itself
+
+The honest unit of "we called a model" is a row, not a number in a template. M29 writes one row per
+*attempt*, and that is what makes the rest provable.
+
+**The ledger row.**
+
+```sql
+-- apps/gateway/migrations/010_model_calls.sql
+CREATE TABLE model_calls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  principal_id TEXT NOT NULL DEFAULT '',
+  via TEXT NOT NULL DEFAULT 'api',
+  provider_id TEXT NOT NULL REFERENCES providers(id),
+  model TEXT NOT NULL DEFAULT '',
+  purpose TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'ok',          -- ok | blocked | error
+  error_code TEXT NOT NULL DEFAULT '',
+  prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  completion_tokens INTEGER NOT NULL DEFAULT 0,
+  total_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd REAL NOT NULL DEFAULT 0,
+  cost_estimated INTEGER NOT NULL DEFAULT 1,  -- a price table, never an invoice
+  latency_ms INTEGER NOT NULL DEFAULT 0,
+  request_id TEXT NOT NULL DEFAULT '',
+  reply_chars INTEGER NOT NULL DEFAULT 0      -- length only: no prompt, no reply
+);
+```
+
+**Three rules that took the most care.**
+
+1. **A refusal is a row too.** `blocked` carries `cost_usd = 0`, so a budget refusal can never inflate
+   spend and the screen can show "refused" next to "no cost" instead of hiding the attempt.
+2. **Spend has exactly one definition.** `SUM(cost_usd) WHERE status='ok'`. The old `providers.spend_mtd`
+   column is *dropped* by the migration: a column that nothing writes is a number waiting to be believed.
+3. **The key is write-only.** `PUT /providers/:id/key` seals with AES-256-GCM (purpose
+   `provider-key-v1`) and returns `{ fingerprint, hint }`. No route, audit row, event or database read
+   path can produce the plaintext, and `test:models` greps the SQLite/WAL bytes to prove it.
+
+**The call, in order** (`models.js → callModel`): provider row → key present? → `unseal` (a tampered
+blob is a `409`, not a crash) → model id shape → messages non-empty → day's spend vs `budget.dailyUsd`
+→ `fetch` with `redirect:'manual'`, `AbortController` timeout and a 256 KB cap → parse
+`choices[0].message.content` and `usage.*` → estimate cost → insert `ok` → audit without text.
+
+**Wire format for the one adapter** is OpenAI-compatible (`POST {baseUrl}/chat/completions`,
+`Authorization: Bearer …`), which is also what most "OpenAI-compatible" vendors and local servers speak.
+A provider that is not compatible is not supported yet, and the README says so.
+
+**When something is uncertain, prefer the smaller claim.** Estimated cost is labelled *estimated*; the
+`llm` capability stays unflipped because nothing else calls the funnel; streaming is `false` in
+`runtimeStatus()` until it exists.
+
+---
 ## Appendix B — Beginner reference
 
 ### B.1 Glossary specific to this repo

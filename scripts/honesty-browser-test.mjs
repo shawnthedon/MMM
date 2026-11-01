@@ -92,12 +92,15 @@ try {
     assert.equal(await page.$$eval('#view input[type="password"]', (e) => e.length), 0, 'no password input');
   });
 
-  await check('the model screen offers no provider switch', async () => {
+  await check('the model screen offers no provider switch and no ledger it cannot have', async () => {
     await go('models');
     const body = await text();
-    assert.ok(/Model catalogue/.test(body), 'titled as a catalogue');
-    assert.ok(/not configured/.test(body), 'says not configured');
+    assert.ok(/Model gateway/.test(body), 'titled as a gateway');
+    assert.ok(/No gateway is connected, so nothing here is callable/.test(body), 'says nothing is callable without a gateway');
+    assert.ok(/not configured/.test(body), 'rows say not configured');
+    assert.ok(!/Spend MTD|estimated in 30 days/.test(body), 'and no spend figure is invented');
     assert.equal(await page.$$eval('[data-act="toggle-provider"]', (e) => e.length), 0, 'no switch');
+    assert.equal(await page.$$eval('[data-act="provider-key"]', (e) => e.length), 0, 'no key control without a gateway');
   });
 
   await check('no page errors while visiting every screen', async () => {

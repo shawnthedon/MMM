@@ -16,10 +16,9 @@
  *                           absent the gateway generates data/.comms-key and says so)
  *   MMM_COMMS_DISABLE=1 skip the background retry ticker (tests drive processQueue directly)
  */
-import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
-import { join } from 'node:path';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { db, DATA_DIR, audit, logEvent } from './db.js';
+import { seal, unseal, purposeKeyFor, keySource as secretsKeySource, warnIfGenerated, LEGACY_COMMS_SALT } from './secrets.js';
 import {
   CHANNELS, CHANNEL_IDS, channelStatus, getChannel, missingFields, missingInboundFields, maskSecret, defaultComms,
 } from '../../../src/commsChannels.js';
@@ -43,49 +42,28 @@ const SECRET_FIELDS = new Set(
  * =======================================================================================*/
 let cachedKey = null;
 
-function keyMaterial() {
-  if (process.env.MMM_SECRET) return { source: 'env', secret: process.env.MMM_SECRET };
-  const file = join(DATA_DIR, '.comms-key');
-  if (!existsSync(file)) {
-    writeFileSync(file, randomBytes(32).toString('hex'), { mode: 0o600 });
-    try { chmodSync(file, 0o600); } catch { /* best effort on filesystems without modes */ }
-    console.warn('[comms] MMM_SECRET is not set — generated a local key at data/.comms-key. Set MMM_SECRET before production use.');
-  }
-  return { source: 'file', secret: readFileSync(file, 'utf8').trim() };
-}
-
-/** 32-byte AES key derived with HKDF-SHA256 from MMM_SECRET (or the generated local key). */
+/**
+ * 32-byte AES key for comms configuration, derived with HKDF-SHA256 from the gateway's key material.
+ * The material itself lives in `secrets.js` (one owner); this keeps the same derivation info it has
+ * always used, so values sealed before that module existed still open.
+ */
 export function encryptionKey() {
   if (cachedKey) return cachedKey;
-  const { secret, source } = keyMaterial();
-  const derived = hkdfSync('sha256', Buffer.from(secret, 'utf8'), Buffer.from('mmm-comms-salt'), Buffer.from('comms-config-v1'), 32);
-  cachedKey = { key: Buffer.from(derived), source };
+  cachedKey = { key: purposeKeyFor('comms-config-v1', { salt: LEGACY_COMMS_SALT }), source: keySource() };
+  warnIfGenerated();
   return cachedKey;
 }
 
-export const keySource = () => encryptionKey().source;
+/** Where the key material came from (env / file / generated) — for diagnostics only. */
+export const keySource = () => secretsKeySource();
 
 export function encryptJson(obj) {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', encryptionKey().key, iv);
-  const body = Buffer.concat([cipher.update(Buffer.from(JSON.stringify(obj), 'utf8')), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `v1.${iv.toString('base64url')}.${tag.toString('base64url')}.${body.toString('base64url')}`;
+  return seal(obj, { purpose: 'comms-config-v1', salt: LEGACY_COMMS_SALT });
 }
 
 export function decryptJson(text) {
-  if (!text) return {};
-  const [version, ivB64, tagB64, bodyB64] = String(text).split('.');
-  if (version !== 'v1' || !ivB64 || !tagB64 || !bodyB64) return {};
-  try {
-    const decipher = createDecipheriv('aes-256-gcm', encryptionKey().key, Buffer.from(ivB64, 'base64url'));
-    decipher.setAuthTag(Buffer.from(tagB64, 'base64url'));
-    const plain = Buffer.concat([decipher.update(Buffer.from(bodyB64, 'base64url')), decipher.final()]);
-    return JSON.parse(plain.toString('utf8'));
-  } catch {
-    // Wrong key or tampered ciphertext: never guess at values.
-    return {};
-  }
+  const opened = unseal(text, { purpose: 'comms-config-v1', salt: LEGACY_COMMS_SALT });
+  return opened && typeof opened === 'object' ? opened : {};
 }
 
 /* =========================================================================================

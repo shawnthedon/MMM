@@ -71,8 +71,11 @@ export function seed({ reset = false } = {}) {
     for (const p of j('plugins.json')) plIns.run(p.id, p.name, p.category, p.installed ? 1 : 0, p.verified ? 1 : 0, p.callsToday, JSON.stringify(p.scopes), JSON.stringify(p.tools));
     counts.plugins = j('plugins.json').length;
 
-    const pvIns = db.prepare(`INSERT OR REPLACE INTO providers (id,category,name,status,auth,models,latency,spend_mtd) VALUES (?,?,?,?,?,?,?,?)`);
-    for (const p of j('providers.json')) pvIns.run(p.id, p.category, p.name, p.status, p.auth, JSON.stringify(p.models), p.latency, p.spendMTD);
+    // A seed cannot configure a provider: `status` is written as 'off' because the honest status is
+    // derived from whether a key is sealed, and a fixture has no key. No spend is written either — the
+    // column is gone and the ledger owns money.
+    const pvIns = db.prepare(`INSERT OR REPLACE INTO providers (id,category,name,status,auth,models,latency) VALUES (?,?,?,?,?,?,?)`);
+    for (const p of j('providers.json')) pvIns.run(p.id, p.category, p.name, 'off', p.auth, JSON.stringify(p.models), p.latency);
     counts.providers = j('providers.json').length;
 
     const poIns = db.prepare(`INSERT OR REPLACE INTO model_policies (id,name,priority,rules) VALUES (?,?,?,?)`);

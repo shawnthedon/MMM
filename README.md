@@ -31,7 +31,7 @@
 | :---: | --- | --- |
 | 📱 | **Interface** | Mobile-first PWA · 12 modules · dark/light themes · offline shell |
 | 🤖 | **Agents** | 7 selectable frameworks: Swarmzero · AutoPentest · A.I.M.A · Project Nautilus · OpenAI Swarm · CrewAI · LangGraph |
-| 🧠 | **Models** | 26 providers: OpenAI/Anthropic/Google/xAI · OpenRouter/Mistral/Cohere… · local Ollama/vLLM · DeepSeek/Groq… · Azure/Bedrock/Vertex/watsonx — **any model, per agent** |
+| 🧠 | **Models** | 26 providers in the catalogue · **one real OpenAI-compatible adapter** · key sealed with AES-256-GCM on the gateway (never returned) · every call metered in a ledger with an **estimated** cost · daily and per-call caps enforced before the request |
 | 🐝 | **Swarms** | Parallel execution engine · dependency DAGs · resource allocation · budgets |
 | ⚡ | **OpenClaw** | Skills system · MCP tool integrations · multi-model routing · Telegram command layer |
 | 🧬 | **Self-improvement** | Agents synthesize skills, refine prompts, optimize tool usage (ML) — always human-gated |
@@ -67,7 +67,7 @@
 | :---: | --- | :---: | --- |
 | 🤖 | **Agent Manager** — profiles, team + position, goal, trust; full-height team panel on a phone, 900 px dock on a desktop | 🐝 | **Teams & Swarms** — real teams, real members, and **swarm plans stored on the gateway** (create, cancel, archive, delete); nothing executes one and the API refuses any status that claims it |
 | 📋 | **Kanban Board** — drag & drop, @agent dispatch | ⚡ | **Skills Hub** — 24-skill marketplace, multi-format import, [Skills Matrix](docs/copilot/skills-hub.md) |
-| 🧠 | **Model catalogue** — 26 providers listed, **no provider client installed** | 🧩 | **Plugin catalogue** — MCP entries listed, **no MCP client installed** |
+| 🧠 | **Model gateway** — install a key, make one real call, read the ledger; **cost estimated, nothing streams** | 🧩 | **Plugin catalogue** — MCP entries listed, **no MCP client installed** |
 | 💬 | **Chat** — real transcript on the gateway; says plainly that no model runtime answers yet | 📡 | **Comms** — Telegram · WhatsApp · Discord · Slack · SMS · Browser gateways |
 | 📊 | **Analytics** — KPIs, spend, trust posture | ⚙️ | **Settings** — everything live-tunable |
 | 🧠 | **Local** — on-device AI preflight + experimental runtime spike (no model bundled) | 🧭 | **Agent Designer** — guided creation, idle definitions |
@@ -97,7 +97,8 @@ from the gateway instead of the bundled fixtures. The top-bar chip shows `live` 
 opens a *Where this data comes from* sheet with the endpoint, the session, the last sync and a
 per-slice table. If a refresh fails you get `stale gateway` plus a strip explaining that the rows
 are the last server copy; if the gateway is unreachable the app falls back to demo fixtures and
-labels them. Swarms, teams and usage still have no server store, so they are always marked demo.
+labels them. Every routed module except Skills, the Skills Matrix, Plugins, Telegram, Files and the
+Copilot's own action list is now a gateway slice — including swarms, teams and the model ledger.
 Gateway rows are never written to `localStorage`, so a signed-out browser only ever holds fixtures.
 
 ### 🧭 Navigate
@@ -134,6 +135,19 @@ re-opened, archived or deleted. Open it to see its facts and the planned node or
 > no spend — the API refuses `live`/`running`/`paused`/`completed` with the reason, the row carries
 > `executed: false`, and the screen says *not executed*. `budget.cap` is stored, not enforced.
 
+### 🔐 Give the model gateway a key
+**Models** → *Install key* on a provider (Owner only) → paste the key, the OpenAI-compatible base URL and
+a default model id → **Seal the key**. It is encrypted on the gateway with AES-256-GCM and is never sent
+back; the row shows a fingerprint and `••••abcd`. Then **Test call** sends one real request and shows the
+reply with its token counts, an **estimated** cost and the latency.
+
+> ⚠️ **What the numbers mean.** Spend is `SUM(cost_usd)` over the `model_calls` ledger, and only calls
+> that actually happened count — a refused call is recorded as `blocked` at zero cost. Cost is
+> **estimated** from a price table, not an invoice. Prompts and replies are never stored (only their
+> length), redirects are never followed, and the daily/per-call caps are checked **before** the request
+> leaves the process (`402` + a `blocked` row, nothing sent). No streaming, no retries, and a provider
+> that is not OpenAI-compatible is not supported yet.
+
 ### ✦ Drive it with the Copilot
 Tap the centre **✦ Copilot** button and pick a mode — **Ask · Operate · Build · Knowledge · Training · Voice · Activity**:
 
@@ -153,9 +167,11 @@ Tap the centre **✦ Copilot** button and pick a mode — **Ask · Operate · Bu
 
 > ⚠️ **Truthfulness:** several screens still read seeded demo state in the browser, and each one says so.
 > Nothing in the app animates itself any more — the simulation ticker was deleted, so what you see is what
-> is stored. Swarms are plans (`not executed`), the model and plugin screens are **catalogues** with no
-> client behind them, and the four security rows in Settings reflect what the code does rather than what it
-> would like to do. No model, scheduler, training worker, voice engine or SMS connector is called. See
+> is stored. Swarms are plans (`not executed`); the model gateway makes **real** calls but only ones you
+> start, and only when an Owner has installed a key — otherwise it says `unconfigured` and offers no
+> button; the plugin screen is a catalogue with no client behind it; and the four security rows in
+> Settings reflect what the code does rather than what it would like to do. No scheduler, training
+> worker, voice engine or SMS connector is called. See
 > [`docs/FEATURE_COMPLETION_ROADMAP.md`](docs/FEATURE_COMPLETION_ROADMAP.md) §2 and
 > [`docs/PROGRESS.md`](docs/PROGRESS.md).
 

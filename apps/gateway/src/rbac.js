@@ -26,6 +26,7 @@ export const PERMISSIONS = Object.freeze({
   'evolution:read': 'Observer',
   'chat:read': 'Observer',
   'terminal:read': 'Observer',
+  'model:read': 'Observer',
   // review surface
   'approval:request': 'Observer',
   'approval:decide': 'Reviewer',
@@ -44,6 +45,8 @@ export const PERMISSIONS = Object.freeze({
   'terminal:run': 'Operator',
   'terminal:signal': 'Operator',
   'terminal:grant': 'Owner',
+  'model:call': 'Operator',
+  'model:key': 'Owner',
   // administration
   'evolution:deploy': 'Admin',
   'principal:read': 'Admin',
@@ -56,9 +59,9 @@ export const PERMISSIONS = Object.freeze({
   'dev:seed': 'Owner',
 });
 
-const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read', 'evolution:read', 'chat:read', 'terminal:read'];
+const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read', 'evolution:read', 'chat:read', 'terminal:read', 'model:read'];
 const REVIEW = ['audit:read', 'audit:verify', 'evolution:review', 'evolution:approve'];
-const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run', 'evolution:run', 'chat:write', 'terminal:run', 'terminal:signal'];
+const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run', 'evolution:run', 'chat:write', 'terminal:run', 'terminal:signal', 'model:call'];
 
 /** Explicit role → permission sets (the authoritative check). */
 export const ROLE_PERMISSIONS = Object.freeze({

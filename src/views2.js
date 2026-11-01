@@ -6,7 +6,12 @@ import {
 import { openSheet, toast, confirmModal, on, applyTheme, closeAllSheets } from './shell.js';
 import { sparkline } from './views1.js';
 import { views } from './views1.js';
-import { isLive, sendChatMessage, createChatThread, markChatRead } from './datastore.js';
+import {
+  isLive, sendChatMessage, createChatThread, markChatRead,
+  getModelsLedger, saveProviderKey, clearProviderKey, callProviderModel, setModelBudget,
+} from './datastore.js';
+import { can } from './auth.js';
+import { isApiMode } from './api.js';
 
 /* ================= SKILLS HUB ================= */
 const SKILL_TABS = [
@@ -366,55 +371,332 @@ on('new-skill', () => {
   });
 });
 
-/* ================= MODEL GATEWAY ================= */
+/* ================= MODEL GATEWAY =================
+ * This screen used to be a catalogue describing a gateway that did not exist: `spend_mtd` typed into
+ * fixtures, a per-provider on/off switch, a key vault that was never built. The gateway exists now
+ * (apps/gateway/src/models.js), so every number here is read from it:
+ *
+ *   • `status` is `configured` only when a key is actually sealed on the server;
+ *   • spend is `SUM(cost_usd)` over the `model_calls` ledger, labelled **estimated** because it comes
+ *     from a price table, not an invoice;
+ *   • a refused or failed attempt is in the ledger with zero cost, and it is shown as such;
+ *   • a key is entered once, sealed, and never returned — the row shows a fingerprint and a hint.
+ *
+ * With no gateway configured there is no ledger and no key store, so the screen says that and offers
+ * no controls: a button that cannot work is worse than no button.
+ */
+const liveLedger = () => (isApiMode() ? getModelsLedger() : null);
+
+const fmtUsd = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  if (n === 0) return '$0.00';
+  // A model call can cost a fraction of a cent; rounding it to $0.00 would hide the very number the
+  // ledger exists to show, so anything under a dollar keeps four decimals.
+  return n < 1 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+};
+
+const providerRowHTML = (p, live) => {
+  const configured = p.status === 'configured';
+  const canKey = can('model:key');
+  const canCall = can('model:call');
+  const models = Array.isArray(p.models) ? p.models : [];
+  return `
+    <div class="list-card">
+      <div class="avatar sm" style="background:${configured ? 'color-mix(in srgb, var(--success) 22%, var(--elevated))' : 'var(--elevated)'};color:${configured ? 'var(--success)' : 'var(--text-3)'}">${icon('model', 15)}</div>
+      <div class="grow">
+        <div class="row wrap" style="gap:6px">
+          <span class="strong small">${esc(p.name)}</span>
+          <span class="chip tiny ${configured ? 'ok' : ''}">${configured ? 'configured' : 'not configured'}</span>
+          ${configured && p.hint ? `<span class="chip tiny mono" data-provider-hint>${esc(p.hint)}</span>` : ''}
+        </div>
+        <div class="tiny muted">${models.length ? `suggested ids · ${esc(models.join(' · '))}` : 'no suggested model ids — the provider decides'}</div>
+        ${live ? `<div class="tiny muted">${configured
+          ? `${fmtUsd(p.spendMtd)} estimated in 30 days · ${p.callsMtd} call${p.callsMtd === 1 ? '' : 's'}${p.endpointHost ? ` · ${esc(p.endpointHost)}` : ''}`
+          : `no key on this gateway${p.endpointHost ? ` · ${esc(p.endpointHost)}` : ''}`}</div>` : ''}
+      </div>
+      <div class="col" style="align-items:flex-end;gap:6px">
+        ${live && canKey ? `<button class="btn sm" data-act="provider-key" data-id="${esc(p.id)}">${configured ? 'Replace key' : 'Install key'}</button>` : ''}
+        ${live && configured && canCall ? `<button class="btn sm primary" data-act="provider-call" data-id="${esc(p.id)}">Test call</button>` : ''}
+        ${live && configured && canKey ? `<button class="btn sm" data-act="provider-unkey" data-id="${esc(p.id)}">Remove key</button>` : ''}
+        ${live && configured && !canCall ? `<span class="tiny muted">your role cannot call models</span>` : ''}
+        ${live && !canKey ? `<span class="tiny muted">${esc(p.auth)} · Owner installs keys</span>` : `<span class="tiny muted">${esc(p.auth)}</span>`}
+      </div>
+    </div>`;
+};
+
+const ledgerRowHTML = (c) => {
+  const label = c.status === 'ok' ? 'ok' : c.status === 'blocked' ? 'refused' : 'failed';
+  const colour = c.status === 'ok' ? 'var(--success)' : c.status === 'blocked' ? 'var(--warning)' : 'var(--danger)';
+  return `
+    <div class="row" style="padding:8px 0;gap:8px;border-top:1px solid var(--border-soft)" data-call-id="${esc(String(c.id))}">
+      <span class="chip tiny" style="color:${colour}">${label}</span>
+      <div class="grow">
+        <div class="small mono ellipsis">${esc(c.model || '—')}</div>
+        <div class="tiny muted">${esc(c.providerId || '')}${c.purpose ? ` · ${esc(c.purpose)}` : ''}${c.error ? ` · ${esc(c.error)}` : ''}</div>
+      </div>
+      <div class="col" style="align-items:flex-end;gap:2px">
+        ${c.status === 'ok' ? `<span class="tiny mono">${fmtUsd(c.costUsd)} est.</span>` : `<span class="tiny muted">no cost</span>`}
+        <span class="tiny muted">${c.tokens ? `${c.tokens} tok · ` : ''}${c.latencyMs ?? 0} ms · ${fmtTime(c.ts)}</span>
+      </div>
+    </div>`;
+};
+
 views.models = {
   title: 'Model Gateway',
   render() {
     const s = getState();
-    const cats = [...new Set(s.providers.map((p) => p.category))];
+    const providers = Array.isArray(s.providers) ? s.providers : [];
+    const ledger = liveLedger();
+    const live = Boolean(ledger) && s.provenance?.providers === 'gateway';
+    const usage = ledger?.usage || null;
+    const budget = ledger?.budget || null;
+    const runtime = ledger?.runtime || null;
+    const cats = [...new Set(providers.map((p) => p.category))];
+    const configured = providers.filter((p) => p.status === 'configured');
+
+    if (!live) {
+      return `
+        <div class="page-head">
+          <h1>Model gateway</h1>
+          <div class="sub">${providers.length} providers in the shipped catalogue · no gateway</div>
+        </div>
+        <div class="banner warn">${icon('shield', 16)}<div><strong>No gateway is connected, so nothing here is callable.</strong>
+          The catalogue, the key vault and the call ledger all live on the gateway. Without one there is no
+          key store, no meter and no provider client — installing a key here would put a secret in this
+          browser for a request that cannot be made. Point the app at a gateway (Settings → Gateway) and
+          sign in.</div></div>
+        <div class="grid-2">
+          <div class="stat"><div class="k">Catalogue</div><div class="v">${providers.length}</div><div class="d">reference rows</div></div>
+          <div class="stat"><div class="k">Calls recorded</div><div class="v">—</div><div class="d">no ledger without a gateway</div></div>
+        </div>
+        ${cats.map((cat) => `
+          <div class="section-title">${esc(cat)}</div>
+          ${providers.filter((p) => p.category === cat).map((p) => providerRowHTML(p, false)).join('')}`).join('')}
+        <div class="section-title">Budgets</div>
+        <div class="card tiny muted" style="line-height:1.8">
+          Not metered here. The daily and per-call caps are enforced by the gateway *before* it sends a
+          request, so they are configured there, next to the ledger they check.
+        </div>`;
+    }
+
     return `
       <div class="page-head">
-        <h1>Model catalogue</h1>
-        <div class="sub">${s.providers.length} providers in the catalogue · not configured</div>
+        <h1>Model gateway</h1>
+        <div class="sub">${providers.length} providers · ${configured.length} configured · cost estimated from a price table</div>
       </div>
-      <div class="banner warn">${icon('shield', 16)}<div><strong>No provider client is installed in this build.</strong>
-        This is a catalogue, not a gateway: nothing here is called, no key is stored, and no token is billed.
-        Wiring one provider is roadmap session 7 — until then every model row is reference data.</div></div>
+      <div class="row wrap" style="gap:6px;margin-bottom:10px">
+        <span class="chip tiny mono">adapter · ${esc(runtime?.adapter || 'openai-compatible')}</span>
+        <span class="chip tiny">streaming · no</span>
+        <span class="chip tiny">cost · estimated</span>
+        <span class="chip tiny">key source · ${esc(runtime?.keySource || 'unknown')}</span>
+      </div>
+      <div class="banner ${configured.length ? 'info' : 'warn'}">${icon('shield', 16)}<div>
+        ${configured.length
+    ? `<strong>${configured.length} provider${configured.length === 1 ? '' : 's'} can be called.</strong> Every call is metered in the gateway ledger: tokens, an <strong>estimated</strong> cost and a latency. Prompts and replies are not stored.`
+    : `<strong>Nothing is configured yet.</strong> Until an Owner seals a provider key on the gateway, no model is called and nothing is billed — the ledger says “unconfigured” rather than pretending to be busy.`}
+      </div></div>
       <div class="grid-2">
-        <div class="stat"><div class="k">Catalogue</div><div class="v">${s.providers.length}</div><div class="d">reference rows</div></div>
-        <div class="stat"><div class="k">Calls made by this app</div><div class="v">0</div><div class="d">no client, no key, no spend</div></div>
+        <div class="stat"><div class="k">Spend today</div><div class="v">${fmtUsd(budget?.spentTodayUsd)}</div><div class="d">estimated · ${budget?.callsToday ?? 0} call${budget?.callsToday === 1 ? '' : 's'}</div></div>
+        <div class="stat"><div class="k">Budget left today</div><div class="v">${fmtUsd(budget?.remainingUsd)}</div><div class="d">of ${fmtUsd(budget?.dailyUsd)}/day</div></div>
+        <div class="stat"><div class="k">Tokens · ${usage?.windowDays ?? 14} days</div><div class="v">${Number(usage?.totals?.tokens || 0).toLocaleString()}</div><div class="d">${usage?.totals?.calls ?? 0} metered calls</div></div>
+        <div class="stat"><div class="k">Refused / failed</div><div class="v">${usage?.totals?.blocked ?? 0} · ${usage?.totals?.errors ?? 0}</div><div class="d">recorded at zero cost</div></div>
       </div>
+
       ${cats.map((cat) => `
         <div class="section-title">${esc(cat)}</div>
-        ${s.providers.filter((p) => p.category === cat).map((p) => `
-          <div class="list-card">
-            <div class="avatar sm" style="background:${p.status === 'on' ? 'color-mix(in srgb, var(--success) 22%, var(--elevated))' : 'var(--elevated)'};color:${p.status === 'on' ? 'var(--success)' : 'var(--text-3)'}">${icon('model', 15)}</div>
-            <div class="grow">
-              <div class="row" style="gap:6px"><span class="strong small">${esc(p.name)}</span>
-                <span class="pulse-dot ${p.status === 'on' ? 'live' : 'idle'}"></span></div>
-              <div class="tiny muted">${esc(p.models.join(' · '))}</div>
-            </div>
-            <div class="col" style="align-items:flex-end;gap:4px">
-              <span class="chip tiny">not configured</span>
-              <span class="tiny muted">${esc(p.auth)}</span>
-            </div>
-          </div>`).join('')}`).join('')}
+        ${providers.filter((p) => p.category === cat).map((p) => providerRowHTML(p, true)).join('')}`).join('')}
 
-      <div class="section-title">Routing policies (illustrative)</div>
-      <div class="banner info">${icon('info', 15)}<div>These rules are written down, not enforced. With no provider client there is nothing to route.</div></div>
-      ${s.policies.map((p) => `
+      <div class="section-title">Budget</div>
+      <div class="card">
+        <div class="row between wrap" style="gap:8px">
+          <div class="grow">
+            <div class="small strong">Checked before the request leaves the gateway</div>
+            <div class="tiny muted">A call that would cross either cap is refused with HTTP 402 and written to the ledger as <span class="mono">blocked</span> at zero cost.</div>
+          </div>
+          <span class="chip tiny ${budget?.enforced ? 'ok' : 'warn'}">${budget?.enforced ? 'enforced' : 'not enforced'}</span>
+        </div>
+        <div class="divider"></div>
+        <div class="grid-2">
+          <div class="field"><label for="mb-daily">Daily cap (USD)</label>
+            <input class="input" id="mb-daily" type="number" min="0" step="0.01" value="${Number(budget?.dailyUsd ?? 0)}" ${can('model:key') ? '' : 'disabled'}></div>
+          <div class="field"><label for="mb-call">Per-call cap (USD)</label>
+            <input class="input" id="mb-call" type="number" min="0" step="0.01" value="${Number(budget?.perCallUsd ?? 0)}" ${can('model:key') ? '' : 'disabled'}></div>
+        </div>
+        <div class="tiny muted" id="mb-status" role="status" aria-live="polite">${can('model:key') ? 'Saving writes the cap on the gateway.' : 'Only an Owner can change the budget.'}</div>
+        ${can('model:key') ? `<div class="row" style="margin-top:10px"><button class="btn primary" data-act="budget-save">Save budget</button></div>` : ''}
+      </div>
+
+      <div class="section-title">Ledger · ${(ledger.calls || []).length} recent attempt${(ledger.calls || []).length === 1 ? '' : 's'}</div>
+      <div class="card">
+        ${(ledger.calls || []).length
+    ? (ledger.calls || []).map(ledgerRowHTML).join('')
+    : `<div class="tiny muted" style="line-height:1.8" data-ledger-empty>No model call has been recorded. A call appears here the moment one is made — including the ones that were refused.</div>`}
+      </div>
+      <div class="tiny muted" style="line-height:1.8;margin-top:10px">${esc(runtime?.note || '')}</div>
+
+      <div class="section-title">Routing policies (not enforced)</div>
+      <div class="banner info">${icon('info', 15)}<div>The gateway calls the provider you choose. It does not route by policy, so these rules are notes, not behaviour.</div></div>
+      ${(s.policies || []).map((p) => `
         <div class="card">
           <div class="row between"><strong class="small mono">${esc(p.name)}</strong><span class="chip tiny">not enforced</span></div>
           <div class="tiny muted mono" style="margin-top:6px;line-height:1.6">${esc(p.rules)}</div>
-        </div>`).join('')}
-
-      <div class="section-title">Budgets</div>
-      <div class="card tiny muted" style="line-height:1.8">
-        Not metered: this app makes no model calls, so there is no spend to cap. A daily cap that is
-        checked *before* a call is roadmap session 8 — it needs the client from session 7 first.
-      </div>`;
+        </div>`).join('')}`;
   },
 };
+
+const providerById = (id) => (getState().providers || []).find((p) => p.id === id) || null;
+
+on('provider-key', (el, ds) => {
+  const p = providerById(ds.id);
+  if (!p) return;
+  if (!can('model:key')) { toast('Only an Owner can install a provider key', 'bad'); return; }
+  openSheet({
+    title: `${esc(p.name)} · ${p.status === 'configured' ? 'replace key' : 'install key'}`,
+    body: `
+      <div class="banner info">${icon('shield', 15)}<div>The key is sealed on the gateway with AES-256-GCM and is never
+        returned to this browser. What comes back is a fingerprint and the last four characters, so you can tell
+        which key is installed.</div></div>
+      <div class="field"><label for="pk-key">API key</label>
+        <input class="input" id="pk-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…"></div>
+      <div class="field"><label for="pk-url">Base URL (OpenAI-compatible)</label>
+        <input class="input" id="pk-url" value="${esc(p.endpoint || '')}" placeholder="https://api.openai.com/v1" spellcheck="false"></div>
+      <div class="field"><label for="pk-model">Default model id</label>
+        <input class="input" id="pk-model" value="${esc(p.defaultModel || '')}" placeholder="e.g. gpt-4o-mini" spellcheck="false"></div>
+      <div class="tiny muted">https only, except for a loopback endpoint (a local model server). URLs with embedded
+        credentials or a query string are refused, and redirects are never followed — the key cannot be forwarded.</div>
+      <div class="tiny muted" id="pk-status" role="status" aria-live="polite" style="margin-top:8px"></div>`,
+    foot: `<button class="btn grow primary" data-act="provider-key-save" data-id="${esc(p.id)}">Seal the key</button>`,
+  });
+});
+
+on('provider-key-save', async (el, ds) => {
+  const sheet = document.querySelector('.sheet.open');
+  if (!sheet) return;
+  const apiKey = sheet.querySelector('#pk-key')?.value.trim() || '';
+  const baseUrl = sheet.querySelector('#pk-url')?.value.trim() || '';
+  const defaultModel = sheet.querySelector('#pk-model')?.value.trim() || '';
+  const status = sheet.querySelector('#pk-status');
+  if (!apiKey) { toast('A key is required', 'bad'); return; }
+  if (!baseUrl) { toast('A base URL is required', 'bad'); return; }
+  el.disabled = true;
+  if (status) status.textContent = 'Sealing…';
+  try {
+    const provider = await saveProviderKey(ds.id, { apiKey, baseUrl, defaultModel });
+    closeAllSheets();
+    toast(`Key sealed · ${provider.hint || 'no hint'} — it cannot be read back`, 'ok');
+    import('./main.js').then((m) => m.rerender());
+  } catch (error) {
+    el.disabled = false;
+    if (status) status.textContent = error?.message || 'The key was not saved';
+    toast(error?.message || 'The key was not saved', 'bad');
+  }
+});
+
+on('provider-unkey', (el, ds) => {
+  const p = providerById(ds.id);
+  if (!p) return;
+  if (!can('model:key')) { toast('Only an Owner can remove a provider key', 'bad'); return; }
+  confirmModal({
+    title: `Remove the key for ${esc(p.name)}?`,
+    body: 'The sealed value is deleted from the gateway. Calls to this provider are refused until a key is installed again. The ledger keeps the calls that already happened.',
+    confirmText: 'Remove key',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        await clearProviderKey(ds.id);
+        toast('Key removed — this provider is unconfigured', 'ok');
+        import('./main.js').then((m) => m.rerender());
+      } catch (error) {
+        toast(error?.message || 'The key was not removed', 'bad');
+      }
+    },
+  });
+});
+
+on('provider-call', (el, ds) => {
+  const p = providerById(ds.id);
+  if (!p) return;
+  if (!can('model:call')) { toast('Your role cannot spend on model calls', 'bad'); return; }
+  openSheet({
+    title: `${esc(p.name)} · one real call`,
+    body: `
+      <div class="banner info">${icon('info', 15)}<div>This sends a real request from the gateway to the provider
+        you configured. It costs real money — the ledger will record an <strong>estimated</strong> cost from a price table,
+        not an invoice.</div></div>
+      <div class="field"><label for="pc-prompt">Prompt</label>
+        <textarea class="input" id="pc-prompt" style="min-height:100px" placeholder="Say hello in one sentence."></textarea></div>
+      <div class="field"><label for="pc-model">Model id</label>
+        <input class="input" id="pc-model" value="${esc(p.defaultModel || '')}" placeholder="set a default in the key sheet, or type one" spellcheck="false"></div>
+      <div class="field"><label for="pc-max">Max tokens</label>
+        <input class="input" id="pc-max" type="number" min="1" max="4096" value="128"></div>
+      <div class="tiny muted" id="pc-status" role="status" aria-live="polite"></div>
+      <div id="pc-result"></div>`,
+    foot: `<button class="btn grow primary" data-act="provider-call-go" data-id="${esc(p.id)}">Send a real request</button>`,
+  });
+});
+
+on('provider-call-go', async (el, ds) => {
+  const sheet = document.querySelector('.sheet.open');
+  if (!sheet) return;
+  const prompt = sheet.querySelector('#pc-prompt')?.value.trim() || '';
+  const model = sheet.querySelector('#pc-model')?.value.trim() || '';
+  const maxTokens = Number(sheet.querySelector('#pc-max')?.value || 128);
+  const status = sheet.querySelector('#pc-status');
+  const result = sheet.querySelector('#pc-result');
+  if (!prompt) { toast('A prompt is required', 'bad'); return; }
+  el.disabled = true;
+  if (status) status.textContent = 'Waiting for the provider…';
+  try {
+    const out = await callProviderModel(ds.id, {
+      messages: [{ role: 'user', content: prompt }],
+      model: model || undefined,
+      maxTokens: Number.isFinite(maxTokens) ? maxTokens : undefined,
+      purpose: 'models-screen',
+    });
+    if (status) status.textContent = '';
+    if (result) {
+      result.innerHTML = `
+        <div class="section-title">Reply</div>
+        <div class="card small" style="white-space:pre-wrap" data-call-reply>${esc(out.text)}</div>
+        <div class="kv"><span class="k">Model</span><span class="mono">${esc(out.model)}</span></div>
+        <div class="kv"><span class="k">Tokens</span><span class="mono">${out.usage.promptTokens} in · ${out.usage.completionTokens} out</span></div>
+        <div class="kv"><span class="k">Cost (estimated)</span><span class="mono">${fmtUsd(out.costUsd)}</span></div>
+        <div class="kv"><span class="k">Latency</span><span class="mono">${out.latencyMs} ms</span></div>
+        <div class="tiny muted" style="margin-top:8px">Call #${esc(String(out.callId))} is in the ledger. The prompt and the reply were not stored.</div>`;
+    }
+    toast(`Call metered · ${fmtUsd(out.costUsd)} estimated`, 'ok');
+    el.disabled = false;
+    el.textContent = 'Send another';
+    import('./main.js').then((m) => m.rerender());
+  } catch (error) {
+    el.disabled = false;
+    const message = error?.message || 'The call failed';
+    if (status) status.textContent = message;
+    if (result) {
+      result.innerHTML = `<div class="banner warn">${icon('shield', 15)}<div><strong>Nothing was billed by us.</strong>
+        ${esc(message)} The attempt is in the ledger${error?.status === 402 ? ' as a refused call' : ''}.</div></div>`;
+    }
+  }
+});
+
+on('budget-save', async () => {
+  const daily = Number(document.getElementById('mb-daily')?.value);
+  const perCall = Number(document.getElementById('mb-call')?.value);
+  const status = document.getElementById('mb-status');
+  if (!Number.isFinite(daily) || !Number.isFinite(perCall) || daily < 0 || perCall < 0) {
+    if (status) status.textContent = 'A cap must be zero or more.';
+    return;
+  }
+  try {
+    const budget = await setModelBudget({ dailyUsd: daily, perCallUsd: perCall });
+    if (status) status.textContent = `Saved: ${fmtUsd(budget.dailyUsd)}/day, ${fmtUsd(budget.perCallUsd)}/call.`;
+    toast('Budget saved on the gateway', 'ok');
+  } catch (error) {
+    if (status) status.textContent = error?.message || 'The budget was not saved';
+    toast(error?.message || 'The budget was not saved', 'bad');
+  }
+});
 
 /* ================= PLUGINS (MCP) =================
  * There is no MCP client in this repo: no JSON-RPC transport, no server process, no tool invocation and
@@ -784,26 +1066,36 @@ views.analytics = {
   title: 'Analytics',
   render() {
     const s = getState();
-    const spend = s.agents.reduce((a, x) => a + x.costToday, 0);
+    const ledger = liveLedger();
+    const usage = ledger?.usage || null;
+    const doneCount = s.tasks.filter((t) => t.column === 'done').length;
+    // Money is only ever a ledger number. With no gateway there is no ledger, so the tile says so
+    // rather than summing a `costToday` fixture and printing a percentage it cannot compute.
+    const spendToday = usage?.today?.usd;
+    const maxDay = Math.max(1e-9, ...(usage?.days || []).map((d) => Number(d.usd) || 0));
+    const maxTok = Math.max(1, ...(usage?.days || []).map((d) => Number(d.tokens) || 0));
     return `
       <div class="page-head row between">
-        <div><h1>Analytics</h1><div class="sub">Live · last 24h</div></div>
+        <div><h1>Analytics</h1><div class="sub">${ledger ? `Gateway ledger · last ${usage?.windowDays ?? 14} days` : 'Demo data · nothing measured'}</div></div>
         <button class="btn sm" data-act="export-report">${icon('download', 14)} Export</button>
       </div>
       <div class="grid-2">
-        <div class="stat"><div class="k">Spend today</div><div class="v">${fmtMoney(spend)}</div><div class="d">▲ 8% vs yesterday</div></div>
-        <div class="stat"><div class="k">Tasks done</div><div class="v">${s.tasks.filter((t) => t.column === 'done').length + 12}</div><div class="d">87% success</div></div>
+        <div class="stat"><div class="k">Spend today</div><div class="v">${ledger ? fmtUsd(spendToday) : '—'}</div><div class="d">${ledger ? `estimated · ${usage?.today?.calls ?? 0} metered call${usage?.today?.calls === 1 ? '' : 's'}` : 'no ledger without a gateway'}</div></div>
+        <div class="stat"><div class="k">Tasks done</div><div class="v">${doneCount}</div><div class="d">rows in the done column</div></div>
         <div class="stat"><div class="k">MCP calls</div><div class="v">—</div><div class="d">not measured · no client</div></div>
-        <div class="stat"><div class="k">Approvals</div><div class="v">${pendingApprovals().length}</div><div class="d">median resolve 4m</div></div>
+        <div class="stat"><div class="k">Approvals</div><div class="v">${pendingApprovals().length}</div><div class="d">pending now</div></div>
       </div>
 
-      <div class="section-title">Throughput & spend (24h)</div>
+      <div class="section-title">Model spend & tokens (${usage?.windowDays ?? 14} days)</div>
       <div class="card">
-        ${sparkline(s.usage.map((u) => u.cost))}
-        <div class="bars" style="margin-top:10px">
-          ${s.usage.slice(-12).map((u) => `<div class="b" style="height:${Math.round((u.tokens / 38000) * 100)}%"></div>`).join('')}
-        </div>
-        <div class="legend" style="margin-top:8px"><span><span class="sw" style="background:var(--brand)"></span>cost $/h</span><span><span class="sw" style="background:var(--brand-2)"></span>tokens (12×2h buckets)</span></div>
+        ${ledger
+    ? ((usage?.days || []).length
+      ? `<div class="bars" data-spend-bars>${(usage.days || []).map((d) => `<div class="b" title="${esc(d.day)} · ${fmtUsd(d.usd)} est." style="height:${Math.max(3, Math.round((Number(d.usd) / maxDay) * 100))}%"></div>`).join('')}</div>
+             <div class="bars" style="margin-top:8px;height:36px" data-token-bars>${(usage.days || []).map((d) => `<div class="b" style="height:${Math.max(3, Math.round((Number(d.tokens) / maxTok) * 100))}%;background:var(--brand-2)"></div>`).join('')}</div>
+             <div class="legend" style="margin-top:8px"><span><span class="sw" style="background:var(--brand)"></span>estimated cost per day</span><span><span class="sw" style="background:var(--brand-2)"></span>tokens per day</span></div>`
+      : `<div class="tiny muted" data-ledger-empty style="line-height:1.8">The ledger is empty: no model call has been made. A day appears here the moment a call is metered.</div>`)
+    : `<div class="tiny muted" style="line-height:1.8">No gateway, no ledger — so there is no spend series to draw. This panel used to chart a seeded hourly curve, which no
+             number on this screen could have come from.</div>`}
       </div>
 
       <div class="section-title">Agent leaderboard</div>
@@ -833,9 +1125,9 @@ views.analytics = {
 
       <div class="section-title">Self-improvement impact</div>
       <div class="card">
-        <div class="kv"><span class="k">Skills synthesized</span><span class="strong">2 pending · 1 activated</span></div>
-        <div class="kv"><span class="k">Prompt refinements accepted</span><span class="strong">+6.2% eval uplift</span></div>
-        <div class="kv"><span class="k">Tool-usage optimizer</span><span class="strong">−18% avg cost/task</span></div>
+        <div class="tiny muted" style="line-height:1.8">Not measured. This panel used to print “+6.2% eval uplift” and
+          “−18% avg cost/task” — numbers nothing in the product computed. Self-improvement runs as recorded
+          experiments on the Evolution screen; until one has a measured outcome, the impact is unknown and says so.</div>
       </div>
 
       <div class="section-title">MCP activity</div>
@@ -853,7 +1145,7 @@ on('export-report', () => {
   const st = getState();
   const content = [
     'metric,value',
-    `spend_today,${(st.agents.reduce((a, x) => a + x.costToday, 0)).toFixed(2)}`,
+    `spend_today,${(() => { const u = liveLedger()?.usage?.today?.usd; return Number.isFinite(Number(u)) ? Number(u).toFixed(4) : 'not_measured'; })()}`,
     `tasks_done,${st.tasks.filter((t) => t.column === 'done').length}`,
     `approvals_pending,${pendingApprovals().length}`,
     `swarm_records,${st.swarms.length}`,

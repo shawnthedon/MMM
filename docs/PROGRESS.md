@@ -537,3 +537,54 @@ honesty rule instead of a comment in the UI.
 - Honest limit: **nothing executes a swarm.** No scheduler, no worker, no per-node budget enforcement —
   `budget.cap` is a number in a row, not a limit anything applies. That is the next step, and the 409s
   are already written to guard it.
+
+## 🔐 2026-11-01 — The Models screen gets a ledger, and the ledger gets a gateway (M29)
+
+Session 7 + 8 + 11 of the roadmap. The Models screen was the app's most careful lie: a catalogue that
+said “not configured” and therefore could never be wrong, above a `providers.spend_mtd` column nothing
+ever wrote. It is now a real gateway with one adapter, a sealed key store and a meter.
+
+- **Key material has one owner** (`apps/gateway/src/secrets.js`): `MMM_SECRET` → `<DATA_DIR>/.mmm-key` →
+  legacy `.comms-key`, HKDF-SHA256 with a **per-purpose** domain separator (`provider-key-v1`,
+  `comms-config-v1`), AES-256-GCM in `v1.<iv>.<tag>.<body>`. Comms was moved onto it — same derivation,
+  same salt, so values sealed before this change still open — and now imports nothing from `node:crypto`
+  itself.
+- **Schema** (`010_model_calls.sql`): `providers` gains `key_fingerprint`, `key_hint`, `default_model`,
+  `configured_at/by`, `updated_at`; **`spend_mtd` is dropped**, because a column nothing writes is a
+  number waiting to be believed. New `model_calls` ledger: one row per *attempt*, `status ∈ ok | blocked |
+  error`, tokens, `cost_usd`, `cost_estimated`, latency, `request_id`, `reply_chars` — length only, never
+  the prompt or the reply. The migration also seeds the 26-row catalogue as *names to configure*
+  (`status='off'`, no money), so a fresh gateway has something to configure.
+- **One funnel** (`apps/gateway/src/models.js`): provider → key present? → `unseal` (a tampered blob is a
+  `409` asking for re-entry, not a crash) → model id shape → non-empty messages → **budget checked against
+  today's SUM** → `fetch` with `redirect:'manual'` (a redirect would send the key somewhere else), an
+  `AbortController` timeout and a 256 KB response cap → parse `choices[0].message.content` and
+  `usage.*` → estimate the cost → write the row → audit **without any text**. A refusal is written as
+  `blocked` with zero cost, so spend stays a number that happened.
+- **Routes**: `GET /providers`, `GET /providers/:id`, `PUT|DELETE /providers/:id/key`,
+  `POST /providers/:id/call`, `GET /usage`, `GET /model-calls`, `PUT /budget`. `model:read` (every role),
+  `model:call` (Operator+), `model:key` (**Owner only**), WS topic `models`. A read returns
+  `status: configured|unconfigured`, a 16-hex fingerprint and a `••••abcd` hint — never the key.
+- **Screen** (`src/views2.js`, `src/datastore.js`, `src/api.js`): `providers` joins `GATEWAY_SLICES`;
+  `getModelsLedger()` carries the gateway's `usage`, `budget`, `runtime` and recent calls. The screen shows
+  spend today (**estimated**), budget left, tokens, refused/failed counts, per-provider spend and calls,
+  an install/replace/remove-key sheet, a **Test call** sheet that renders the reply with tokens, estimated
+  cost and latency, an editable budget, and the ledger itself. Without a gateway it says nothing is
+  callable and offers no control at all. Analytics now reads the same ledger for its money and token
+  tiles, and the invented `▲ 8% vs yesterday`, `+ 12`, `median resolve 4m`, `+6.2% eval uplift` and
+  `−18% avg cost/task` are gone.
+- Evidence: `npm run test:models` — **22 passed** against a real gateway plus a real local
+  OpenAI-compatible server (the key absent from every read, the audit chain, the event feed **and the
+  SQLite/WAL bytes**; prompt and reply text absent from the ledger and the files; budget refusal with the
+  provider contacted zero times; redirect not followed; timeout; oversized/malformed/empty bodies refused;
+  tampered key → `409` → recovery; Observer read-only; a sealed key surviving a restart; key removal
+  returning the provider to `unconfigured`). `npm run test:models:ui` — **11 passed**. `npm run
+  test:models:browser` — **9 passed** in real Chromium against a real gateway **and a real loopback
+  OpenAI-compatible server** (seal a key through the sheet → the key never appears in the DOM → a real
+  request reaches the provider with `Authorization: Bearer …` → the ledger matches `GET /usage` → a zero
+  budget refuses the next call with the provider contacted zero times → reload keeps the key → removal
+  returns the provider to `unconfigured` → no sideways scroll at 320 px). `npm test` (39 suites) and
+  `npm run build` green.
+- Honest limit: **no streaming, no retries, no policy routing, no invoices.** Cost is an estimate from a
+  price table and the UI says *estimated*; the `llm` capability stays unflipped because nothing else in
+  the app calls the funnel yet — Chat still answers nothing, and still says so.
