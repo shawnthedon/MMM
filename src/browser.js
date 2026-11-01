@@ -112,11 +112,16 @@ function runnable() {
 
 /* ---------- painting ---------- */
 
-function paint(root = document) {
+function paint(root = document, { updateCompose = true } = {}) {
   const banner = root.getElementById?.('bx-status');
   if (banner) banner.innerHTML = statusHTML();
-  const compose = root.getElementById?.('bx-compose');
-  if (compose) compose.innerHTML = composeHTML();
+  // The compose form contains live textareas. Replacing its innerHTML during the
+  // five-second task poll destroys the focused node and ejects the mobile keyboard
+  // cursor. Only rebuild it when explicitly requested (for example, after mount).
+  if (updateCompose) {
+    const compose = root.getElementById?.('bx-compose');
+    if (compose) compose.innerHTML = composeHTML();
+  }
   const list = root.getElementById?.('bx-list');
   if (list) list.innerHTML = listHTML();
   const detail = root.getElementById?.('bx-detail');
@@ -306,7 +311,9 @@ function startPolling() {
   timer = setInterval(async () => {
     if (!document.getElementById('bx-list')) { stopPolling(); return; }
     await refresh({ quiet: true });
-    paint();
+    // Polling updates status/tasks only; leave the compose form DOM untouched
+    // so typing and selection remain stable on mobile.
+    paint(document, { updateCompose: false });
   }, POLL_MS);
 }
 function stopPolling() {
