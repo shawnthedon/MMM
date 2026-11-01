@@ -15,6 +15,7 @@ import { STATUS_LABEL } from './capabilities.js';
 import { holoStageIn, copilotModeIn, copilotOut, fabPulse, motionEnabled, toastIn } from '../motion.js';
 import { sfx } from '../sound.js';
 import * as convo from './conversation.js';
+import * as drafts from './drafts.js';
 
 const session = {
   open: false,
@@ -659,6 +660,72 @@ function activityCardHTML(card) {
   </div>`;
 }
 
+/* ---------- agent drafts ----------
+ * A draft card is not a chat bubble with buttons: it is a definition with a state. It shows the state in
+ * the canonical words, the findings that produced it, what activation would and would not do, and only
+ * the actions the state and the reader's permissions allow.
+ */
+const DRAFT_TONE = {
+  draft: 'info', 'needs-information': 'warn', 'needs-setup': 'warn', invalid: 'bad', blocked: 'bad',
+  'ready-for-review': 'ok', 'awaiting-approval': 'info', active: 'ok', archived: 'info',
+};
+
+function draftCardHTML(card) {
+  const d = card.draft || {};
+  const spec = d.spec || {};
+  const findings = Array.isArray(d.findings) ? d.findings : [];
+  const sevTone = { error: 'bad', setup: 'warn', warning: 'warn', info: 'info', blocked: 'bad' };
+  const actions = typeof card.actions === 'function' ? card.actions() : card.actions || [];
+  return `<div class="cp-card cp-draft" data-draft-id="${esc(d.id || '')}" data-draft-state="${esc(d.state || '')}">
+    <div class="cp-card-head">
+      <span class="cp-card-title">${esc(spec.name || 'Untitled agent')}</span>
+      <span class="cp-badge ${DRAFT_TONE[d.state] || 'info'}" data-draft-label>${esc(d.stateLabel || d.state || 'draft')}</span>
+    </div>
+    <div class="cp-card-body">
+      ${spec.role ? `<div class="small">${esc(spec.role)}</div>` : ''}
+      ${spec.goal ? `<div class="tiny muted">${esc(spec.goal)}</div>` : ''}
+      <div class="cp-draft-meta tiny muted">
+        ${spec.framework ? `<span>${esc(spec.framework)}</span>` : ''}
+        ${spec.model ? `<span>${esc(spec.model)}</span>` : ''}
+        ${spec.autonomy ? `<span>L${esc(String(spec.autonomy))} autonomy</span>` : ''}
+        ${d.agentId ? `<span>agent ${esc(d.agentId)}</span>` : ''}
+      </div>
+      ${
+        findings.length
+          ? `<div class="cp-section">What the validator says</div>${findings
+              .slice(0, 6)
+              .map((f) => `<div class="cp-draft-finding"><span class="cp-badge ${sevTone[f.severity] || 'info'}">${esc(f.severity)}</span>
+                <div class="grow"><div class="small">${esc(f.title)}</div><div class="tiny muted">${esc(f.detail || '')}</div></div></div>`)
+              .join('')}`
+          : ''
+      }
+      <div class="cp-draft-note tiny muted">A draft is not an agent: activating stores an idle definition through an
+        approval gate, and no runtime in this build can execute it.</div>
+      ${card.error ? `<div class="cp-notice bad" role="alert">${icon('shield', 15)}<div>${esc(card.error)}</div></div>` : ''}
+      ${card.note ? `<div class="cp-notice info" role="status">${icon('info', 15)}<div>${esc(card.note)}</div></div>` : ''}
+      ${
+        actions.length
+          ? `<div class="cp-draft-actions">${actions
+              .map((a) => `<button class="cp-chip ${a.tone === 'primary' ? 'ok' : ''}" data-cp="${esc(a.act)}" data-draft="${esc(d.id || '')}">${esc(a.label)}</button>`)
+              .join('')}</div>`
+          : `<div class="tiny muted">No action is available to your role in this state.</div>`
+      }
+    </div>
+  </div>`;
+}
+
+/**
+ * The sentence that asks for a draft. Deliberately narrow: "make the tests pass" must not silently turn
+ * into a definition, and a question ("how do agents work?") must stay a question.
+ */
+function wantsDraft(text) {
+  const lc = String(text || '').toLowerCase();
+  // "how do agents work?" is a question; "create an agent that triages" is a request. The guard comes
+  // first because the request pattern is broad by design.
+  if (/\b(how do|what is|what are|why|explain|tell me about|should i|can i|does)\b/.test(lc)) return false;
+  return /\b(create|design|make|build|draft|add|set up|new)\b[^.!?]{0,28}\b(agent|assistant|bot|worker|copilot)\b/.test(lc);
+}
+
 function cardHTML(card, msg) {
   if (!card) return '';
   switch (card.type) {
@@ -669,6 +736,7 @@ function cardHTML(card, msg) {
     case 'diagnostic': return diagnosticCardHTML(card);
     case 'capability': return capabilityCardHTML(card);
     case 'activity': return activityCardHTML(card);
+    case 'draft': return draftCardHTML(card);
     default: return `<div class="cp-card"><div class="cp-card-body">${md(card.text || '')}</div></div>`;
   }
 }
@@ -908,6 +976,10 @@ async function sendLive(raw) {
   pushMessage({ id: localId, role: 'user', text: raw, mode: session.mode, live: true });
   setDraft('');
   paint();
+  if (wantsDraft(raw)) {
+    await sendDraftTurn(raw, localId);
+    return;
+  }
   const out = await convo.sendTurn({ text: raw, route: session.route });
   session.pending = false;
   if (out.ok) {
@@ -959,6 +1031,130 @@ async function respond(raw) {
     return;
   }
   finish(res.card || null, res.text);
+}
+
+/**
+ * A turn that asks for an agent. The model writes JSON, the gateway validates it, and the panel shows the
+ * resulting draft as a card — with its real state, its findings, and only the actions that state allows.
+ */
+async function sendDraftTurn(raw, localId) {
+  const out = await drafts.createFromText(raw, { route: session.route });
+  session.pending = false;
+  if (out.userMessage) {
+    const idx = session.history.findIndex((m) => m.id === localId);
+    if (idx >= 0) session.history[idx] = { ...convo.toPanelMessage(out.userMessage), mode: session.mode };
+  }
+  if (out.draft) {
+    pushMessage({
+      role: 'copilot', text: out.reply?.text || '', mode: session.mode, live: true,
+      usage: out.reply?.payload || { draftId: out.draft.id },
+      card: { type: 'draft', draft: out.draft, actions: () => draftActions(out.draft) },
+    });
+  } else if (out.reply?.text) {
+    pushMessage({ role: 'copilot', text: out.reply.text, mode: session.mode, live: true });
+  } else {
+    session.lastError = out.error || 'the draft failed';
+    pushMessage({
+      role: 'copilot',
+      text: out.reason === 'no-model' ? out.error : `That draft did not go through: ${out.error}`,
+      mode: session.mode, live: true, failed: true,
+    });
+    if (out.reason === 'no-model') await convo.load({ silent: true });
+  }
+  paint();
+}
+
+/** The actions the panel offers for a draft. Derived from the row, never from optimistic state. */
+function draftActions(draft) {
+  if (!draft) return [];
+  const list = [];
+  const allowed = drafts.actionsFor(draft).map((a) => a.act);
+  if (draft.canSubmit && allowed.includes('draft-submit')) list.push({ act: 'draft-submit', label: 'Submit for approval', tone: 'primary' });
+  if (draft.state === 'awaiting-approval' && allowed.includes('draft-activate')) {
+    list.push({ act: 'draft-activate', label: 'Activate', tone: 'primary' });
+    list.push({ act: 'draft-open-approvals', label: 'Review the gate', tone: '' });
+  }
+  if (allowed.includes('draft-archive')) list.push({ act: 'draft-archive', label: 'Archive', tone: '' });
+  if (allowed.includes('draft-open-designer')) list.push({ act: 'draft-open-designer', label: 'Open in the builder', tone: '' });
+  if (draft.agentId) list.push({ act: 'draft-open-agent', label: 'Open the agent', tone: '' });
+  return list;
+}
+
+/**
+ * A draft card is not a chat bubble, so it does not come back with the transcript. After a reload the
+ * messages still carry `draftId` in their payload, so the cards are re-attached from the drafts the
+ * gateway still holds — which is the difference between "the draft exists" and "the draft was a picture".
+ */
+async function attachDraftCards() {
+  if (!drafts.available()) return;
+  const out = await drafts.load();
+  if (!out.ok) return;
+  const byId = new Map((out.drafts || []).map((d) => [d.id, d]));
+  let changed = false;
+  for (const msg of session.history) {
+    const id = msg.usage?.draftId;
+    if (!id || msg.card?.type === 'draft') continue;
+    const draft = byId.get(id);
+    if (!draft) continue;
+    msg.card = { type: 'draft', draft, actions: () => draftActions(draft) };
+    changed = true;
+  }
+  if (changed) paint();
+}
+
+function draftMessage(id) {
+  return session.history.find((m) => m.card?.type === 'draft' && m.card.draft?.id === id) || null;
+}
+
+function replaceDraftCard(id, draft, extra = {}) {
+  const msg = draftMessage(id);
+  if (!msg || !draft) return;
+  msg.card = { ...msg.card, draft, actions: () => draftActions(draft), ...extra };
+  paint();
+}
+
+async function runDraftAction(act, id) {
+  if (!id) return;
+  const current = draftMessage(id)?.card.draft || null;
+  if (act === 'draft-submit') {
+    const out = await drafts.submit(id);
+    if (!out.ok) return replaceDraftCard(id, out.draft || current, { error: out.error });
+    toast('Submitted — a Reviewer must allow it before it can become an agent', 'ok');
+    return replaceDraftCard(id, out.draft, { error: '', note: 'Waiting for a decision on the Approvals screen. You cannot approve your own draft.' });
+  }
+  if (act === 'draft-activate') {
+    const out = await drafts.activate(id);
+    if (!out.ok) return replaceDraftCard(id, out.draft || current, { error: out.error });
+    toast(`Agent ${out.agent?.name || ''} created as an idle definition — nothing was started`, 'ok');
+    return replaceDraftCard(id, out.draft, { error: '', note: 'Activated: the definition exists as an idle agent. No runtime in this build can execute it.' });
+  }
+  if (act === 'draft-archive') {
+    const out = await drafts.archive(id);
+    if (!out.ok) return replaceDraftCard(id, current, { error: out.error });
+    return replaceDraftCard(id, out.draft, { error: '', note: 'Archived — the row is kept and still readable.' });
+  }
+  if (act === 'draft-open-designer') {
+    if (!current) return;
+    try {
+      const designer = await import('../designer.js');
+      designer.openDesigner({ seed: { ...drafts.designerSeed(current), draftId: current.id } });
+      closeCopilot();
+      toast('Opened in the builder with this draft’s fields. Saving there updates the draft.', 'info');
+    } catch (error) {
+      toast(`The builder could not be opened: ${error?.message || error}`, 'bad');
+    }
+    return;
+  }
+  if (act === 'draft-open-approvals') {
+    closeCopilot();
+    toast('The gate is on the Approvals screen — a Reviewer decides it there.', 'info');
+    try { shellActions.navigate?.('agents'); } catch { /* the shell owns routing */ }
+    return;
+  }
+  if (act === 'draft-open-agent' && current?.agentId) {
+    closeCopilot();
+    try { shellActions.navigate?.(`agents/${current.agentId}`); } catch { /* the shell owns routing */ }
+  }
 }
 
 function stopPending() {
@@ -1117,6 +1313,8 @@ export function openCopilot({ mode, message } = {}) {
             if (local?.card && local.text === msg.text) msg.card = local.card;
             return msg;
           });
+          paint();
+          attachDraftCards().catch(() => {});
         }
         paint();
       })
@@ -1268,6 +1466,14 @@ function onClick(e) {
       break;
     case 'new-conversation':
       newConversation();
+      break;
+    case 'draft-submit':
+    case 'draft-activate':
+    case 'draft-archive':
+    case 'draft-open-designer':
+    case 'draft-open-approvals':
+    case 'draft-open-agent':
+      runDraftAction(act, t.dataset.draft);
       break;
     case 'open-models': {
       closeCopilot();

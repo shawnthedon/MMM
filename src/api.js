@@ -246,6 +246,16 @@ export const api = {
   copilotClear: () => request('/api/v1/copilot', { method: 'DELETE' }),
   setCopilotModel: (body) => request('/api/v1/copilot/model', { method: 'PUT', body }),
 
+  // Agent drafts: a definition that needs a person before it becomes an agent.
+  draftList: () => request('/api/v1/copilot/drafts'),
+  draftGet: (id) => request(`/api/v1/copilot/drafts/${encodeURIComponent(id)}`),
+  draftFromText: (body) => request('/api/v1/copilot/drafts', { method: 'POST', body, timeoutMs: 90000 }),
+  draftFromSpec: (body) => request('/api/v1/copilot/drafts', { method: 'POST', body }),
+  draftUpdate: (id, body) => request(`/api/v1/copilot/drafts/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
+  draftSubmit: (id) => request(`/api/v1/copilot/drafts/${encodeURIComponent(id)}/submit`, { method: 'POST', body: {} }),
+  draftActivate: (id) => request(`/api/v1/copilot/drafts/${encodeURIComponent(id)}/activate`, { method: 'POST', body: {} }),
+  draftArchive: (id) => request(`/api/v1/copilot/drafts/${encodeURIComponent(id)}/archive`, { method: 'POST', body: {} }),
+
   providers: () => request('/api/v1/providers'),
   provider: (id) => request(`/api/v1/providers/${encodeURIComponent(id)}`),
   saveProviderKey: (id, body) => request(`/api/v1/providers/${encodeURIComponent(id)}/key`, { method: 'PUT', body }),

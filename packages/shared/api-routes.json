@@ -61,7 +61,14 @@
       "SEND": "POST /api/v1/copilot/messages  body:{text, clientId?, route?}",
       "CLEAR": "DELETE /api/v1/copilot",
       "RUNTIME": "GET /api/v1/copilot/runtime",
-      "MODEL": "PUT /api/v1/copilot/model  body:{providerId, model?}"
+      "MODEL": "PUT /api/v1/copilot/model  body:{providerId, model?}",
+      "DRAFTS": "GET /api/v1/copilot/drafts",
+      "DRAFT_ONE": "GET /api/v1/copilot/drafts/:id",
+      "DRAFT_CREATE": "POST /api/v1/copilot/drafts  body:{text} | {spec}",
+      "DRAFT_UPDATE": "PATCH /api/v1/copilot/drafts/:id  body:{spec}",
+      "DRAFT_SUBMIT": "POST /api/v1/copilot/drafts/:id/submit",
+      "DRAFT_ACTIVATE": "POST /api/v1/copilot/drafts/:id/activate",
+      "DRAFT_ARCHIVE": "POST /api/v1/copilot/drafts/:id/archive"
     }
   },
   "planned": [

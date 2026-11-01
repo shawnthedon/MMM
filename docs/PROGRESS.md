@@ -642,3 +642,60 @@ name.
 - Honest limit: **no streaming and no tool calls.** Multi-turn context only — the Copilot cannot read your
   board or create an agent yet. Drafts, swarm plans, Agent Browser JSON and open-source voice are units 2–5
   and are not built; the panel does not imply otherwise.
+
+## 🧩 2026-11-01 — The Copilot drafts an agent, and a different human decides (M31)
+
+Unit 2 of the Copilot upgrade. A conversation can now produce an **agent draft**: a definition with an
+identity, a state and a history that a Reviewer can gate — never an agent. The rule is enforced three
+times in code, not once in a prompt: the route needs `agent:write`, the activation check needs an
+`allow`ed approvals row that the activating principal did not decide, and the canonical validator is
+re-run at activation so a draft edited after approval cannot slip through on a stale verdict.
+
+- **One schema** (`packages/shared/agentDraft.js`, plain JS, no imports, loaded by both sides):
+  `normaliseSpec` (coerces, **drops unknown keys and reports them**), `validateSpec` (findings +
+  derived state), `toAgentRecord`, `toDesignerSeed`/`fromDesignerDraft`, `parseDraftReply`,
+  `draftInstruction`. Two validators would let the browser call a draft "ready" while the server called
+  it "invalid", which from the outside is indistinguishable from a bug. States are the canonical
+  vocabulary — Draft, Needs information, Needs setup, Invalid, Blocked, Ready for review, Awaiting
+  approval, Active, Archived — with Running/Completed/Failed/Paused declared but never applied to a
+  draft, because they describe a run. Every draft also carries a `blocked` finding that no runtime
+  adapter exists, so "ready to review" and "cannot run" are never collapsed into one another.
+- **Schema** (`012_agent_drafts.sql`): `agent_drafts` with owner, source, state, spec, findings (the
+  validator's output at the last write, so a stale "ready" cannot survive an edit), `approval_id`,
+  `agent_id`, `model_call_id`. No `activated_by` column: activation is in the audit chain, and an audit
+  trail that can be edited is not one.
+- **Gateway** (`apps/gateway/src/agentDrafts.js`): `fromConversation` stores the person's turn, calls the
+  funnel with `purpose: 'copilot.draft'`, parses JSON (fenced or not), validates and stores the draft —
+  or, for an unreadable reply, stores the refusal turn and creates **no draft**. `submit` creates a real
+  `approvals` row (`agent.draft.activate`), so the gate is the same table the Approvals screen reads.
+  Activation writes the agent through the **same `insertAgent`** that `POST /agents` uses.
+- **Routes**: `GET/POST /copilot/drafts`, `GET/PATCH /copilot/drafts/:id`, `POST …/submit`, `…/activate`
+  (`agent:write`), `…/archive`. `copilot:write` is the floor for generating and editing; another
+  principal's draft is a 404, not a 403 — an id is not a capability.
+- **Panel** (`src/copilot/drafts.js`, `panel.js`, `designer.js`): "create an agent that triages inbound
+  tickets" produces a **draft card** — canonical state, the findings that produced it, and only the
+  actions that state and the reader's role allow (a Reviewer is never shown Activate). A question stays a
+  question; a reply that is not JSON creates nothing and says so; a refusal is rendered verbatim and
+  leaves the state alone. `Open in the builder` seeds the Agent Designer from the draft and remembers
+  `sourceId`; saving there **PATCHes the draft** instead of creating an ungated agent behind the gate.
+- Evidence: `npm run test:drafts` — **21 passed** against a real gateway and a real loopback provider (no
+  key → 409 and zero drafts; a real JSON reply → `ready-for-review` decided by the validator, not the
+  model; the turn stored with its call id; a prose reply → 422, no draft, call still metered; a model
+  that sends `state: "active"` and `agentId` → the server decides, and the unknown fields are reported
+  as dropped; edit recomputes state; submit refused when incomplete; a real approvals row; activation
+  refused before approval; self-approval refused; a Reviewer cannot activate; an Owner who decided cannot
+  activate what it approved; exactly one idle agent created, idempotently; a denied gate never activates;
+  Observer cannot create or read others' drafts; a builder spec with write capability and no gate is
+  invalid; archive keeps the row; survives a restart). `npm run test:drafts:ui` — **11 passed** (including
+  a reload rebuilding the card from the gateway's row, so the card is a view of a draft, not a picture).
+  `npm run test:drafts:browser` — **10 passed** in real Chromium at a phone viewport: a key sealed through
+  the Models sheet, the request typed into the panel, one metered `copilot.draft` row, Submit → a real
+  approvals row, Activate before the decision refused with no agent created, a **Reviewer** allowing the
+  gate, that Reviewer refused activation (no `agent:write`), the Owner signing back in and finding the
+  card after a full reload, Activate creating exactly one idle agent, a second activation returning 409,
+  and the card fitting 320 px with 44 px buttons and no page errors. `npm test` (42 suites) and
+  `npm run build` green. Design + limits: [`copilot/agent-drafts.md`](copilot/agent-drafts.md).
+- Honest limit: **activation creates a definition, never a run** — no adapter, process host or
+  cancellation exists, and the card says so. Setup findings do not block submission (the approval is
+  about the definition; the provider key is a workspace fact). No streaming, no regeneration. Swarm-plan
+  drafts, Agent Browser JSON and open-source voice are units 3–5 and are not built.
