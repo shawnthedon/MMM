@@ -10,12 +10,12 @@
  * only: membership is `agents.team_id`, fetched in the same pull, so there is one value to read.
  * Swarms and usage stay local and are labelled demo.
  */
-import { getState, replaceSlices, setProvenance, getProvenance, isLive, setPersistFilter, resetDemo } from './core.js';
+import { getState, replaceSlices, setProvenance, getProvenance, isLive, setPersistFilter, resetDemo, setState, uid, now } from './core.js';
 import { api, ApiError, isApiMode, gatewayUrl } from './api.js';
 import { getAuth, getAuthVersion, subscribeAuth, isAuthenticated, refreshSession } from './auth.js';
 import { demoCommsForPersistence } from './commsGateway.js';
 
-export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events', 'teams'];
+export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events', 'teams', 'threads'];
 export const LOCAL_SLICES = ['swarms', 'usage'];
 
 const listeners = new Set();
@@ -102,6 +102,53 @@ export function adaptTeam(row) {
   };
 }
 
+export function adaptMessage(row) {
+  let payload = {};
+  try { payload = row.payload ? (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) : {}; } catch { payload = {}; }
+  return {
+    id: row.id,
+    from: row.from || row.from_principal || 'me',
+    agent: row.agent || '',
+    text: row.text ?? row.body ?? '',
+    kind: row.kind || 'text',
+    payload,
+    ts: num(row.ts, Date.now()),
+    source: 'gateway',
+  };
+}
+
+export function adaptThread(row) {
+  const messages = arr(row.messages).map(adaptMessage);
+  return {
+    id: row.id,
+    kind: row.kind || 'direct',
+    title: row.title || 'Untitled thread',
+    unread: num(row.unread, 0),
+    createdAt: num(row.createdAt ?? row.created_at, Date.now()),
+    messages,
+    messageCount: num(row.messageCount, messages.length),
+    truncated: Boolean(row.truncated),
+    source: 'gateway',
+  };
+}
+
+/** The gateway's own statement about what chat can do here. Never inferred on the client. */
+export function adaptChatRuntime(runtime) {
+  if (!runtime || typeof runtime !== 'object') {
+    return {
+      connected: true, configured: false, generatesReplies: false, driver: 'none',
+      note: 'This gateway serves no chat runtime information, so no reply can be expected.',
+    };
+  }
+  return {
+    connected: true,
+    configured: Boolean(runtime.configured),
+    generatesReplies: Boolean(runtime.generatesReplies),
+    driver: runtime.driver || 'none',
+    note: runtime.note || '',
+  };
+}
+
 export function adaptTask(row) {
   return {
     id: row.id,
@@ -144,6 +191,7 @@ function captureDemo() {
   const s = getState();
   demoSnapshot = {};
   for (const slice of GATEWAY_SLICES) demoSnapshot[slice] = JSON.parse(JSON.stringify(s[slice] ?? []));
+  demoSnapshot.chatRuntime = JSON.parse(JSON.stringify(s.chatRuntime ?? {}));
   return demoSnapshot;
 }
 
@@ -217,6 +265,9 @@ function adopt(data, { requestId = null } = {}) {
   const approvals = data.approvals.map(adaptApproval);
   const events = data.events.map(adaptEvent).sort((a, b) => b.ts - a.ts).slice(0, 80);
   const teams = (data.teams || []).map(adaptTeam);
+  // A gateway that predates the chat routes returns no array here. That is a real state, and the
+  // screen has to say "this gateway serves no transcript" rather than show demo threads as live.
+  const threads = Array.isArray(data.threads) ? data.threads.map(adaptThread) : null;
 
   // Set ownership before publishing rows to subscribers or persistence.
   // Slices without a server store stay local and keep their demo provenance.
@@ -227,9 +278,11 @@ function adopt(data, { requestId = null } = {}) {
     events: 'gateway',
     swarms: 'demo',
     teams: 'gateway',
+    threads: threads ? 'gateway' : 'demo',
     usage: 'demo',
   });
-  replaceSlices({ agents, tasks, approvals, events, teams }, 'data:gateway');
+  const chatRuntime = threads ? adaptChatRuntime(data.chatRuntime) : getState().chatRuntime;
+  replaceSlices({ agents, tasks, approvals, events, teams, chatRuntime, ...(threads ? { threads } : {}) }, 'data:gateway');
   // Reflect the real gateway in the demo `gateway` object so header dots are not lies.
   replaceSlices(
     {
@@ -264,7 +317,7 @@ export function releaseGatewayData({ reason = 'signed-out' } = {}) {
     }, 'data:release');
     demoSnapshot = null;
   }
-  setProvenance({ agents: 'demo', tasks: 'demo', approvals: 'demo', events: 'demo', swarms: 'demo', teams: 'demo', usage: 'demo' });
+  setProvenance({ agents: 'demo', tasks: 'demo', approvals: 'demo', events: 'demo', swarms: 'demo', teams: 'demo', threads: 'demo', usage: 'demo' });
   Object.assign(sync, { status: isApiMode() ? 'degraded' : 'demo', error: reason === 'signed-out' ? null : sync.error, at: Date.now(), ws: 'off' });
   emit();
 }
@@ -276,13 +329,16 @@ export function reloadDemoData() {
 }
 
 async function fetchAll() {
-  const [agents, tasks, approvals, events, teams] = await Promise.all([
+  const [agents, tasks, approvals, events, teams, threads] = await Promise.all([
     api.agents(),
     api.tasks(),
     api.approvals(),
     api.events(0),
     // Teams are only names/topology now: membership is read from the agent rows fetched alongside.
     api.teams().catch(() => ({ body: { teams: [] } })),
+    // A gateway without the chat routes must not fail the whole refresh; `threads: null` below
+    // keeps the slice on demo provenance and the screen says so.
+    api.threads().catch(() => null),
   ]);
   return {
     agents: agents.body,
@@ -290,6 +346,8 @@ async function fetchAll() {
     approvals: approvals.body,
     events: events.body,
     teams: teams.body?.teams || [],
+    threads: threads?.body?.threads ?? null,
+    chatRuntime: threads?.body?.runtime ?? null,
     requestId: agents.requestId,
   };
 }
@@ -402,7 +460,7 @@ export function connectLive() {
     reconnectAttempt = 0;
     setWs('open');
     try {
-      ws.send(JSON.stringify({ type: 'subscribe', topics: ['agents', 'tasks', 'approvals', 'system', 'evolution'] }));
+      ws.send(JSON.stringify({ type: 'subscribe', topics: ['agents', 'tasks', 'approvals', 'system', 'evolution', 'chat'] }));
     } catch {
       /* ignore: the server will just use its default subscription */
     }
@@ -436,7 +494,7 @@ export function connectLive() {
       evolutionListeners.forEach((fn) => { try { fn(msg); } catch { /* a panel must not break the socket */ } });
       return;
     }
-    if (['agents', 'tasks', 'approvals', 'system'].includes(msg?.topic)) scheduleRefresh();
+    if (['agents', 'tasks', 'approvals', 'system', 'chat'].includes(msg?.topic)) scheduleRefresh();
   };
   ws.onerror = () => {
     /* onclose handles the state machine */
@@ -659,4 +717,69 @@ export async function requestApproval(draft) {
   if (isLive('approvals')) upsert('approvals', row);
   scheduleRefresh(300);
   return row;
+}
+
+/* ---------- chat ----------
+ * Chat is a transcript. There is no model runtime, so nothing here waits for or invents a reply:
+ * a send stores exactly what was typed, and the slice is re-read from the server afterwards.
+ */
+export async function sendChatMessage(threadId, text) {
+  const body = String(text ?? '').trim();
+  if (!body) throw new Error('a message needs text');
+  if (!isLive('threads')) {
+    // Demo: the transcript lives in this browser, and the runtime banner says exactly that.
+    const message = { id: uid('m'), from: 'me', text: body, ts: now() };
+    setState((st) => {
+      const thread = st.threads.find((t) => t.id === threadId);
+      if (thread) { thread.messages.push(message); thread.unread = 0; }
+    }, 'chat-send');
+    return { message, local: true, runtime: getState().chatRuntime };
+  }
+  // A stable key per attempt: a retry (double tap, flaky network) cannot become a second message.
+  const clientId = globalThis.crypto?.randomUUID?.() || uid('cid');
+  const out = await api.sendMessage(threadId, { text: body, clientId });
+  const message = adaptMessage(out.body.message);
+  // Fold the server's copy into the thread, then let the next refresh settle ordering/counters.
+  setState((st) => {
+    const thread = st.threads.find((t) => t.id === threadId);
+    if (thread) { thread.messages = [...thread.messages, message]; thread.messageCount = (thread.messageCount || 0) + 1; }
+  }, 'chat-send');
+  if (out.body.runtime) replaceSlices({ chatRuntime: adaptChatRuntime(out.body.runtime) }, 'chat-runtime');
+  scheduleRefresh(250);
+  return { message, runtime: getState().chatRuntime };
+}
+
+export async function createChatThread({ title, kind = 'direct' }) {
+  const name = String(title ?? '').trim();
+  if (!name) throw new Error('a thread needs a title');
+  if (!isLive('threads')) {
+    const thread = { id: uid('th'), kind, title: name, unread: 0, createdAt: now(), messages: [], messageCount: 0, truncated: false };
+    setState((st) => { st.threads.unshift(thread); }, 'chat-thread');
+    return thread;
+  }
+  const out = await api.createThread({ title: name, kind });
+  const thread = adaptThread(out.body.thread);
+  setState((st) => { st.threads = [thread, ...st.threads.filter((t) => t.id !== thread.id)]; }, 'chat-thread');
+  scheduleRefresh(250);
+  return thread;
+}
+
+export async function markChatRead(threadId) {
+  if (!isLive('threads')) {
+    setState((st) => { const t = st.threads.find((x) => x.id === threadId); if (t) t.unread = 0; }, 'chat-read');
+    return { cleared: 0, local: true };
+  }
+  const out = await api.markThreadRead(threadId);
+  setState((st) => { const t = st.threads.find((x) => x.id === threadId); if (t) t.unread = 0; }, 'chat-read');
+  return out.body;
+}
+
+export async function deleteChatThread(threadId) {
+  if (!isLive('threads')) {
+    setState((st) => { st.threads = st.threads.filter((t) => t.id !== threadId); }, 'chat-thread-delete');
+    return { deleted: threadId, local: true };
+  }
+  const out = await api.deleteThread(threadId);
+  setState((st) => { st.threads = st.threads.filter((t) => t.id !== threadId); }, 'chat-thread-delete');
+  return out.body;
 }

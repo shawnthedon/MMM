@@ -458,6 +458,21 @@ input[type='range']::-webkit-slider-thumb {
 .tg-msg.user { background: color-mix(in srgb, var(--brand) 30%, var(--surface)); align-self: flex-end; border-bottom-right-radius: 5px; }
 .tg-cmds { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid var(--border-soft); }
 
+/* ---------- chat runtime notice ----------
+ * Chat stores what you type and nothing answers it yet. This banner is the visible half of that
+ * contract: it is rendered from state (gateway note when live, local default otherwise) and must
+ * never be removed without removing the claim that chat replies.
+ */
+.chat-runtime {
+  display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px;
+  padding: 10px 12px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--state-warning) 35%, var(--border-subtle));
+  background: color-mix(in srgb, var(--state-warning) 5%, var(--bg-surface));
+}
+.chat-runtime-icon { display: grid; place-items: center; color: var(--state-warning); flex: none; padding-top: 1px; }
+.chat-runtime-title { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.chat-runtime-note { font-size: 12px; line-height: 1.45; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere; }
+
 /* ---------- misc ---------- */
 .empty {
   text-align: center; padding: 40px 20px; color: var(--text-2);

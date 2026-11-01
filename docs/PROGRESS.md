@@ -388,3 +388,33 @@ panel, the designer and the gateway cannot disagree about who is on what team.
   `npm run build` green.
 - Honest limits: `team_position` is not yet used for dispatch, there are no per-team budgets, and there is
   no membership-history screen beyond the audit trail.
+
+---
+
+## 💬 2026-11-01 — Chat is a real transcript, and it says it cannot answer (M25)
+
+The fabricated replies are **deleted, not hidden**: `simulateReply()` and its four canned sentences —
+including `Estimated cost: $0.42` — are gone from `src/views2.js`.
+
+- Backend: `apps/gateway/src/chat.js` + six routes (`GET/POST /threads`, `GET/POST /threads/:id/messages`,
+  `POST /threads/:id/read`, `DELETE /threads/:id`). Reads need `chat:read` (Observer), writes
+  `chat:write` (Operator); WS topic `chat`. Threads and messages were already seeded in 001 — they now
+  have a read and a write path.
+- **Nothing answers.** One function builds `runtimeStatus()` (`configured: false`, `generatesReplies:
+  false`, and a plain-language note), every read and write carries it, and the screen renders the note
+  verbatim. A request body cannot assert `from: 'agent'`: it is refused with the reason, because an agent
+  message may only be written by a runtime.
+- Idempotent writes: `007_chat_idempotency.sql` adds `messages.client_id` with a **partial** unique index,
+  so a retried send returns the same row (`200 { duplicate: true }`) instead of a second message.
+- `unread` is a server-owned counter raised only by a message from someone else and cleared only by an
+  explicit read mark; the receipt is sent only from a visible tab. A failed write keeps the text in the
+  composer and says what failed. A stale remembered thread id is replaced by the thread actually shown.
+- A gateway without the chat routes leaves the slice on demo provenance and the banner says so — it never
+  shows fixtures as a live transcript.
+- Evidence: `npm run test:chat` — **16 passed** against a real gateway on a temporary `DATA_DIR`,
+  including a restart (`the transcript survives a gateway restart`); `npm run test:chat:ui` — **10
+  passed**; `npm run test:chat:browser` — **5 passed** in real Chromium (notice visible at 390 px, one
+  message from the real composer, **nothing appears after 3.2 s**, no sideways scroll at 320 px, no
+  background request). `npm test` and `npm run build` green.
+- Honest limits: no model runtime (so no reply), no streaming, no pagination past 200 messages per
+  thread, no per-thread access control beyond `chat:read`.
