@@ -239,6 +239,13 @@ export const api = {
   updateSwarm: (id, body) => request(`/api/v1/swarms/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
   setSwarmStatus: (id, status) => request(`/api/v1/swarms/${encodeURIComponent(id)}/status`, { method: 'POST', body: { status } }),
   deleteSwarm: (id) => request(`/api/v1/swarms/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  // Copilot: the conversation is a server row, and every reply is a metered model call.
+  copilot: () => request('/api/v1/copilot'),
+  copilotRuntime: () => request('/api/v1/copilot/runtime'),
+  copilotSend: (body, opts = {}) => request('/api/v1/copilot/messages', { method: 'POST', body, timeoutMs: 90000, ...opts }),
+  copilotClear: () => request('/api/v1/copilot', { method: 'DELETE' }),
+  setCopilotModel: (body) => request('/api/v1/copilot/model', { method: 'PUT', body }),
+
   providers: () => request('/api/v1/providers'),
   provider: (id) => request(`/api/v1/providers/${encodeURIComponent(id)}`),
   saveProviderKey: (id, body) => request(`/api/v1/providers/${encodeURIComponent(id)}/key`, { method: 'PUT', body }),

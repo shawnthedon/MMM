@@ -171,7 +171,7 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | 10 | **Model gateway** | `#/models` | ✅ | Real end to end: an Owner seals a provider key (AES-256-GCM, never returned — a 16-hex fingerprint and a `••••abcd` hint come back instead), one OpenAI-compatible adapter makes a real request, and every attempt lands in `model_calls` as `ok` / `blocked` / `error` with tokens, an **estimated** cost and a latency. The daily and per-call caps are enforced **before** the request leaves the process. `spend_mtd` is dropped from the schema — spend is `SUM(cost_usd) WHERE status='ok'` and nothing else. Prompts and replies are never stored; redirects are never followed; nothing streams yet | `apps/gateway/src/models.js`, `apps/gateway/src/secrets.js`, `010_model_calls.sql`, `src/views2.js`, `src/datastore.js` |
 | 11 | **Plugins / MCP** | `#/plugins` | 🎭 | A catalogue that says so: “no MCP client is installed in this build”, rows read *not connected*, the install action opens “what it needs” instead of flipping a flag, `callsToday` is gone and the credential field is deleted (a secret the app cannot store must not be collected). The proxy / `scoped tokens` banner is gone | `src/views2.js` |
 | 12 | **Chat** | `#/chat` | ✅ | Real transcript end to end: threads and messages persist on the gateway, survive a reload and a restart, and the read receipt is a write. **Nothing answers**: there is no model runtime, the API says so in every read (`runtime.configured: false`) and the screen prints it. A request body cannot claim an agent spoke. Writes are idempotent by `clientId` | `apps/gateway/src/chat.js`, `server.js`, `src/views2.js`, `src/datastore.js` |
-| 13 | **Copilot** | overlay | 🟠 | Real UI, real consent flow, real capability registry; answers are deterministic retrieval over local state; actions are labelled `demo` | `src/copilot/*` |
+| 13 | **Copilot** | overlay | 🟠 | On a gateway the conversation is real: each turn is a metered model call, stored on the gateway and linked to its ledger row, and the mode tabs are replaced by a runtime statement. With no sealed key a send is refused with the server's reason and no assistant turn is invented. Off a gateway the old deterministic engine answers and says, per message, that it called no model. Drafts, swarm plans and browser JSON are not built yet. See session 13 | `src/copilot/*`, `apps/gateway/src/copilot.js` |
 | 14 | **Analytics** | `#/analytics` | 🟠 | Money and tokens are now the **model ledger**: “Spend today” is `model_calls` for the day (labelled estimated), the chart is cost and tokens per day from `GET /usage`, and Export writes that same number. The typed-in `+ 12`, `87% success`, `▲ 8% vs yesterday`, `median resolve 4m` and the `+6.2% / −18%` self-improvement figures are deleted — the self-improvement panel now says it is not measured. Still seed: agent leaderboard `successRate`/`trust`/`costToday` | `src/views2.js`, `apps/gateway/src/models.js` |
 | 15 | **Artifacts / Files** | `#/artifacts` | 🎭 | File list is seed; “Upload” writes into local state; storage reads `248 MB / 2 GB` as a string; `files` table exists unused | `src/views2.js:816-880` |
 | 16 | **Terminal** | `#/terminal` | ✅ | Real end to end: **real child processes** on the gateway host — `node`, `npm`, `npx`, no shell — with live stdout/stderr over SSE, exact exit codes, Ctrl+C, multiple sessions, a persistent cwd, an approval gate for destructive npm commands, and an audit row per run. Authorised agents run commands through the same path and read back the output. **Local-first: no cloud dependency, and an offline `npm install` only works for packages already on disk** | `apps/gateway/src/terminal/`, `src/terminal.js`, `src/terminal.css` |
@@ -1021,8 +1021,11 @@ creates one row; with no provider the reply has `runtime: 'none'`; `rg "Estimate
 **Today.** The strongest surface in the app: full-screen stage, consent-gated mic, capability
 registry, action cards with two-step confirmation, honest labels (`demo`, `blocked`, `unverified`).
 
-**The gap.** Conversations are browser-only; answers are deterministic retrieval; actions write to
-the local store; `llm` is `unverified` (correct).
+**Today (M30).** Messages persist, replies are real model calls and `llm` reads the runtime. See
+[`copilot/conversation.md`](copilot/conversation.md).
+
+**The gap.** Actions still write to the local store, and the Copilot cannot create an agent, a swarm plan
+or a browser task — units 2–4 of the upgrade, not built yet.
 
 **Done means.** Messages persist; the capability registry drives every claim; when an action cannot be
 performed server-side the card ends `blocked` with the reason; `llm` becomes `available` only with a
@@ -1902,10 +1905,17 @@ One session ≈ one sitting. Each is independently shippable.
 | 10 | **Telegram Bridge on the real transport** | Screen rebuilt on comms routes; one live message | provider message id |
 | 11 | ~~**Analytics + export**~~ ✅ M29 (money/tokens) | Spend and token tiles + series read `GET /usage`; the fabricated deltas and self-improvement percentages are deleted; Export writes the same number | `test:models:ui` · `test:honesty` 13 |
 | 12 | **Files** | Upload/download/checksum/quota | hash round-trip |
+| 13 | ~~**Copilot conversation**~~ ✅ M30 | `011_copilot.sql`, `apps/gateway/src/copilot.js`, `src/copilot/conversation.js`: turns persist per principal, every reply carries the `model_calls` id that produced it, and a refusal writes no assistant row | `test:copilot-api` 19 (real gateway + real loopback provider) · `test:copilot:ui` 8 · a reply with no ledger row cannot be stored |
+| 14 | **Copilot drafts** | Agent drafts from conversation, canonical schema + validation, visual-builder sync, approval before activation | a draft is created, rejected when invalid, and never activates itself |
 
 After session 12 the app has no simulated *data* left; what remains (skills execution, MCP, training,
 local AI) is genuinely `blocked`/`unconfigured` and labelled as such — which is a finished state, not
 an unfinished one.
+
+Sessions 13–17 are the Copilot upgrade (`MMM-Copilot-Design-Spec-2026-11-01.md`): conversation, agent
+drafts, swarm-plan (workflow) drafts, Agent Browser JSON, and open-source voice. They are ordered so each
+one is verifiable alone: 13 is shipped and proven, 14 is next. Until 14 exists the Copilot can *talk*
+about an agent but cannot create one, and the system brief says exactly that.
 
 ---
 

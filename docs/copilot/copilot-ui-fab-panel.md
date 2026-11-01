@@ -9,6 +9,11 @@
 | Evidence | `npm run smoke` (28 checks) · `npm run test:copilot` (6 interaction checks) · `npm run build` |
 | Status | **PASS for the client-side, demo-runtime scope** — see limitations |
 
+> **Superseded in part (M30).** The seven mode tabs described below now render only when the Copilot has
+> no gateway — i.e. when the deterministic engine really is the only thing that can answer. On a gateway
+> the conversation is a live, stored, metered model conversation and the mode row is a runtime statement
+> instead. See [`conversation.md`](conversation.md) for the live path and what replaced the tabs.
+
 ---
 
 ## 1. Launcher (§2.1)

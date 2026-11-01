@@ -27,6 +27,7 @@ export const PERMISSIONS = Object.freeze({
   'chat:read': 'Observer',
   'terminal:read': 'Observer',
   'model:read': 'Observer',
+  'copilot:read': 'Observer',
   // review surface
   'approval:request': 'Observer',
   'approval:decide': 'Reviewer',
@@ -47,6 +48,9 @@ export const PERMISSIONS = Object.freeze({
   'terminal:grant': 'Owner',
   'model:call': 'Operator',
   'model:key': 'Owner',
+  // Talking to the Copilot spends money, so it needs the same rank as any other model call.
+  'copilot:write': 'Operator',
+  'copilot:model': 'Owner',
   // administration
   'evolution:deploy': 'Admin',
   'principal:read': 'Admin',
@@ -59,9 +63,9 @@ export const PERMISSIONS = Object.freeze({
   'dev:seed': 'Owner',
 });
 
-const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read', 'evolution:read', 'chat:read', 'terminal:read', 'model:read'];
+const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read', 'evolution:read', 'chat:read', 'terminal:read', 'model:read', 'copilot:read'];
 const REVIEW = ['audit:read', 'audit:verify', 'evolution:review', 'evolution:approve'];
-const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run', 'evolution:run', 'chat:write', 'terminal:run', 'terminal:signal', 'model:call'];
+const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run', 'evolution:run', 'chat:write', 'terminal:run', 'terminal:signal', 'model:call', 'copilot:write'];
 
 /** Explicit role → permission sets (the authoritative check). */
 export const ROLE_PERMISSIONS = Object.freeze({

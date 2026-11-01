@@ -581,3 +581,56 @@ button.cp-chip:active { background: var(--elevated); }
   .cp-stage-caption strong { font-size: 14px; }
   .cp-mic { width: 68px; height: 68px; }
 }
+
+/* ---------- live conversation: provenance, refusal, and confirmations ----------
+ * A live Copilot has to show what answered and when nothing could. These are the only two lines in
+ * the panel that are not a message, and they are deliberately quiet: a notice when there is no model,
+ * and a chip row that states the provider, the model, and that the cost is an estimate.
+ */
+.cp-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  margin: 0 0 10px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text-1);
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+}
+.cp-notice svg { flex: none; margin-top: 1px; }
+.cp-notice.info { border-color: color-mix(in srgb, var(--accent-info) 35%, var(--line-2)); }
+.cp-notice.warn { border-color: color-mix(in srgb, var(--accent-warn) 45%, var(--line-2)); }
+.cp-notice.bad { border-color: color-mix(in srgb, var(--danger, var(--accent-bad)) 50%, var(--line-2)); }
+.cp-notice strong { font-weight: 650; }
+
+.cp-inline-link {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-ink, var(--text-1));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  min-height: 32px;
+}
+.cp-inline-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* The live chip row sits where the mode tabs used to be. */
+.cp-modes[data-live='true'] { display: flex; flex-wrap: wrap; gap: 8px; }
+.cp-chip.ghost { background: transparent; border-style: dashed; color: var(--text-2); }
+.cp-chip.ok { color: var(--text-1); }
+.cp-chip.ok svg { color: var(--accent-ok, var(--text-1)); }
+
+/* A reply the server refused is visually distinct from a reply it produced. */
+.cp-msg.failed .cp-bubble { border-color: color-mix(in srgb, var(--accent-warn) 45%, var(--line-2)); }
+.cp-msg.failed .cp-msg-meta-text { color: var(--text-2); }
+
+@media (min-width: 900px) {
+  .cp-notice { font-size: var(--text-base, var(--text-sm)); }
+}

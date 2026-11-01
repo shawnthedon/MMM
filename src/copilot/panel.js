@@ -14,6 +14,7 @@ import { knowledgeStats } from './knowledge.js';
 import { STATUS_LABEL } from './capabilities.js';
 import { holoStageIn, copilotModeIn, copilotOut, fabPulse, motionEnabled, toastIn } from '../motion.js';
 import { sfx } from '../sound.js';
+import * as convo from './conversation.js';
 
 const session = {
   open: false,
@@ -28,6 +29,10 @@ const session = {
   listening: false,
   voiceStatus: '',
   lastSent: '',
+  // 'live' (a model answers) vs 'local' (the built-in engine answers); `gatewayState` says why.
+  live: 'local',
+  gatewayState: 'demo',
+  lastError: '',
 };
 
 let layer = null;
@@ -37,6 +42,7 @@ let pendingTimer = null;
 let draftTimer = null;
 let runtimeUnsub = null;
 let runtimeUnsubAuth = null;
+let runtimeUnsubConvo = null;
 
 function matchesNarrow() {
   try {
@@ -333,10 +339,72 @@ function contextHTML() {
     <span class="cp-chip ghost" title="Workspace scope">${esc(s.settings.workspaceName)}</span>`;
 }
 
+/**
+ * The mode tabs were the old Copilot's whole interaction model: choose a lens, then get that lens's canned
+ * answers. With a live model there is nothing to choose — you just talk — so the row is replaced by a
+ * statement of what is answering. Whenever the built-in engine is what replies (no gateway, or a gateway
+ * with no model) the tabs stay, because they are the only honest way to reach those answers.
+ */
+const RUNTIME_TONE = { ready: 'ok', unready: 'warn', loading: 'info', error: 'bad', unavailable: 'warn', demo: 'info' };
+
+/** What is answering, in one line. Every chip is a fact from the server or a reason it is absent. */
+function runtimeChipsHTML() {
+  const st = convo.getState();
+  const rt = st.runtime;
+  const status = session.gatewayState;
+  const label = status === 'ready' ? 'model' : status === 'loading' ? 'connecting' : status === 'error' ? 'unreachable' : 'no model';
+  const chips = [];
+  chips.push(`<span class="cp-chip ${RUNTIME_TONE[status] || 'info'}" data-cp-runtime="${esc(status)}">${icon('spark', 13)}${esc(label)}</span>`);
+  if (rt?.providerName) chips.push(`<span class="cp-chip ghost" title="The provider behind this conversation">${esc(rt.providerName)}${rt.model ? ` · ${esc(rt.model)}` : ''}</span>`);
+  if (rt?.costBasis === 'estimated' && status === 'ready') chips.push('<span class="cp-chip ghost" title="Cost comes from a price table, not an invoice">cost estimated</span>');
+  if (status === 'ready') {
+    chips.push(`<button class="cp-chip" data-cp="new-conversation" title="Delete this conversation on the gateway">${icon('trash', 13)}New conversation</button>`);
+  }
+  if (status !== 'ready') {
+    chips.push(`<button class="cp-chip ${status === 'unready' ? 'warn' : ''}" data-cp="open-models" title="Configure a provider key">${icon('model', 13)}Set up a model</button>`);
+  }
+  return chips.join('');
+}
+
+/**
+ * Shown above the transcript whenever a gateway is connected but cannot answer with a model. It is the
+ * one thing that keeps a deterministic reply from being mistaken for a model reply, so it states both
+ * halves: what is answering, and where the conversation is (or is not) stored.
+ */
+function liveNoticeHTML() {
+  const st = convo.getState();
+  if (session.live === 'live') return '';
+  const state = session.gatewayState;
+  if (state === 'demo') return '';
+  const reason = st.runtime?.reason || st.error || '';
+  if (state === 'loading') {
+    return `<div class="cp-notice info" role="status">${icon('info', 15)}<div>Connecting to the gateway conversation…</div></div>`;
+  }
+  if (state === 'unavailable') {
+    return `<div class="cp-notice warn" role="status" data-cp-source="unavailable">${icon('shield', 15)}<div><strong>This gateway has no Copilot conversation route.</strong>
+      Answers come from the built-in knowledge engine and no model is called. Nothing you type here leaves
+      this browser. Update the gateway to get a stored, model-backed conversation.</div></div>`;
+  }
+  if (state === 'error') {
+    return `<div class="cp-notice bad" role="status" data-cp-source="error">${icon('shield', 15)}<div><strong>The gateway conversation could not be read.</strong>
+      ${esc(st.error || 'Unknown error')} Answers fall back to the built-in knowledge engine, no model is
+      called, and this conversation stays in this browser.</div></div>`;
+  }
+  return `<div class="cp-notice warn" role="status" data-cp-source="unready" data-cp-nomodel>${icon('shield', 15)}<div><strong>No model is configured, so nothing here is model-written.</strong>
+    ${esc(reason)} Answers below come from the built-in knowledge engine and stay in this browser — no model
+    is called and the gateway stores none of this. <button class="cp-inline-link" data-cp="open-models">Install a provider key</button></div></div>`;
+}
+
 function paintModes() {
   if (!panel) return;
   const el = panel.querySelector('#cp-modes');
   if (!el) return;
+  if (session.live === 'live') {
+    el.dataset.live = 'true';
+    el.innerHTML = runtimeChipsHTML();
+    return;
+  }
+  el.dataset.live = 'false';
   el.innerHTML = MODES.map((m) => {
     const active = m.id === session.mode;
     const blocked = m.id === 'training' || m.id === 'voice';
@@ -605,16 +673,40 @@ function cardHTML(card, msg) {
   }
 }
 
+const fmtUsd = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '';
+  if (n === 0) return '$0.00';
+  return n < 1 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+};
+
+/** The provenance line under a live reply: model, tokens, estimated cost, and the ledger id. */
+function liveMeta(m) {
+  if (m.failed) return 'Copilot · not answered';
+  const u = m.usage || {};
+  const bits = [];
+  if (u.model) bits.push(esc(String(u.model)));
+  if (u.promptTokens || u.completionTokens) bits.push(`${Number(u.promptTokens) || 0} in / ${Number(u.completionTokens) || 0} out`);
+  if (Number.isFinite(Number(u.costUsd))) bits.push(`${fmtUsd(u.costUsd)} est.`);
+  if (Number.isFinite(Number(u.latencyMs))) bits.push(`${Number(u.latencyMs)} ms`);
+  if (m.modelCallId) bits.push(`call #${esc(String(m.modelCallId))}`);
+  return bits.length ? `Copilot · ${bits.join(' · ')}` : 'Copilot';
+}
+
 function messageHTML(m) {
   if (m.role === 'user') {
     return `<div class="cp-msg me"><div class="cp-bubble">${md(m.text)}</div>
       <div class="cp-msg-meta">You · ${new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
   }
   const speakable = [m.text, m.card?.text, m.card?.title].filter(Boolean).join(' ').slice(0, 2000);
-  return `<div class="cp-msg bot">
+  // A live reply states where it came from and what it cost. A demo reply states that it is one.
+  const metaLabel = m.live
+    ? liveMeta(m)
+    : `Copilot · ${esc(modeMeta(m.mode || session.mode).label)} mode · demo answer, no model called`;
+  return `<div class="cp-msg bot${m.failed ? ' failed' : ''}"${m.modelCallId ? ` data-call-id="${esc(String(m.modelCallId))}"` : ''}>
     <div class="cp-bubble">${m.text && !m.card ? md(m.text) : ''}${cardHTML(m.card, m)}</div>
     <div class="cp-msg-meta">
-      <span class="cp-msg-meta-text">Copilot · ${esc(modeMeta(m.mode || session.mode).label)} mode · ${new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+      <span class="cp-msg-meta-text">${metaLabel} · ${new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       <button class="cp-speak" type="button" data-cp="speak" data-msg="${esc(m.id)}" data-text="${esc(speakable)}" aria-label="Read this reply aloud">${icon('mic', 15)}<span>Speak</span></button>
     </div>
   </div>`;
@@ -630,30 +722,53 @@ function emptyStateHTML() {
     <div class="cp-suggests">
       ${suggestions.map((q) => `<button class="cp-chip" data-cp="suggest" data-q="${esc(q)}">${esc(q)}</button>`).join('')}
     </div>
-    <p class="cp-empty-foot">Grounded in ${ks.total} reviewed knowledge entries · ${esc(ks.version)}<br>Deterministic answers, no model call. Runtime is labelled in the header.</p>
+    <p class="cp-empty-foot">Grounded in ${ks.total} reviewed knowledge entries · ${esc(ks.version)}<br>${session.live === 'live'
+      ? 'Answers come from the model configured on the gateway. Every reply shows its call id and estimated cost.'
+      : 'Deterministic answers, no model call. Runtime is labelled in the header.'}</p>
   </div>`;
+}
+
+function pendingHTML() {
+  if (!session.pending) return '';
+  const label = session.live === 'live' ? 'Waiting for the model…' : 'Working…';
+  return `<div class="cp-msg bot"><div class="cp-bubble cp-pending" data-cp-pending="${esc(session.live)}">
+    <span class="cp-dot run"></span>${esc(label)} <button class="cp-chip" data-cp="stop">Stop</button></div></div>`;
 }
 
 function paintWork() {
   if (!workEl) return;
   const blank = session.history.length === 0;
-  workEl.innerHTML = blank
-    ? emptyStateHTML()
-    : session.history.map(messageHTML).join('') +
-      (session.pending
-        ? `<div class="cp-msg bot"><div class="cp-bubble cp-pending"><span class="cp-dot run"></span>Working… <button class="cp-chip" data-cp="stop">Stop</button></div></div>`
-        : '');
+  const notice = liveNoticeHTML();
+  workEl.innerHTML = notice + (blank ? emptyStateHTML() : session.history.map(messageHTML).join('') + pendingHTML());
   const panelEl = panel;
   if (panelEl) {
-    panelEl.dataset.blank = String(blank && !session.pending);
+    panelEl.dataset.blank = String(blank && !session.pending && !notice);
     panelEl.querySelector('#copilot-work').setAttribute('aria-busy', String(session.pending));
   }
   if (!blank) workEl.scrollTop = workEl.scrollHeight;
 }
 
+/**
+ * Two questions, kept apart because they have different answers:
+ *   source        — where the *reply* comes from (a model, or the built-in engine)
+ *   gatewayState  — what the gateway says about models (ready / unready / unavailable / error / demo)
+ * A gateway without a model is `unavailable` for conversation but perfectly usable for deterministic
+ * answers, and pretending otherwise would remove the Copilot's actions from every older gateway.
+ */
+function deriveSource() {
+  const st = convo.getState();
+  const gatewayState = convo.available() ? st.status : 'demo';
+  return { gatewayState, source: gatewayState === 'ready' ? 'live' : 'local' };
+}
+
 function paint() {
   if (!panel) return;
+  const { gatewayState, source } = deriveSource();
+  session.gatewayState = gatewayState;
+  session.live = source;
   panel.dataset.mode = session.mode;
+  panel.dataset.source = source;
+  panel.dataset.gateway = gatewayState;
   panel.dataset.min = String(session.minimized);
   panel.dataset.view = session.advanced ? 'advanced' : 'stage';
   // The overlay now covers the whole screen at every width, so it is always modal.
@@ -702,6 +817,34 @@ export function showAdvanced(next) {
   return value;
 }
 
+/**
+ * Delete the server-side conversation after asking. Two steps, because losing a transcript by a stray tap
+ * is exactly the kind of thing the old panel did ("clear memory" was one tap and irreversible).
+ */
+function newConversation() {
+  if (session.live !== 'live') {
+    session.history = [];
+    paint();
+    return;
+  }
+  const last = session.history[session.history.length - 1];
+  if (last?.confirmClear) {
+    convo.clearConversation().then((out) => {
+      if (out.ok) {
+        session.history = [];
+        toast(out.cleared ? `Conversation cleared (${out.cleared} turns deleted)` : 'Conversation was already empty', 'ok');
+      } else {
+        toast(out.error || 'Could not clear the conversation', 'bad');
+      }
+      paint();
+    });
+    return;
+  }
+  const prompt = { id: uid('cp-msg'), role: 'copilot', text: 'Clear this whole conversation on the gateway? This deletes every turn and cannot be undone.', mode: session.mode, live: true, confirmClear: true };
+  session.history.push(prompt);
+  paint();
+}
+
 /** Public hook so other screens can open the Copilot directly in the conversation view. */
 export const isAdvanced = () => session.advanced;
 
@@ -731,10 +874,16 @@ export function send(text) {
   if (!raw || session.pending) return;
   session.lastSent = raw;
   session.route = currentRoute();
+  if (!session.advanced) showAdvanced(true);
+  if (session.live === 'live' && convo.getState().status === 'ready') {
+    sendLive(raw);
+    return;
+  }
+  // No model is answering (no gateway, or a gateway without a usable provider). The built-in engine
+  // answers, and every reply it produces says, on its own meta line, that no model was called.
   pushMessage({ role: 'user', text: raw, mode: session.mode });
   setDraft('');
   session.pending = true;
-  if (!session.advanced) showAdvanced(true);
   paint();
   clearTimeout(pendingTimer);
   pendingTimer = setTimeout(() => {
@@ -744,6 +893,50 @@ export function send(text) {
       paint();
     });
   }, 220);
+}
+
+let liveSeq = 0;
+
+/**
+ * One live turn. The user's message appears immediately (they did say it); the reply appears only when the
+ * gateway returns one, carrying the ledger id and the estimated cost of the call that produced it.
+ */
+async function sendLive(raw) {
+  session.pending = true;
+  session.lastError = '';
+  const localId = `live-${++liveSeq}`;
+  pushMessage({ id: localId, role: 'user', text: raw, mode: session.mode, live: true });
+  setDraft('');
+  paint();
+  const out = await convo.sendTurn({ text: raw, route: session.route });
+  session.pending = false;
+  if (out.ok) {
+    if (out.reply) {
+      const msg = convo.toPanelMessage(out.reply);
+      msg.mode = session.mode;
+      // Replace the optimistic copy with the server's own row (same text, real id and timestamp).
+      if (out.user) {
+        const idx = session.history.findIndex((m) => m.id === localId);
+        if (idx >= 0) session.history[idx] = { ...convo.toPanelMessage(out.user), mode: session.mode };
+      }
+      pushMessage(msg);
+    }
+  } else if (out.cancelled) {
+    pushMessage({ role: 'copilot', text: 'Stopped. The request was cancelled; nothing further was generated.', mode: session.mode, live: true });
+  } else {
+    session.lastError = out.error || 'the reply failed';
+    pushMessage({
+      role: 'copilot',
+      text: out.reason === 'no-model'
+        ? `${out.error}`
+        : `That did not go through: ${out.error}`,
+      mode: session.mode,
+      live: true,
+      failed: true,
+    });
+    if (out.reason === 'no-model') await convo.load({ silent: true });
+  }
+  paint();
 }
 
 async function respond(raw) {
@@ -770,6 +963,15 @@ async function respond(raw) {
 
 function stopPending() {
   clearTimeout(pendingTimer);
+  if (convo.available() && session.pending) {
+    const aborted = convo.abort();
+    if (aborted) {
+      session.pending = false;
+      pushMessage({ role: 'copilot', text: 'Stopped. The request was cancelled; nothing further was generated.', mode: session.mode, live: true });
+      paint();
+      return;
+    }
+  }
   if (!session.pending) return;
   session.pending = false;
   pushMessage({ role: 'copilot', text: 'Stopped before answering. No action was prepared or executed.', mode: session.mode });
@@ -886,14 +1088,40 @@ export function openCopilot({ mode, message } = {}) {
   runtimeUnsub = () => {
     runtimeUnsubRuntime?.();
     runtimeUnsubAuth?.();
+    runtimeUnsubConvo?.();
+    runtimeUnsubConvo = null;
   };
   const runtimeUnsubRuntime = subscribeRuntime(() => paintRuntime());
   const runtimeUnsubAuth = subscribeAuth(() => {
     paintRuntime();
     paintTray();
   });
+  runtimeUnsubConvo = convo.subscribe(() => {
+    if (session.open) paint();
+  });
   paint();
   probeGateway().catch(() => {});
+  if (convo.available()) {
+    convo.load()
+      .then((out) => {
+        if (!session.open) return;
+        // The server transcript replaces the local one only when the server is what answers. On a gateway
+        // with no model the replies are local, so adopting server rows would show questions without the
+        // answers that followed them.
+        if (out.ok && convo.getState().status === 'ready') {
+          session.history = (out.messages || []).map((row, i) => {
+            const msg = convo.toPanelMessage(row);
+            msg.mode = session.mode;
+            // Keep any richer local card attached to a message the panel itself produced (same order).
+            const local = session.history[i];
+            if (local?.card && local.text === msg.text) msg.card = local.card;
+            return msg;
+          });
+        }
+        paint();
+      })
+      .catch(() => paint());
+  }
   // The stage always starts closed over a blank screen, then resolves into the hologram.
   session.advanced = false;
   panel.dataset.view = 'stage';
@@ -967,6 +1195,14 @@ export function copilotState() {
     view: session.advanced ? 'advanced' : 'stage',
     listening: session.listening,
     cards: session.history.filter((m) => m.card).map((m) => m.card.type),
+    // Where the answers come from — the one thing a test (or a person) must be able to check.
+    source: session.live,
+    gatewayState: session.gatewayState,
+    live: convo.getState().status,
+    runtimeConfigured: Boolean(convo.getState().runtime?.configured),
+    conversationId: convo.getState().conversationId,
+    modelCallIds: session.history.filter((m) => m.modelCallId != null).map((m) => m.modelCallId),
+    pendingLabel: session.pending ? (session.live === 'live' ? 'Waiting for the model…' : 'Working…') : '',
   };
 }
 
@@ -982,6 +1218,10 @@ export function resetCopilotSession() {
   session.listening = false;
   session.voiceStatus = '';
   session.recognition = null;
+  session.live = 'local';
+  session.gatewayState = 'demo';
+  session.lastError = '';
+  convo.reset();
 }
 
 /* ---------- events ---------- */
@@ -1026,6 +1266,15 @@ function onClick(e) {
     case 'mode':
       setMode(t.dataset.mode);
       break;
+    case 'new-conversation':
+      newConversation();
+      break;
+    case 'open-models': {
+      closeCopilot();
+      try { shellActions.navigate?.('models'); } catch { /* the shell owns routing */ }
+      toast('Install a provider key, then reopen the Copilot', 'info');
+      break;
+    }
     case 'suggest':
       openCopilot();
       if (t.dataset.mode && t.dataset.mode !== session.mode) setMode(t.dataset.mode);

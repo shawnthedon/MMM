@@ -5,6 +5,7 @@
  */
 import { getRuntime } from './runtime.js';
 import { isApiMode } from '../api.js';
+import * as convo from './conversation.js';
 import { getAuth, can } from '../auth.js';
 import { knowledgeStats } from './knowledge.js';
 import { memorySummary } from './memory.js';
@@ -304,9 +305,40 @@ const CAPS = {
     status: 'unverified',
     summary: 'No model is called. Answers are deterministic retrieval + live app state.',
     detail:
-      'The model catalogue, routing policies and agent model ids are demo data. There is no provider client, no key handling and no streaming. Copilot must not be described as an LLM in this build.',
-    requirements: ['Provider client + key vault', 'Model discovery/health/limits', 'Tool-calling intent router'],
-    evidence: () => 'no fetch to a provider anywhere in src/',
+      'Without a gateway there is no provider client and no key vault, so the Copilot answers from reviewed knowledge and live app state. The card reports the truth per install: it turns to “not configured” once a gateway is connected, and “available” only when the gateway reports a provider with a sealed key.',
+    requirements: ['A gateway session', 'A provider key sealed by an Owner on the Models screen'],
+    evidence: () => 'no gateway configured — every answer is deterministic and says so',
+    // The honest status is a runtime fact, so it is read from the conversation, not asserted here.
+    dynamic: () => {
+      let live = 'demo';
+      let rt = null;
+      try {
+        live = convo.available() ? convo.getState().status : 'demo';
+        rt = convo.getState().runtime;
+      } catch {
+        live = 'demo';
+      }
+      if (live === 'ready') {
+        return {
+          status: 'available',
+          summary: `Replies come from ${rt?.providerName || 'a provider'}${rt?.model ? ` (${rt.model})` : ''} through the gateway.`,
+          detail:
+            'Each turn is a real model call recorded in the model ledger with its token counts and an estimated cost, and the conversation is stored on the gateway so it survives a reload. There is no streaming: a turn resolves when the whole reply arrives, and Stop cancels the request. Cost is an estimate from a price table, not an invoice.',
+          evidence: `gateway · ${rt?.providerName || 'provider'} · ${rt?.model || 'default model'} · cost ${rt?.costBasis || 'estimated'}`,
+        };
+      }
+      if (live === 'unready' || live === 'unavailable' || live === 'error') {
+        return {
+          status: 'unconfigured',
+          summary: 'A gateway is connected, but no provider can answer — sends are refused, not faked.',
+          detail:
+            rt?.reason ||
+            'The gateway has no provider with a sealed key, so the Copilot refuses a turn instead of inventing one. Your message is still stored on the gateway.',
+          evidence: live === 'unavailable' ? 'gateway · no Copilot route' : 'gateway · no sealed provider key',
+        };
+      }
+      return {};
+    },
   },
 };
 

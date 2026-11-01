@@ -55,6 +55,13 @@
       "LIST": "GET /api/v1/tokens",
       "CREATE": "POST /api/v1/tokens",
       "REVOKE": "DELETE /api/v1/tokens/:id"
+    },
+    "copilot": {
+      "READ": "GET /api/v1/copilot",
+      "SEND": "POST /api/v1/copilot/messages  body:{text, clientId?, route?}",
+      "CLEAR": "DELETE /api/v1/copilot",
+      "RUNTIME": "GET /api/v1/copilot/runtime",
+      "MODEL": "PUT /api/v1/copilot/model  body:{providerId, model?}"
     }
   },
   "planned": [
@@ -62,7 +69,6 @@
     "POST /skills/:id/activate",
     "GET/POST /chat/threads/:id/messages",
     "GET/POST /files",
-    "POST /copilot/messages",
     "GET /analytics/series/:metric"
   ],
   "auth": {

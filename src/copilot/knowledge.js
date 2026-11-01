@@ -527,12 +527,33 @@ export const KNOWLEDGE = [
       'The Models screen is a real gateway since M29, over a 26-provider catalogue (frontier clouds, mid-tier clouds, local/self-hosted, specialised, enterprise). A provider is “configured” only when an Owner has sealed a key on the gateway; otherwise it is “unconfigured”, no key store, and no button that would pretend to try.\n' +
       'One OpenAI-compatible adapter: the gateway POSTs to {baseUrl}/chat/completions with the key in an Authorization header, never follows a redirect, applies a timeout and a 256 KB response cap, and refuses plain http off loopback. The key is sealed with AES-256-GCM (key material from MMM_SECRET or a 0600 file) and is never returned — a read gives a 16-hex fingerprint and a hint like ••••abcd.\n' +
       'Every attempt is written to the model_calls ledger as ok, blocked or error, with token counts, latency and an ESTIMATED cost from a price table (not an invoice). Spend is SUM(cost_usd) over ok rows only, so a refusal can never inflate it; the daily and per-call budgets are checked before the request leaves the process (HTTP 402 + a blocked row, provider contacted zero times). Prompts and replies are never stored — only reply_chars.\n' +
-      'Not built: streaming (a long completion blocks), retries or fallback, and routing — the routing policies on the screen are notes labelled “not enforced”. Chat and Copilot do not call this funnel yet, so they still answer nothing and say so.',
+      'Not built: streaming (a long completion blocks), retries or fallback, and routing — the routing policies on the screen are notes labelled “not enforced”. Copilot is the first caller (M30): a conversation turn goes through this funnel with purpose “copilot”, and the reply is stored with the id of the call that produced it. Chat still calls nothing and says so.',
     sources: [
       { label: 'apps/gateway/src/models.js — the funnel and the ledger', ref: 'apps/gateway/src/models.js' },
       { label: 'apps/gateway/src/secrets.js — sealed key material', ref: 'apps/gateway/src/secrets.js' },
       { label: 'apps/gateway/migrations/010_model_calls.sql — ledger schema', ref: 'apps/gateway/migrations/010_model_calls.sql' },
       { label: 'src/views2.js — the screen reads the ledger', ref: 'src/views2.js' },
+    ],
+  },
+  {
+    id: 'copilot.conversation',
+    title: 'Copilot conversations: a model when one is configured, the built-in engine when not',
+    type: 'reference',
+    module: 'copilot',
+    tags: ['copilot', 'conversation', 'model', 'llm', 'chat', 'history', 'cost', 'transcript', 'memory'],
+    status: 'verified',
+    version: PACK.version,
+    updated: '2026-11-01',
+    sensitivity: 'internal',
+    body:
+      'Two things decide who answers. Where the reply comes from is either a model or the built-in engine; what the gateway says is one of ready (a provider with a sealed key), unready (a gateway but no key), unavailable (a gateway with no Copilot route), error, or demo (no gateway at all). Only “ready” makes the conversation a model conversation.\n' +
+      'With a model: a turn is stored on the gateway before the call, every reply carries the id of the model call that produced it with its token counts, latency and an estimated cost, the transcript survives a reload and is scoped to the signed-in principal, and the last 24 turns are sent as history so follow-ups work. With no model: answers come from this knowledge pack and live app state, the mode tabs stay, and every answer says on its own line that no model was called.\n' +
+      'When the gateway has no model, nothing is sent anywhere — the conversation stays in this browser. When it has one but the call fails, the turn is marked failed with the server’s own reason and no answer is invented.\n' +
+      'Not built yet: streaming, tool calls, and artefacts from conversation — the Copilot can discuss an agent, a swarm plan or a browser task but cannot create one. Those are the next units, and the system brief states the limit rather than letting the model imply otherwise.',
+    sources: [
+      { label: 'apps/gateway/src/copilot.js — the turn, the refusal, the ledger join', ref: 'apps/gateway/src/copilot.js' },
+      { label: 'src/copilot/conversation.js — the client conversation', ref: 'src/copilot/conversation.js' },
+      { label: 'docs/copilot/conversation.md', ref: 'docs/copilot/conversation.md' },
     ],
   },
   {
