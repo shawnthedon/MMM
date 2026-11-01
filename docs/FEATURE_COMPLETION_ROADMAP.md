@@ -174,7 +174,7 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | 13 | **Copilot** | overlay | 🟠 | Real UI, real consent flow, real capability registry; answers are deterministic retrieval over local state; actions are labelled `demo` | `src/copilot/*` |
 | 14 | **Analytics** | `#/analytics` | 🎭 | Four tiles, a chart and a “Live · last 24h” subtitle built from `+ 12`, `87% success`, `▲ 8%`, `median 4m`, `2 denied by policy` typed into the template | `src/views2.js:734-800` |
 | 15 | **Artifacts / Files** | `#/artifacts` | 🎭 | File list is seed; “Upload” writes into local state; storage reads `248 MB / 2 GB` as a string; `files` table exists unused | `src/views2.js:816-880` |
-| 16 | **Terminal** | `#/terminal` | 🎭 | 24 commands over local state; `/run`, `/deploy`, `/spend` fabricate results; banner says “shell v0.1.0-proto” | `src/terminal.js` |
+| 16 | **Terminal** | `#/terminal` | ✅ | Real end to end: **real child processes** on the gateway host — `node`, `npm`, `npx`, no shell — with live stdout/stderr over SSE, exact exit codes, Ctrl+C, multiple sessions, a persistent cwd, an approval gate for destructive npm commands, and an audit row per run. Authorised agents run commands through the same path and read back the output. **Local-first: no cloud dependency, and an offline `npm install` only works for packages already on disk** | `apps/gateway/src/terminal/`, `src/terminal.js`, `src/terminal.css` |
 | 17 | **Comms** | `#/comms` | ⚠️ | Genuinely server-side: encrypted channel configs, delivery rows, retry queue, signature-gated inbound. **Never verified against a live provider** | `apps/gateway/src/comms.js`, `docs/comms/` |
 | 18 | **Telegram Bridge** | `#/telegram` | 🎭 | Entirely local. The link switch flips a boolean; “Send test notification” toasts **“Sent to Telegram”** without sending anything; the command preview answers with hardcoded strings, including a fake agent progress line | `src/views2.js:640-740` |
 | 19 | **Voice Studio** | `#/voice` | 🟠 | `browser-speech` adapter is real where `speechSynthesis` exists (on-device); the local-endpoint and cloning adapters are contract-only until you run a server | `src/voice/adapters.js` |
@@ -1069,8 +1069,13 @@ the storage bar is a `SUM(size)`; a user cannot read another principal's file.
 
 ### M14 · Terminal
 
-**Today.** 24 commands over local state. `help` lists commands that fabricate results (`/run`,
-`/deploy`, `/spend`), and the banner says “shell v0.1.0-proto”.
+**Today.** Shipped in M26 — but not as this section planned it. The plan below assumed a *console*
+that calls read routes; what shipped is stronger: real child processes with a policy in front of them.
+Read §5 **M26** first; the steps here are kept because the honesty requirements (retitle, `help` from
+the command table, delete the fabricating cases) were all met on the way through.
+
+**Was.** 24 commands over local state. `help` listed commands that fabricated results (`/run`,
+`/deploy`, `/spend`), and the banner said “shell v0.1.0-proto”.
 
 **The gap.** It presents itself as a shell with system access. It has none.
 
@@ -1456,6 +1461,62 @@ newest with `truncated: true` rather than paginating.
 
 ---
 
+### M26 · Terminal that runs real commands
+
+**Today.** Implemented and proven end to end. The terminal is not a console that prints plausible
+text — it starts real processes on the gateway host, one at a time, and streams what they say.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| Policy | `apps/gateway/src/terminal/policy.js` | The first line of defence, and the only place that decides what may run. `TERMINAL_EXECUTABLES` is `node`, `npm`, `npx` — **no shell**, so `rm -rf /`, `&&`, `|`, `>` and `$(…)` are not commands, they are a refusal with a reason. `npm -g`, `--prefix=`, `--registry=`, `--userconfig=`, `--script-shell=` and absolute paths are refused, because each is a way out of the workspace. Absolute path arguments are resolved against the **real** workspace root; anything outside it is `bad-path`. |
+| Workspaces | `apps/gateway/src/terminal/workspaces.js` | Roots come from the deployment (`MMM_TERMINAL_ROOTS`) or default to `DATA_DIR/workspaces` — never from a request. `resolveInside()` is the only path join used for a cwd, so `cd ../../..` cannot become a way to read the host. The repository can be a root, explicitly, and then every command in it needs an approval. |
+| Execution | `apps/gateway/src/terminal/index.js` | `spawn` with `shell: false`, its own process group (`detached`), and a cwd that must be an absolute path inside the workspace — a `spawn` with an undefined cwd inherits the gateway's own directory, so that is checked rather than assumed. One run per session (`409` otherwise), bounded output (`OutputBuffer`), bounded time, `SIGTERM` → `SIGKILL` escalation on stop, and every run recorded with command, exit code, signal and duration. |
+| Streaming | `server.js`, `src/api.js` | `GET /runs/:id/stream` is `text/event-stream` (`run`, `chunk`, `exit`), with `GET /runs/:id/output?since=` as the replay path for a reconnecting client, so output is not lost when a screen is left and reopened. |
+| Approvals | `terminal/index.js` `requestApproval`, `server.js` | `npm ci` and `npm uninstall` are *destructive*: they open a gate, return `awaiting_approval` and run **nothing** until a different principal allows it. The requester cannot approve their own gate — same rule as every other approval in the app. |
+| Agents | `terminal/index.js` `runForAgent` | An authorised agent runs a command through the same policy, the same approval gate and the same audit trail, and gets the output and exit code back — which is what makes “inspect the error and retry” a real loop instead of a prompt. A grant is required; without one the route is `403`, not a spawn. |
+| Screen | `src/terminal.js`, `src/terminal.css` | The existing design, kept: same chips, same prompt, same scrollback. Adds a live run bar (running / completed / failed / awaiting approval, with the exit code), a stop button, a cwd indicator with the detected `package.json`, session management, a clear control, and history with ArrowUp. Output survives switching screens because the view is `persistent` and the scrollback lives in module state. |
+| Deleted | `src/terminal.js` | The fabricated `/run`, `/deploy`, `/spend` and the `Math.random()` swarm. `deploy` and `run` now print the route they would need and stop. |
+
+**Acceptance tests.** `npm run test:terminal` — 28 checks against a real gateway on a temporary
+`DATA_DIR`, running real binaries: this host's `node --version` and `npm --version`, a real
+`npm init -y` that writes a real `package.json`, a real `npm install` of a packed local package (and of
+`express` when the registry answers, skipped with the reason printed when it does not), `npm run`
+listing the project's own scripts, `npm run build` and `npm run dev` executing them, exit codes 7 and
+3 with stdout and stderr kept apart, SSE chunks arriving spread over time, a late subscriber
+replaying what it missed, the approval gate (self-approval `403`, Reviewer allows, denial runs nothing),
+the role matrix, env vars accepted by name and never echoed, the gateway's own environment not
+inherited, `SIGINT` leaving no orphan, and one-command-at-a-time.
+`npm run test:terminal:ui` — 12 checks in happy-dom: no gateway means the screen says so and the
+prompt is disabled, a typed command is POSTed and its chunks land in the right lane, a failure shows
+its exit code, a refusal shows the gateway's reason and opens no stream, a destructive command is
+reported as waiting and claims nothing ran, Ctrl+C sends `SIGINT`, Ctrl+L clears, ArrowUp recalls,
+app commands stay local, script chips run `npm run <script>`.
+`npm run test:terminal:browser` — 15 checks in real Chromium against the real gateway: sign in, open
+the terminal, `node --version` and `npm --version`, `npm init -y` creating a file on disk, `npm run`
+listing the project's scripts, `npm run greet` printing its real output, a script chip re-running it,
+a long-running script stopped by the stop button **and** by Ctrl+C with no output afterwards,
+`npm install express` installing into the project and being importable, the transcript surviving a
+screen switch, `rm -rf /` refused, and no orphaned process left behind.
+
+**The gap.** Process isolation, not a container: a command runs as the gateway's own user, so the
+limits are a policy, an allowlist, a cwd check, a time limit and an output cap — not filesystem or
+network namespaces. Network isolation is **not** enforced and the capability endpoint says so. There
+is no PTY, so interactive programs that need a TTY (`vim`, prompts on a pipe) will not behave; stdin is
+available through `POST /runs/:id/input` but nothing emulates a terminal. Nothing is simulated, and
+nothing is claimed beyond that.
+
+**Next steps**
+
+1. Run each command in a `bwrap`/`nsjail` sandbox when one is available, and report which one is in
+   use through the capability endpoint (the isolation field already exists for this).
+2. A cheap PTY layer for programs that check `isatty`.
+3. Per-workspace resource budgets (CPU time, output bytes per day) instead of per-run caps.
+4. Let an agent chain retries explicitly: `attempt`, `fix`, `retry` recorded as one agent run.
+
+**URLs:** A.30 (process isolation and terminal conventions).
+
+---
+
 ## 6. Master implementation checklist
 
 Tick a box only when its **evidence** exists (test output, SQL row, recorded call). Order matters
@@ -1551,10 +1612,10 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 - [ ] Ownership scoping (404, not 403)
 - [ ] Storage bar from `SUM(size)`
 
-### M14 · Terminal
-- [ ] Retitled; reads call the API; writes explained, not faked
-- [ ] `help` generated from the command table
-- [ ] `reset-demo` removed
+### M14 · Terminal ✅ M26
+- [x] Retitled; the banner states that this runs real processes on the gateway
+- [x] `help` matches the implementation, including which commands need an approval
+- [x] The fabricating cases (`run`, `deploy`, `spend`, `reset-demo`) are gone
 
 ### M15 · Comms / Telegram ⛓ (M09 optional; independent otherwise)
 - [ ] Telegram screen rebuilt on `PUT/POST/GET /api/v1/comms/telegram*`
@@ -1650,6 +1711,21 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 - [ ] Streaming, attachments, per-message edit/delete
 - [ ] Pagination beyond the 200-message window
 
+### M26 · Terminal that runs real commands
+- [x] `spawn` with no shell; `node`/`npm`/`npx` only; metacharacters and escaping flags refused with reasons
+- [x] Working directory resolved inside a workspace root and re-checked before every spawn
+- [x] Live stdout/stderr over SSE, with a replay path so output survives leaving the screen
+- [x] Exact exit codes and signals; `running`/`completed`/`failed`/`cancelled`/`timed_out`/`refused`/`blocked`
+- [x] Ctrl+C and a stop button send `SIGINT`; the whole process group is killed, no orphans
+- [x] Multiple sessions, one command per session at a time (`409`), persistent cwd, history
+- [x] `npm ci` / `npm uninstall` behind an approval a different principal must grant
+- [x] Agents run through the same policy, with a grant, and get output plus exit code back
+- [x] Every run recorded (command, actor, status, exit code, duration) and audited with no secret in the row
+- [x] The fabricating `run`/`deploy`/`spend` cases deleted
+- [ ] Kernel-enforced isolation (namespaces/container), and network isolation reported honestly as unenforced
+- [ ] A PTY for programs that require a TTY
+- [ ] Per-workspace resource budgets
+
 ---
 
 ## 7. TODO — the next twelve sessions
@@ -1664,6 +1740,7 @@ One session ≈ one sitting. Each is independently shippable.
 | 4 | **Swarms: write path** | Deploy persists; pause/resume/cancel; delete the `$6.40` literal | two-browser test |
 | 5 | **Teams** | Teams CRUD + membership; swarms reads the team | `test:teams` |
 | 6 | ~~**Chat persists**~~ ✅ M25 | threads/messages routes; `simulateReply` deleted; `runtime: { configured: false }` in every payload | `test:chat` 16 · `test:chat:ui` 10 · real browser 5 |
+| 6b | ~~**Terminal runs real commands**~~ ✅ M26 | spawn behind a policy; SSE streaming; Ctrl+C; approval gate; agent runs | `test:terminal` 28 · `test:terminal:ui` 12 · real browser 15 |
 | 7 | **Provider key + one real call** | Seal a key, one adapter, `modelCall()`, `usage_events` | recorded call + `dist/` grep |
 | 8 | **Metering + budgets** | Daily cap enforced pre-call; Models page shows real spend | budget refusal test |
 | 9 | **Agents run** | `agent_runs` + worker + recomputed stats + honest seed | `test:agent-runs` |
@@ -1908,6 +1985,17 @@ re-litigate a decision that cost a bug to learn.
 | Why a partial unique index instead of a unique `client_id`? | Rows written before `007` have no key; they must not collide with each other. `WHERE client_id <> ''` keeps the constraint exactly where it is meaningful. | `007_chat_idempotency.sql` |
 | Why is message text absent from the audit trail? | Audit rows are read by Reviewers for governance, not for conversation. Length plus thread id answers "was it stored" without copying private text into a second store. | `chat.js`, `db.js` `audit()` |
 | What is honestly missing? | No model, so no reply; no streaming; no pagination past 200 messages per thread; no per-thread access control beyond `chat:read`. | M25 “The gap” |
+
+### A.30 Process execution, isolation and terminal conventions
+
+| Question | Answer | Where |
+| --- | --- | --- |
+| Why is there no shell? | A shell is the feature, not the plumbing: `rm -rf /` is only dangerous once `spawn` is given `/bin/sh -c`. Without one, the argument vector is the program's, so `|`, `&&`, `>` are ordinary characters that the policy refuses instead of parsing. | `policy.js` `tokenise` |
+| Why `detached: true`? | So the child gets its own process group and `kill(-pid, 'SIGINT')` reaches the whole tree — `npm run dev` spawns a server, and stopping must stop the server, not just npm. | `index.js` `signalRun` |
+| Why check the cwd again at spawn time? | `spawn` with an undefined cwd silently inherits the parent's — which is how a suite once ran `npm init -y` in this repository. A refusal must throw, and the cwd must be absolute and inside the workspace before the call. | `index.js` `startProcess` |
+| What is honestly not enforced? | Filesystem and network namespaces. A child runs as the gateway's user; it can read whatever that user can read over the network. The capability endpoint reports `isolation: 'process'` with an explicit `notEnforced` list rather than implying a sandbox. | `describeTerminalPolicy()` |
+| How do you add a real sandbox? | Wrap the command in `bwrap` (or `nsjail`) with only the workspace bind-mounted and no network, then report the sandbox in the capability payload. The policy and the UI need no change. | `@anthropic-ai/sandbox-runtime`, `bubblewrap` |
+| Where do terminal conventions come from? | ANSI/ECMA-48 for escape sequences, `node-pty` if you later want a real TTY, and `xterm.js` if you want to render one. | `node-pty`, `xterm.js` |
 
 ## Appendix B — Beginner reference
 

@@ -71,7 +71,7 @@
 | 💬 | **Chat** — real transcript on the gateway; says plainly that no model runtime answers yet | 📡 | **Comms** — Telegram · WhatsApp · Discord · Slack · SMS · Browser gateways |
 | 📊 | **Analytics** — KPIs, spend, trust posture | ⚙️ | **Settings** — everything live-tunable |
 | 🧠 | **Local** — on-device AI preflight + experimental runtime spike (no model bundled) | 🧭 | **Agent Designer** — guided creation, idle definitions |
-| 📁 | **Artifacts & Files** — previews, upload, share | 💻 | **Terminal** — working `swarm` CLI |
+| 📁 | **Artifacts & Files** — previews, upload, share | 💻 | **Terminal** — real `node`/`npm`/`npx` processes on the gateway: live output, exit codes, Ctrl+C, per-project cwd, approvals for destructive npm commands |
 
 ---
 
@@ -158,7 +158,29 @@ never accepts secrets in chat. See [Comms gateways](docs/comms/channels.md) and
 [credentials](docs/comms/credentials.md).
 
 ### 💻 Terminal
-**Terminal** → try `help`, `status`, `agents`, `deploy audit plugins`, `approve ap-1`, `cat` a file. Destructive commands are policy-blocked.
+The terminal runs **real commands** on the gateway host — `node`, `npm` and `npx`, with no shell in
+between. With the gateway running, open **Terminal**, then:
+
+```
+node --version            npm --version
+npm init -y               npm install express
+npm run                   npm run build
+npx cowsay hi             help · status · agents · open home
+```
+
+Output streams as it happens, the run bar shows `running` / `completed` / `failed` with the exact exit
+code, **Stop** (or Ctrl+C) interrupts a long-running process, ArrowUp recalls history and Ctrl+L clears.
+Each session keeps its own working directory under `DATA_DIR/workspaces` (or the roots you set in
+`MMM_TERMINAL_ROOTS`), so `npm install` installs into the project you are in, not into MMM.
+
+`npm ci` and `npm uninstall` are treated as destructive: they wait for an approval from a **different**
+person. Shell syntax (`&&`, `|`, `>`) is refused rather than emulated, `npm -g` and `--prefix` are
+refused, and no path outside the workspace can be reached.
+
+> ⚠️ **Local-first, and honest about it.** Nothing here calls a cloud service. An `npm install` of a
+> package that is not already in the npm cache needs the network — with no network it fails with npm's
+> own error, and the terminal shows it. Commands run as the gateway's user in a **process** sandbox, not
+> a container: no filesystem or network namespaces, which the capability endpoint states plainly.
 
 ### 📱 Install on your phone
 Open the site → browser menu → **Add to Home Screen / Install App** (or **Settings → About → Install app**). Works offline; queued actions sync on reconnect.

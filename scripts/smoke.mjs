@@ -284,17 +284,25 @@ await check('gateway probe reports a truthful status', async () => {
 copilot.resetCopilotSession();
 
 const term = await import('../src/terminal.js');
-check('terminal execCommand', () => {
+check('terminal renders and refuses to fabricate', () => {
+  term.resetTerminalForTests();
+  navigate('terminal');
+  rerender(); // first mount seeds the scrollback, so type after it — the same order a person uses
   term.execCommand('help');
   term.execCommand('status');
   term.execCommand('agents');
   term.execCommand('deploy smoke-test objective');
-  term.execCommand('approve ap-1');
   term.execCommand('nonsense-cmd');
-  const h = html();
-  navigate('terminal');
-  rerender();
-  if (!html().includes('MMM shell')) throw new Error('terminal not rendered');
+
+  const screen = html();
+  // The terminal is a real process runner now: with no gateway it must say so rather than print a
+  // plausible-looking transcript.
+  if (!screen.includes('term-screen')) throw new Error('terminal not rendered');
+  if (screen.includes('swarm deployed')) throw new Error('terminal still fabricates a deployment');
+  const lines = term.terminalState().lines.map((l) => l.text).join('\n').replace(/\s+/g, ' ');
+  if (!/swarm deployment is not implemented/.test(lines)) throw new Error('deploy must say it is not implemented');
+  if (!/App commands/.test(lines)) throw new Error('help output missing');
+  if (!/no gateway is configured, so nothing can be executed/.test(lines)) throw new Error('an unknown command must not be silently accepted');
 });
 
 check('store persists', () => {

@@ -418,3 +418,43 @@ including `Estimated cost: $0.42` — are gone from `src/views2.js`.
   background request). `npm test` and `npm run build` green.
 - Honest limits: no model runtime (so no reply), no streaming, no pagination past 200 messages per
   thread, no per-thread access control beyond `chat:read`.
+
+---
+
+## 💻 2026-11-01 — The terminal runs real commands now (M26)
+
+The screen that used to print 24 plausible-looking answers is gone. `src/terminal.js` now drives real
+child processes on the gateway, and the fabricating cases (`run`, `deploy`, `spend`, the `Math.random()`
+swarm) are **deleted** — `deploy` and `run` print the route they would need and stop.
+
+- Policy first: `apps/gateway/src/terminal/policy.js` allows `node`, `npm`, `npx` and **no shell**, so
+  `&&`, `|`, `>` and `$(…)` are refusals with a reason rather than syntax. `npm -g`, `--prefix`,
+  `--registry`, `--userconfig`, `--script-shell` and absolute paths are refused; absolute arguments are
+  resolved against the real workspace root and anything outside it is `bad-path`.
+- Execution: `apps/gateway/src/terminal/index.js` spawns with `shell: false` in its own process group,
+  with a cwd that must be absolute and inside a workspace — checked again at spawn time, because a
+  `spawn` with an undefined cwd silently inherits the gateway's own directory (that bug was real: it is
+  how a test suite once ran `npm init -y` inside this repository).
+- Live output: SSE (`run` · `chunk` · `exit`) with `GET /runs/:id/output?since=` as the replay path, so
+  output is not lost when you leave the screen and come back. Exact exit codes and signals; states
+  `running`/`completed`/`failed`/`cancelled`/`timed_out`/`refused`/`blocked`.
+- Control: **Stop** or Ctrl+C sends `SIGINT` to the process group (`SIGTERM` → `SIGKILL` escalation),
+  one command per session at a time (`409`), several sessions, a cwd that persists per session, env
+  vars accepted by **name** and never echoed back, and the gateway's own environment is not inherited.
+- Governance: `npm ci` and `npm uninstall` open an approval that a **different** principal must grant —
+  self-approval is `403`, denial runs nothing. Every run is recorded (actor, command, status, exit code,
+  duration) and audited without any secret in the row. An agent with a grant runs through the same policy
+  and gets output plus exit code back; without a grant the route is `403`, not a spawn.
+- Screen: the existing design, kept — same chips, prompt and scrollback — plus a live run bar with the
+  exit code, a stop control, a cwd indicator with the detected `package.json` and its scripts.
+- Evidence: `npm run test:terminal` — **28 passed** against a real gateway on a temporary `DATA_DIR`
+  (real `npm init -y`, real `npm install` of a packed local package, `npm install express` when the
+  registry answers, `npm run build`/`dev`, exit codes 7 and 3, SSE spread over time, approval gate, role
+  matrix, no orphan after `SIGINT`); `npm run test:terminal:ui` — **12 passed**; `npm run
+  test:terminal:browser` — **15 passed** in real Chromium (sign in → open the terminal → `npm install
+  express` visibly installs → run the project's script → interrupt it, no output afterwards). `npm test`
+  and `npm run build` green.
+- Honest limits: process isolation, **not** a container — no filesystem or network namespaces, and the
+  capability endpoint says `isolation: 'process'` with the unenforced list. No PTY, so TTY-only programs
+  will not behave. `npm install` needs the network unless the package is already cached; the app never
+  claims otherwise.
