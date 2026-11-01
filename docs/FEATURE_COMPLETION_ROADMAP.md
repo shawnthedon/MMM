@@ -163,16 +163,16 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | 2 | **Agents** | `#/agents` | 🟠 | Cards are real and persist, and **team, team position and goal are real columns** (`agents.team_id`, `agents.team_position`, `agents.goal`); every *number* is still a seed constant — `status: 'running'` is a label, `successRate`, `costToday`, `runs`, `lastActive`, `memory` are never computed | `001_init.sql` (agents), `006_team_membership.sql`, `fixtures/agents.json` |
 | 3 | **Agent Designer** | `#/designer` | 🟠 | Saves through `createAgent()` → `POST /api/v1/agents` (real), but validation is client-side only and there is no versioning, evaluation or rollback | `src/designer.js:648` |
 | 4 | **Teams** | `#/teams` | ✅ | Real end to end: create, rename, delete, add/remove member, reorder by position, through gateway routes with RBAC and audit. Membership lives once, on `agents.team_id` + `agents.team_position` (`team_members` retired by `006`). Deleting a team **unassigns** its members and says so. The panel is a full-height sheet on a phone and a 900 px docked panel above that | `apps/gateway/src/teams.js`, `server.js`, `src/team-panel.js`, `src/views1.js`, `src/agents.css` |
-| 5 | **Teams & Swarms** | `#/swarms` | 🎭 | Deploy writes a **local object** with a fabricated node list; the estimate `$6.40` is a string literal; progress advances from `Math.random()` in a `setInterval` | `src/views1.js:500-520`, `src/main.js` `tick()` |
+| 5 | **Teams & Swarms** | `#/swarms` | 🎭 | A swarm is a **plan**: the fixture ships `status: 'planned'`, `executed: false`, every node `planned`, spend `0`, and the screen says “not executed” in the list, the record and the detail view. The `$6.40` estimate, the `Math.random()` ticker and the fake Pause/Cancel controls are deleted. Nothing schedules, executes or persists a swarm | `src/views1.js`, `src/core.js` |
 | 6 | **Tasks / Kanban** | `#/tasks` | ✅ | Real CRUD through the gateway; moves confirm before writing; drag, wires and zoom are client-side by design | `src/kanban.js`, `src/views2.js` |
 | 7 | **Approvals** | `#/approvals` | ✅ | Real gates, separation of duties (you cannot approve your own), audited decisions | `server.js`, `scripts/gateway-auth-test.mjs` |
 | 8 | **Skills Hub** | `#/skills` | 🎭 | 24-entry catalogue + 6 installed skills are local; import/validation/quarantine is genuinely good code but client-side; “activate” changes a local flag | `src/skillsData.js`, `src/skillsImport.js` |
 | 9 | **Skills Matrix** | `#/matrix` | 🎭 | Relationship editing is local state only | `src/views2.js` |
-| 10 | **Model Gateway** | `#/models` | 🎭 | 26 seeded providers; the on/off switch flips a local boolean; `latency`, `spendMTD` are constants; **no provider client, no key storage, no streaming** | `src/views2.js:328-380`, `fixtures/providers.json` |
-| 11 | **Plugins / MCP** | `#/plugins` | 🎭 | “Install” sets `installed = true` locally and toasts success; the pasted API key is discarded; `callsToday` counts are seed data; the banner claims calls are “proxied & audited by the gateway” | `src/views2.js:385-470` |
+| 10 | **Model catalogue** | `#/models` | 🎭 | 26 seeded providers, presented as a catalogue: “not configured”, 0 calls made by this app, every row `not configured`, routing policies labelled *illustrative / not enforced*. The fake on/off switch, `Active providers`, `Spend MTD` and the typed budget bars are deleted. **No provider client, no key store, no streaming** | `src/views2.js`, `fixtures/providers.json` |
+| 11 | **Plugins / MCP** | `#/plugins` | 🎭 | A catalogue that says so: “no MCP client is installed in this build”, rows read *not connected*, the install action opens “what it needs” instead of flipping a flag, `callsToday` is gone and the credential field is deleted (a secret the app cannot store must not be collected). The proxy / `scoped tokens` banner is gone | `src/views2.js` |
 | 12 | **Chat** | `#/chat` | ✅ | Real transcript end to end: threads and messages persist on the gateway, survive a reload and a restart, and the read receipt is a write. **Nothing answers**: there is no model runtime, the API says so in every read (`runtime.configured: false`) and the screen prints it. A request body cannot claim an agent spoke. Writes are idempotent by `clientId` | `apps/gateway/src/chat.js`, `server.js`, `src/views2.js`, `src/datastore.js` |
 | 13 | **Copilot** | overlay | 🟠 | Real UI, real consent flow, real capability registry; answers are deterministic retrieval over local state; actions are labelled `demo` | `src/copilot/*` |
-| 14 | **Analytics** | `#/analytics` | 🎭 | Four tiles, a chart and a “Live · last 24h” subtitle built from `+ 12`, `87% success`, `▲ 8%`, `median 4m`, `2 denied by policy` typed into the template | `src/views2.js:734-800` |
+| 14 | **Analytics** | `#/analytics` | 🎭 | Still mostly typed-in — `+ 12`, `87% success`, `▲ 8%`, `median 4m` remain (**session 11**). Fixed here: the MCP tile reads `—` / *not measured · no client* instead of a seed counter, the MCP bar chart is gone, and Export writes a CSV computed from the rows on screen instead of a constant string containing `spend_today,17.93` | `src/views2.js` |
 | 15 | **Artifacts / Files** | `#/artifacts` | 🎭 | File list is seed; “Upload” writes into local state; storage reads `248 MB / 2 GB` as a string; `files` table exists unused | `src/views2.js:816-880` |
 | 16 | **Terminal** | `#/terminal` | ✅ | Real end to end: **real child processes** on the gateway host — `node`, `npm`, `npx`, no shell — with live stdout/stderr over SSE, exact exit codes, Ctrl+C, multiple sessions, a persistent cwd, an approval gate for destructive npm commands, and an audit row per run. Authorised agents run commands through the same path and read back the output. **Local-first: no cloud dependency, and an offline `npm install` only works for packages already on disk** | `apps/gateway/src/terminal/`, `src/terminal.js`, `src/terminal.css` |
 | 17 | **Comms** | `#/comms` | ⚠️ | Genuinely server-side: encrypted channel configs, delivery rows, retry queue, signature-gated inbound. **Never verified against a live provider** | `apps/gateway/src/comms.js`, `docs/comms/` |
@@ -182,7 +182,7 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | 21 | **Local AI** | `#/local` | ❌ | Phase 2 spike only; model manager, offline text, image phases not started | `src/local.js`, `docs/local/` |
 | 23 | **Agent Browser** | `#/browser` | ✅ | Real end to end: gateway-owned tasks, one action per tick, watchdog, bounded recovery, checkpoints, evidence. **Requires Chromium on the gateway host** — until it is installed the screen reports `unconfigured` and offers no start button | `apps/gateway/src/browser/`, `src/browser.js` |
 | 24 | **Self-Improvement** | `#/evolution` | ✅ | Real end to end: per-agent policy, isolated candidate, real sandboxed test runs, independent review, approval, versioned promotion and rollback, audit. **The sandbox is process isolation, not a container, and says so.** No model writes the patch for you yet | `apps/gateway/src/evolution/`, `src/evolution.js` |
-| 22 | **Settings** | `#/settings` | 🎭 | Trust-weight sliders change a *preview number* only; notification toggles do nothing; retention is display text; “4 templates active”, “AEAD-sealed vault”, “default-deny · proxy” are static strings | `src/views2.js:930-1000` |
+| 22 | **Settings** | `#/settings` | 🎭 | The four static security claims are replaced with what is true: live pending-approval count, audit *gateway-only*, “no key vault in this build”, “egress not enforced by this app”. Notifications say they are device-local and that nothing is sent; retention says nothing is deleted on that schedule; the simulation switch went with the ticker. Trust-weight sliders still only move a labelled preview | `src/views2.js` |
 
 > **Note on honesty already present.** The header chip, the provenance notes and the capability
 > registry are the app telling the truth about itself. They are correct today. Every playbook below
@@ -1517,6 +1517,43 @@ nothing is claimed beyond that.
 
 ---
 
+### M27 · Stop the lies that cost nothing
+
+**Today.** Shipped. Nothing on these screens is animated, and the four claims that read as fact without
+being one now say what the code actually does.
+
+| Was | Where | Now |
+| --- | --- | --- |
+| A 4.2 s `tick()` advanced live swarms by `Math.random()`, drifted a fake usage curve and invented events | `src/main.js` | Deleted, with the `settings.simulate` switch that drove it. A simulation switch is still a simulation. |
+| Swarm fixtures claimed 62% progress and `$3.41` spent, on nodes marked `done` | `src/core.js` | `status: 'planned'`, `executed: false`, every node `planned`, spend `0`. The list, the record and the detail view all say *not executed*. |
+| A deploy sheet offered “Deploy · est $6.40” — a string, not a calculation | `src/views1.js` | “Save record”, and a banner explaining that nothing runs. Pause and Cancel are gone: there is no process to pause. |
+| “Active providers”, “Spend MTD”, a per-provider switch and typed budget bars | `src/views2.js` | A catalogue: *not configured*, 0 calls made by this app, routing policies labelled *illustrative / not enforced*. |
+| “All calls proxied & audited by the gateway”, `calls today` per plugin, and an Install button that asked for an API key, discarded it and toasted success | `src/views2.js` | “No MCP client is installed in this build”, *not connected*, `callsToday` gone, and the credential field deleted — collecting a secret the app cannot store is the worst of the three. |
+| “4 templates active”, “AEAD-sealed vault”, “default-deny · proxy” | `src/views2.js` | Live pending-approval count; audit *gateway-only*; “no key vault in this build”; “egress not enforced by this app”. |
+| An analytics Export that wrote `spend_today,17.93` and `mcp_calls,535` as constants, plus an MCP bar chart drawn from seed counters | `src/views2.js` | The CSV is computed from the rows on screen, `size` is the real byte length, unmeasured metrics are omitted; the MCP tile says *not measured* and the chart is gone. |
+| Copilot text describing “the demo ticker” advancing swarms | `src/copilot/` | Same story as the screen: a record is saved, the plan will not move. |
+
+**Why this mattered.** The remaining fabricated numbers were not decorative: `Spend MTD`, `calls today`
+and swarm progress looked exactly like the serviced numbers beside them, so the honest ones could not be
+told apart. Deleting the source of motion (the ticker) and the fixed claims leaves a screen where every
+number is either a row or explicitly marked missing.
+
+**Acceptance tests.** `npm run test:honesty` — 13 checks over code and DOM: no `tick()`, no
+`setInterval(tick)`, no `settings.simulate`, no `Math.random` in `main.js`; swarm fixtures are plans with
+zero spend; the four claims are absent from source and from the rendered screens; no password field on
+the plugin screen; no provider switch on the models screen; and **five seconds of real state with an
+unchanged DOM**. `npm run test:honesty:browser` — 8 checks in real Chromium at 390 px: the teams banner,
+**six seconds with a byte-identical DOM** (the old tick fired at 4.2 s), the swarm detail has no
+Pause/Cancel, settings and plugins show the truthful text, no page errors across ten screens, and no
+sideways scroll at 320 px.
+
+**The gap.** Analytics still carries typed-in tiles (`▲ 8%`, `87% success`, `median 4m`) — that is
+session 11, and it needs a ledger to read from. The Copilot's own proposal cards still say `Simulated
+runtime` where they mean *no runtime*; the wording is scheduled with M09. Nothing here makes a swarm real:
+that is session 4, and it needs a scheduler.
+
+---
+
 ## 6. Master implementation checklist
 
 Tick a box only when its **evidence** exists (test output, SQL row, recorded call). Order matters
@@ -1726,6 +1763,18 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 - [ ] A PTY for programs that require a TTY
 - [ ] Per-workspace resource budgets
 
+### M27 · No fabrications
+- [x] `tick()`, `setInterval(tick)`, `toggle-sim` and `settings.simulate` deleted
+- [x] Swarm fixtures are plans (`executed: false`, `planned` nodes, zero spend)
+- [x] Swarm screens label every record `not executed`; the `$6.40` estimate and Pause/Cancel are gone
+- [x] Models is a catalogue (`not configured`, 0 calls, illustrative policies, no switch)
+- [x] Plugins declares that no MCP client exists; `callsToday` and the credential field deleted
+- [x] Settings' four static security claims replaced with true, scoped text
+- [x] Analytics MCP tile/chart removed; Export computes its CSV from the rows
+- [x] Copilot text no longer describes a ticker
+- [ ] Analytics' remaining typed-in tiles (session 11)
+- [ ] Swarm execution (session 4)
+
 ---
 
 ## 7. TODO — the next twelve sessions
@@ -1734,8 +1783,8 @@ One session ≈ one sitting. Each is independently shippable.
 
 | # | Session | Ships | Proves |
 | --- | --- | --- | --- |
-| 1 | **Stop the lies that cost nothing** | Delete the three static security claims; Models page says “catalogue · not configured”; Plugins copy says “no MCP client”; remove `callsToday` | `npm test`; screenshots |
-| 2 | **Kill the ticker** | Remove `tick()`, `toggle-sim`, `settings.simulate`; swarm progress renders from the local row only, labelled `not executed` | `rg "Math.random" src/main.js` empty |
+| 1 | ~~**Stop the lies that cost nothing**~~ ✅ M27 | The four static security claims replaced with live/true text; Models is a catalogue · not configured; Plugins says there is no MCP client and holds no credential field; `callsToday` deleted | `test:honesty` 13 · real browser 8 |
+| 2 | ~~**Kill the ticker**~~ ✅ M27 | `tick()`, `toggle-sim`, `settings.simulate` deleted; swarm rows are plans labelled `not executed`; the `$6.40` literal and the fake Pause/Cancel are gone | `rg "Math.random" src/main.js` empty · 6 s in a real browser with an unchanged DOM |
 | 3 | **Swarms: read path** | `swarms` table → routes → slice → WS → real list | new `test:swarms` |
 | 4 | **Swarms: write path** | Deploy persists; pause/resume/cancel; delete the `$6.40` literal | two-browser test |
 | 5 | **Teams** | Teams CRUD + membership; swarms reads the team | `test:teams` |

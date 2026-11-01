@@ -458,3 +458,43 @@ swarm) are **deleted** — `deploy` and `run` print the route they would need an
   capability endpoint says `isolation: 'process'` with the unenforced list. No PTY, so TTY-only programs
   will not behave. `npm install` needs the network unless the package is already cached; the app never
   claims otherwise.
+
+---
+
+## 🧹 2026-11-01 — The ticker is dead and the static claims are gone (M27)
+
+There was a 4.2-second `tick()` in `src/main.js` that advanced live swarms with `Math.random()`, drifted
+a fake usage curve and invented events — on every screen, forever. It is **deleted**, with the
+`settings.simulate` switch that drove it. A switch that turns a simulation on is still a simulation.
+
+- **Swarms are plans.** `src/core.js` shipped a fixture claiming 62% progress and `$3.41` spent on nodes
+  marked `done`; every cent was a literal. It now ships `status: 'planned'`, `executed: false`, six
+  `planned` nodes and `spent: 0`. The list, the record and the detail view each say **not executed**, the
+  `Deploy · est $6.40` button is “Save record”, and Pause/Cancel are gone — there is no process to pause.
+- **Models is a catalogue.** “Model Gateway” + “Active providers” + “Spend MTD” + a per-provider on/off
+  switch described a gateway that does not exist. The screen now says *not configured*, *0 calls made by
+  this app*, marks routing policies *illustrative / not enforced*, and the switch, the invented spend and
+  the typed budget bars are deleted.
+- **Plugins holds no secret.** The banner claimed “all calls proxied & audited by the gateway”, each row
+  showed a `calls today` counter, and Install asked for an API key it then threw away while toasting
+  success. Now: “no MCP client is installed in this build”, rows read *not connected*, the action opens
+  *what it needs*, `callsToday` is deleted, and the credential field is gone — collecting a secret the app
+  cannot store is worse than the fake install.
+- **Settings tells the truth.** “4 templates active”, “AEAD-sealed vault”, “default-deny · proxy” are
+  replaced by a live pending-approval count, *audit gateway-only*, “no key vault in this build” and
+  “egress not enforced by this app”. Notifications say they are device-local and nothing is sent;
+  retention says nothing is deleted on that schedule.
+- **Analytics stops charting calls it never made**: the MCP tile reads *not measured · no client*, the
+  bar chart is gone, and Export now computes its CSV from the rows on screen (`size` is the real byte
+  length) instead of writing `spend_today,17.93` and `mcp_calls,535` as constants.
+- Copilot knowledge and proposal text no longer describe a ticker; a swarm record is saved with status
+  `planned` and the card says the plan will not move.
+- Evidence: `npm run test:honesty` — **13 passed** (no `tick`, no `settings.simulate`, no `Math.random` in
+  `main.js`, fixtures are plans, the claims are absent from both source and rendered DOM, no password
+  field, no provider switch, and **five seconds of unchanged state**); `npm run test:honesty:browser` —
+  **8 passed** in real Chromium at 390 px, including **six seconds with a byte-identical DOM** (the old
+  tick fired at 4.2 s), no page errors across ten screens and no sideways scroll at 320 px. `npm test`
+  and `npm run build` green.
+- Honest remaining: Analytics still carries typed-in tiles (`▲ 8%`, `87% success`, `median 4m`) — that is
+  session 11 and needs a ledger; no swarm is executed or persisted, which is session 4 and needs a
+  scheduler.

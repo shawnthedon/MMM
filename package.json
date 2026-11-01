@@ -40,7 +40,7 @@
     "audit:verify": "node -e \"import('./apps/gateway/src/db.js').then(m=>console.log(m.verifyAuditChain()))\"",
     "icons": "node scripts/gen-icons.mjs",
     "smoke": "node --import ./scripts/register-css-stub.mjs scripts/smoke.mjs",
-    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:design && npm run test:responsive && npm run test:local && npm run test:local-runtime && npm run test:isolation && npm run test:kanban && npm run test:scroll && npm run test:comms-gateway && npm run test:gateway && npm run test:session-safety && npm run test:sw-safety && npm run test:provider-safety && npm run test:comms-persistence && npm run test:training-jsonl && npm run test:voice && npm run test:motion && npm run test:browser && npm run test:browser-ui && npm run test:evolution && npm run test:evolution-ui && npm run test:teams && npm run test:teams:ui && npm run test:chat && npm run test:chat:ui && npm run test:terminal && npm run test:terminal:ui",
+    "test": "npm run smoke && npm run test:copilot && npm run test:auth && npm run test:readsync && npm run test:designer && npm run test:skills && npm run test:comms && npm run test:design && npm run test:responsive && npm run test:local && npm run test:local-runtime && npm run test:isolation && npm run test:kanban && npm run test:scroll && npm run test:comms-gateway && npm run test:gateway && npm run test:session-safety && npm run test:sw-safety && npm run test:provider-safety && npm run test:comms-persistence && npm run test:training-jsonl && npm run test:voice && npm run test:motion && npm run test:browser && npm run test:browser-ui && npm run test:evolution && npm run test:evolution-ui && npm run test:teams && npm run test:teams:ui && npm run test:chat && npm run test:chat:ui && npm run test:terminal && npm run test:terminal:ui && npm run test:honesty",
     "test:copilot": "node --import ./scripts/register-css-stub.mjs scripts/copilot-tour.mjs",
     "test:auth": "node --import ./scripts/register-css-stub.mjs scripts/auth-ui-test.mjs",
     "test:gateway": "node --no-warnings scripts/gateway-auth-test.mjs",
@@ -83,7 +83,9 @@
     "test:chat:browser": "node scripts/chat-browser-test.mjs",
     "test:terminal": "node --no-warnings scripts/terminal-gateway-test.mjs",
     "test:terminal:ui": "node --import ./scripts/register-css-stub.mjs scripts/terminal-ui-test.mjs",
-    "test:terminal:browser": "node scripts/terminal-browser-test.mjs"
+    "test:terminal:browser": "node scripts/terminal-browser-test.mjs",
+    "test:honesty": "node --import ./scripts/register-css-stub.mjs scripts/honesty-test.mjs",
+    "test:honesty:browser": "node scripts/honesty-browser-test.mjs"
   },
   "devDependencies": {
     "autoprefixer": "^10.6.2",

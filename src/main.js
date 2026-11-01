@@ -33,7 +33,7 @@ let previousRoute = 'home';
 let renderedKey = null;
 
 /* ---------- scroll continuity ----------
- * State changes (the 4.2s simulation tick, gateway syncs, toasts that update data) re-render the
+ * State changes (gateway syncs, toasts that update data) re-render the
  * whole view. Rendering must never move the reader: a re-render keeps the page and every inner
  * scroller where they were, and only a real navigation returns to the top. */
 const SCROLL_IDLE_MS = 450;
@@ -165,11 +165,6 @@ subscribe((state, label) => {
   if (v?.persistent && label?.startsWith('term')) return; // terminal updates imperatively
   if (window.__dragging) return; // kanban drag in progress
   if (typeof v?.skipRender === 'function' && v.skipRender(label)) return; // view owns its DOM right now
-  if (label === 'sim') {
-    if (v?.persistent) return;
-    const ae = document.activeElement;
-    if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName)) return;
-  }
   // Replacing the view mid-gesture kills momentum scrolling on touch devices. Wait for the reader
   // to stop; `renderWhenIdle` flushes after SCROLL_IDLE_MS or MAX_RENDER_DEFERRAL_MS.
   if (isScrolling()) { renderWhenIdle(); return; }
@@ -182,50 +177,12 @@ function sessionGatePaused() {
   return currentRoute === 'login' && active && ['INPUT', 'TEXTAREA'].includes(active.tagName);
 }
 
-/* ---------- live simulation ticker ---------- */
-function tick() {
-  const s = getState();
-  if (!s.settings.simulate) return;
-  // Anything the gateway owns is driven by the gateway's own rows and live stream. Simulating
-  // those slices here would produce changes the server never saw (ghost state).
-  const swarmsLocal = !sliceIsLive('swarms');
-  const usageLocal = !sliceIsLive('usage');
-  if (!swarmsLocal && !usageLocal) return;
-  setState((st) => {
-    // advance live swarms
-    if (swarmsLocal) st.swarms.filter((w) => w.status === 'live').forEach((w) => {
-      w.progress = Math.min(0.97, w.progress + 0.004 + Math.random() * 0.012);
-      w.budget.spent = Math.round((w.budget.spent + 0.01 + Math.random() * 0.05) * 100) / 100;
-      const active = w.nodes.find((n) => n.status === 'running');
-      if (active) {
-        active.spent = Math.round((active.spent + 0.01 + Math.random() * 0.03) * 100) / 100;
-        if (Math.random() < 0.06) {
-          active.status = 'done';
-          const next = w.nodes.find((n) => n.status === 'queued');
-          if (next) next.status = 'running';
-          logEvent('swarm', `${w.name}: node ${active.label} completed`);
-        }
-      }
-    });
-    // usage drift
-    if (usageLocal) {
-      if (st.usage.length > 24) st.usage.shift();
-      st.usage.push({ ts: now(), cost: 0.4 + Math.random() * 2.4, tokens: Math.floor(8000 + Math.random() * 30000) });
-    }
-    // occasional event (skipped when the feed is gateway-backed: logEvent is a no-op there)
-    if (Math.random() < 0.12) {
-      const evs = [
-        ['mcp', `firecrawl.scrape called · ${(0.4 + Math.random() * 2).toFixed(1)}s · ok`],
-        ['mcp', `github.pr.create called by Coder-07 · gated · ok`],
-        ['agent', `Researcher-01 checkpoint saved`],
-        ['trust', `SRE-Bot trust +1 → 96 (clean approval streak)`],
-        ['model', `fallback invoked · claude-sonnet-4 → deepseek-v3`],
-      ];
-      const [type, text] = evs[Math.floor(Math.random() * evs.length)];
-      logEvent(type, text);
-    }
-  }, 'sim');
-}
+/* ---------- no ticker ----------
+ * There used to be a 4.2 s `tick()` here. It advanced live swarms by `Math.random()`, drifted a fake
+ * usage curve and invented events — every 4 seconds, on every screen. It was the single largest source
+ * of numbers in this app that no row could explain. It is deleted rather than paused: a simulation
+ * switch is still a simulation. Swarms render their stored row and are labelled `not executed`.
+ */
 
 /* ---------- PWA ---------- */
 function registerSW() {
@@ -249,7 +206,6 @@ function boot() {
   parseHash();
   rerender();
   registerSW();
-  setInterval(tick, 4200);
 
   // Identity first: the gateway is the authority on who is signed in and what they may do.
   refreshSession()
