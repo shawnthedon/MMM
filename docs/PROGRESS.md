@@ -588,3 +588,57 @@ ever wrote. It is now a real gateway with one adapter, a sealed key store and a 
 - Honest limit: **no streaming, no retries, no policy routing, no invoices.** Cost is an estimate from a
   price table and the UI says *estimated*; the `llm` capability stays unflipped because nothing else in
   the app calls the funnel yet — Chat still answers nothing, and still says so.
+
+## 💬 2026-11-01 — The Copilot gets a conversation instead of a switch statement (M30)
+
+Unit 1 of the Copilot upgrade: the 1,282-line deterministic `handle()` is no longer the only thing that can
+answer. On a gateway, a turn is a real model call, stored as a row, linked to the ledger row that produced
+it — and when no model can answer, the refusal is the server's, not a keyword matcher wearing the model's
+name.
+
+- **Schema** (`011_copilot.sql`): `threads.owner_id` (one conversation per principal), `messages.model_call_id`
+  (the call that produced an assistant turn), and `copilot.provider` / `copilot.model` settings. There is one
+  insert path and it **throws** if an agent turn arrives without a call id, so a reply cannot exist without
+  the meter that made it. Copilot threads are excluded from `GET /threads` — they would otherwise put a
+  model-written turn inside Chat, whose banner says, truthfully, that it generates no replies.
+- **Gateway** (`apps/gateway/src/copilot.js`): one turn stores your message **first** (a provider outage must
+  not lose what you typed), resolves the model, and — with no sealed key — answers `409 { code: 'no-model' }`
+  while writing **no assistant row**. With a key it calls the M29 funnel (`purpose: 'copilot'`), stores the
+  reply with tokens, latency, estimated cost and call id, and audits lengths only: never the question, never
+  the answer. History is the last 24 turns / 12,000 chars, oldest first, the new message exactly once;
+  `clientId` makes a retried send one turn.
+- **Routes**: `GET /copilot`, `POST /copilot/messages` (30/min per principal), `DELETE /copilot`,
+  `GET /copilot/runtime`, `PUT /copilot/model`. `copilot:read` (every role), `copilot:write` (Operator —
+  every turn spends money), `copilot:model` (**Owner**, the same rank as installing the key it depends on).
+  The conversation id is never read from a request body, so a guessed id returns *your* thread.
+- **Panel / client** (`src/copilot/conversation.js`, `panel.js`): two facts are decided separately — where
+  the reply comes from (`live` model vs `local` engine) and what the gateway says (`ready` / `unready` /
+  `unavailable` / `error` / `demo`). Only `ready` turns the conversation into a model conversation; the
+  transcript on screen is then the gateway's, not `localStorage`'s. Mode tabs render whenever the built-in
+  engine is what replies (including on a gateway with no key, which keeps every existing action card and
+  gateway write working); on a live conversation the row becomes a runtime statement (provider · model ·
+  *cost estimated*) with no tabs, because there is nothing to choose when you can just talk. A live reply
+  carries `model · 120 in / 30 out · $0.0021 est. · 640 ms · call #42`; a local reply says no model was
+  called. `unready` shows a notice before you type and states that the conversation stays in the browser;
+  `unavailable` (a gateway without the routes) is stated rather than mimed; pending distinguishes
+  *Working…* from *Waiting for the model…*; Stop aborts the request; clearing takes two taps and deletes on
+  the server. The `llm` capability now reads the runtime: `available` only when a sealed key is resolving.
+- Evidence: `npm run test:copilot-api` — **19 passed** against a real gateway and a real loopback
+  OpenAI-compatible provider (no key → 409, question stored, no assistant row, provider contacted zero
+  times; a real turn carries the ledger id; prompt is system + stored history with no duplicated turn;
+  provider failure → 502 with only the question stored; a body `conversationId` is ignored; a retried
+  `clientId` is one turn; a body-`conversationId` from another principal cannot reach your transcript;
+  Observer may read but not spend; conversations survive a restart; a clear removes only your own turns).
+  `npm run test:copilot:ui` — **8 passed** (demo labels every answer "no model called"; `unready` warns
+  first and invents nothing; the transcript is the gateway's; a live bubble carries tokens, estimated cost
+  and call id while no mode button exists; an upstream failure is marked failed with the server's words and
+  no call id; Stop aborts; clearing is two steps; a gateway without the routes is reported).
+  `npm run test:copilot:browser` — **8 passed in real Chromium** against a real gateway and a real loopback
+  provider (no key → local answers, provider contacted zero times; seal a key through the Models sheet → the
+  panel becomes live with no mode tabs; a real question reaches the provider with `Bearer` and comes back as
+  the provider's text with `240 in / 40 out · est. · call #N`; the reply exists in `messages` pointing at a
+  `model_calls` row with `purpose='copilot'`; reload keeps the conversation; at 320 px nothing overflows and
+  every control is ≥ 44 px; no page errors). `npm test` (41 suites) and `npm run build` green. Design + limits: [`copilot/conversation.md`](copilot/conversation.md).
+- Honest limit: **no streaming and no tool calls.** Multi-turn context only — the Copilot cannot read your
+  board or create an agent yet. Drafts, swarm plans, Agent Browser JSON and open-source voice are units 2–5
+  and are not built; the panel does not imply otherwise.

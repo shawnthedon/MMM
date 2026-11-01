@@ -79,10 +79,17 @@ export function threadRow(row, { withMessages = true } = {}) {
   return { ...base, messages, truncated, messageCount: total };
 }
 
-/** Every thread the reader may see, newest activity first. */
+/**
+ * Every thread the reader may see, newest activity first.
+ *
+ * Copilot conversations (`kind='copilot'`) are deliberately excluded: they belong to `copilot.js`, they
+ * are scoped to one principal, and they answer with a model. Mixing them into this list would present a
+ * model-written turn in a transcript whose runtime says it generates nothing.
+ */
 export function listThreads({ limit = LIMITS.threads } = {}) {
   const rows = db.prepare(`SELECT t.*, COALESCE(MAX(m.ts), t.created_at) AS last_ts
                            FROM threads t LEFT JOIN messages m ON m.thread_id = t.id
+                           WHERE t.kind <> 'copilot'
                            GROUP BY t.id ORDER BY last_ts DESC LIMIT ?`).all(limit);
   return { threads: rows.map((row) => threadRow(row)), runtime: runtimeStatus() };
 }

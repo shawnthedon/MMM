@@ -21,6 +21,7 @@ import { evolution, setEvolutionBroadcast, ensurePoliciesForAllAgents } from './
 import * as teams from './src/teams.js';
 import * as swarms from './src/swarms.js';
 import * as models from './src/models.js';
+import * as copilot from './src/copilot.js';
 import * as chat from './src/chat.js';
 import * as terminal from './src/terminal/index.js';
 import * as auth from './src/auth.js';
@@ -146,6 +147,7 @@ function subscriptionFilter(topic, principal) {
   if (topic === 'chat') return can(principal, 'chat:read');
   if (topic === 'terminal') return can(principal, 'terminal:read');
   if (topic === 'models') return can(principal, 'model:read');
+  if (topic === 'copilot') return can(principal, 'copilot:read');
   if (topic === 'audit') return can(principal, 'audit:read');
   return can(principal, 'read');
 }
@@ -767,6 +769,84 @@ route('PUT', /^\/api\/v1\/budget$/, { permission: 'model:key', mutating: true },
     return { code: 200, body: { budget } };
   } catch (error) {
     return modelFail(error);
+  }
+});
+
+/* ---- Copilot: a real conversation on the model gateway (see src/copilot.js) ----
+ * Reading is `copilot:read` (every role sees its own conversation); sending is `copilot:write`, because
+ * every reply is a metered model call and therefore spends money. Pointing the Copilot at a provider is
+ * `copilot:model` — Owner only, like installing the key it depends on.
+ *
+ * A conversation is scoped to the caller: the thread id is never taken from a request body, so one
+ * principal cannot read or continue another's transcript by guessing an id.
+ */
+const copilotFail = (error) => {
+  const code = error?.code || 'error';
+  const status = code === 'not-found' ? 404
+    : code === 'conflict' ? 409
+      : code === 'no-model' ? 409
+        : code === 'budget-exceeded' ? 402
+          : code === 'timeout' ? 504
+            : ['network', 'bad-gateway', 'provider-error'].includes(code) ? 502
+              : 400;
+  return { code: status, body: { error: error.message, code, runtime: error.runtime || null } };
+};
+
+route('GET', /^\/api\/v1\/copilot$/, { permission: 'copilot:read' }, (ctx) => {
+  try {
+    return { code: 200, body: copilot.listConversation(ctx.principal.id) };
+  } catch (error) {
+    return copilotFail(error);
+  }
+});
+
+/** One turn. The reply is a real model call; a refusal writes no assistant message. */
+route('POST', /^\/api\/v1\/copilot\/messages$/, { permission: 'copilot:write', mutating: true }, async (ctx) => {
+  const limit = auth.rateLimit(`copilot:send:${ctx.principal.id}`, { limit: 30, windowMs: 60 * 1000 });
+  if (!limit.allowed) return { code: 429, body: { error: 'too many Copilot turns; wait a moment' }, headers: { 'Retry-After': String(limit.retryAfter) } };
+  try {
+    const out = await copilot.send({
+      principalId: ctx.principal.id,
+      via: ctx.principal.via,
+      text: ctx.body?.text,
+      clientId: ctx.body?.clientId,
+      route: typeof ctx.body?.route === 'string' ? ctx.body.route.slice(0, 40) : '',
+    });
+    if (!out.duplicate && out.reply) {
+      broadcast('copilot', { type: 'copilot.message', entity: out.reply.id, callId: out.reply.modelCallId });
+    }
+    return { code: 200, body: out };
+  } catch (error) {
+    return copilotFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/copilot$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
+  try {
+    const out = copilot.clearConversation(ctx.principal.id, ctx.principal.via);
+    broadcast('copilot', { type: 'copilot.cleared', entity: ctx.principal.id });
+    return { code: 200, body: out };
+  } catch (error) {
+    return copilotFail(error);
+  }
+});
+
+/** What can answer right now — the panel reads this instead of guessing. */
+route('GET', /^\/api\/v1\/copilot\/runtime$/, { permission: 'copilot:read' }, (ctx) => {
+  try {
+    return { code: 200, body: { runtime: copilot.runtimeStatus(), model: copilot.resolveModel(), gateway: models.runtimeStatus() } };
+  } catch (error) {
+    return copilotFail(error);
+  }
+});
+
+route('PUT', /^\/api\/v1\/copilot\/model$/, { permission: 'copilot:model', mutating: true }, (ctx) => {
+  try {
+    const runtime = copilot.setModel(ctx.body || {}, ctx.principal.id, ctx.principal.via);
+    broadcast('copilot', { type: 'copilot.model', entity: runtime.providerId || 'auto' });
+    return { code: 200, body: { runtime } };
+  } catch (error) {
+    return copilotFail(error);
   }
 });
 
@@ -1687,7 +1767,7 @@ export function createGateway() {
           return;
         }
         if (msg?.type === 'subscribe' && Array.isArray(msg.topics)) {
-          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'chat', 'terminal', 'swarms', 'models', 'system', 'audit', '*'].includes(t));
+          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'chat', 'terminal', 'swarms', 'models', 'copilot', 'system', 'audit', '*'].includes(t));
           const refused = wanted.filter((t) => t !== '*' && !subscriptionFilter(t, client.principal));
           client.topics = new Set(wanted.filter((t) => !refused.includes(t)));
           ws.send(JSON.stringify({ topic: 'system', type: 'subscribed', topics: [...client.topics], refused, ts: Date.now() }));

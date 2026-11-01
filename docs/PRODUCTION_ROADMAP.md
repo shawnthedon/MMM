@@ -109,7 +109,7 @@ commands below, not by trusting the README.
 | 6 | **No backup or restore path.** A single SQLite file in `./data`, no snapshot job, no tested restore. | no backup script; `DATA_DIR` unused beyond `db.js` |
 | 7 | **No rate limiting per principal** — one global `MMM_RATE_LIMIT` (600) for the process. No per-token quotas, no spend caps enforced server-side. | `server.js` |
 | 8 | **Browser test suites are not in `npm test`.** `test:motion:browser`, `test:scroll:browser`, `test:voice:browser`, `test:relay:browser`, `test:isolation:browser`, `test:local-spike:browser`, `test:sw-safety:browser` must be run by hand. | `package.json` |
-| 9 | **7 API contracts are declared but do not exist**: swarm deploy/pause/resume/cancel, skills activate, chat messages, files, copilot messages, analytics series. | `packages/shared/api-routes.json` → `"planned"` |
+| 9 | **API contracts declared but not all exist**: swarm deploy/pause/resume/cancel, skills activate, files, analytics series. Chat messages and the Copilot conversation (`GET/POST /copilot…`, M30) now ship. | `packages/shared/api-routes.json` → `"planned"` |
 | 10 | **The product still runs a browser simulation ticker** that advances swarms and spend with `Math.random()`. | `src/main.js` `tick()` |
 | 11 | **No production deploy topology documented**: the gateway is a Node process, the app is a static SPA on Vercel. Nothing explains how they meet at one origin, or how TLS/same-site cookies work across them. | `README.md` “Deploy” covers Vercel only |
 | 12 | **No legal/privacy surface**: no terms, no privacy notice, no data-retention enforcement (settings exist and are inert), no DPA/NDPA posture, no cookie statement. | none in repo |
@@ -151,7 +151,7 @@ Read this before touching any code. It is the actual backlog of dishonesty.
 | **D11** 🟨 | **Export report** | `src/views2.js` `on('export-report')` | Toasts “exported → artifacts/reports/…”, then unshifts a **hardcoded CSV string** into local state | L6: generate CSV server-side from the same aggregate query, return a real file; or remove the button. | downloaded CSV matches live query for a known fixture |
 | **D12** 🟧 | **Artifacts / Files** | `src/views2.js` `views.artifacts`; `GET/POST /files` planned | File list is local demo data; nothing is stored | L6: `files` table exists — expose `GET/POST /api/v1/files` with content-type validation, size cap, and owner scoping. | upload → row → download → byte-identical |
 | **D13** 🟨 | **Terminal** | `src/terminal.js` (banner, `reset-demo`, `plugins` with `callsToday`) | Simulated command shell over local state | L6: keep it as a **local UI console** explicitly labelled “browser-only console”; wire real read commands through the API and refuse writes it cannot perform. Remove `reset-demo`. | `help` output lists only implemented commands; each tested |
-| **D14** 🟧 | **Copilot answers** | `src/copilot/orchestrator.js`, `capabilities.js` (`llm: unverified`) | Deterministic retrieval over demo state; some cards say `simulated: true` | L4: persist messages (`POST /copilot/messages`), keep capability registry as the source of truth, then L5: attach a real model behind the registry with a `verified` flag. | capability status flips only with a proven call |
+| **D14** 🟩 | **Copilot answers** | `apps/gateway/src/copilot.js`, `src/copilot/conversation.js`, `capabilities.js` | On a gateway: stored, multi-turn, metered model calls, each reply linked to its `model_calls` row; no model → the server's refusal, no invented turn. Off a gateway the deterministic engine answers and labels itself. | Remaining: drafts (agent, swarm plan, browser JSON) and open-source voice — units 2–5. | `test:copilot-api` 19 · `test:copilot:ui` 8 · `llm` flips only on a live configured provider |
 | **D15** 🟧 | **Voice** | `src/voice/studio.js` (explicit fake engine), `adapters.js` (never fabricates) | Studio UI works against a fake engine for stale-audio rules; mic consent flow is real | L7: bind one real engine (browser Web Speech or a server TTS adapter) behind the existing adapter interface; otherwise keep `blocked` and keep the fake engine out of production builds. | a spoken clip produced by a named engine, with the engine recorded |
 | **D16** 🟨 | **Training** | capability `training: blocked` | View exists; no backend | Keep blocked. Implement only with a real job runner (`jobs` table exists) — never a progress bar without a job. | job row + logs + artefact |
 | **D17** ⚠️ | **Comms delivery** | gateway routes `/api/v1/comms/*` | Real adapter code, real encryption, mock-tested only | L7: verify one provider end-to-end with a real bot in a private channel; record the message id. | provider-side message id in `comms_messages` |
@@ -549,8 +549,10 @@ Everything before this is plumbing that makes this step safe.
    progress bar is decoration.
 6. Stream responses (`text/event-stream`) for chat and Copilot. Cap body size and per-response
    tokens; enforce a wall-clock timeout; abort on client disconnect so you stop paying for tokens.
-7. Set `llm` in `src/copilot/capabilities.js` to `unverified` while testing, and only to `available`
-   once a recorded, reproducible call exists for the exact model id you ship as default.
+7. `llm` in `src/copilot/capabilities.js` is now **read from the runtime** (M30), not asserted by hand:
+   `available` only when the gateway reports a provider with a sealed key, `not configured` when the
+   gateway exists without one, `unverified` in demo mode. A capability that can be typed in is a claim;
+   one that is computed is evidence.
 8. Add rate limits per principal and per token (see SEC-08) so one client cannot drain the balance.
 
 **Verification**
