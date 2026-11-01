@@ -65,9 +65,9 @@
 
 | | Module | | Module |
 | :---: | --- | :---: | --- |
-| 🤖 | **Agent Manager** — profiles, team + position, goal, trust; full-height team panel on a phone, 900 px dock on a desktop | 🐝 | **Teams & Swarms** — real teams, real membership (one row, one truth); swarms still simulate |
+| 🤖 | **Agent Manager** — profiles, team + position, goal, trust; full-height team panel on a phone, 900 px dock on a desktop | 🐝 | **Teams & Swarms** — real teams and membership; a swarm is a **plan** and says so: nothing schedules or executes one |
 | 📋 | **Kanban Board** — drag & drop, @agent dispatch | ⚡ | **Skills Hub** — 24-skill marketplace, multi-format import, [Skills Matrix](docs/copilot/skills-hub.md) |
-| 🧠 | **Model Gateway** — routing, budgets, key vault | 🧩 | **Plugins** — MCP install & scoped grants |
+| 🧠 | **Model catalogue** — 26 providers listed, **no provider client installed** | 🧩 | **Plugin catalogue** — MCP entries listed, **no MCP client installed** |
 | 💬 | **Chat** — real transcript on the gateway; says plainly that no model runtime answers yet | 📡 | **Comms** — Telegram · WhatsApp · Discord · Slack · SMS · Browser gateways |
 | 📊 | **Analytics** — KPIs, spend, trust posture | ⚙️ | **Settings** — everything live-tunable |
 | 🧠 | **Local** — on-device AI preflight + experimental runtime spike (no model bundled) | 🧭 | **Agent Designer** — guided creation, idle definitions |
@@ -145,7 +145,13 @@ Tap the centre **✦ Copilot** button and pick a mode — **Ask · Operate · Bu
 
 > 🔐 **Governance:** with a gateway session, agent/task writes and approval decisions are RBAC-checked server-side, separation-of-duties guarded (you cannot approve your own gate) and written to a hash-chained audit log. Read the contract in [`docs/copilot/copilot-governance-auth.md`](docs/copilot/copilot-governance-auth.md).
 
-> ⚠️ **Truthfulness:** the module screens still read seeded demo state in the browser (read sync is pending). The panel header always shows `Demo data · gateway …`, and agents/swarms/training/voice actions say what is simulated. No model, scheduler, training worker, voice engine or SMS connector is called. See [`docs/copilot/PHASE0_DISCOVERY.md`](docs/copilot/PHASE0_DISCOVERY.md).
+> ⚠️ **Truthfulness:** several screens still read seeded demo state in the browser, and each one says so.
+> Nothing in the app animates itself any more — the simulation ticker was deleted, so what you see is what
+> is stored. Swarms are plans (`not executed`), the model and plugin screens are **catalogues** with no
+> client behind them, and the four security rows in Settings reflect what the code does rather than what it
+> would like to do. No model, scheduler, training worker, voice engine or SMS connector is called. See
+> [`docs/FEATURE_COMPLETION_ROADMAP.md`](docs/FEATURE_COMPLETION_ROADMAP.md) §2 and
+> [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ### ✈️ Control from Telegram
 **Comms** → pick a gateway (Telegram, WhatsApp, Discord, Slack, SMS, Browser) → enter credentials →

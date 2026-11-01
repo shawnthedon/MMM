@@ -103,11 +103,11 @@ views.home = {
 
         <div class="deck-lower">
           <section class="deck-panel">
-            <div class="deck-panel-head"><div><div class="deck-kicker">WORK IN PROGRESS</div><h2>Active swarms</h2></div><button class="deck-link" data-act="nav" data-to="teams">View all ${icon('right', 15)}</button></div>
-            <p class="deck-panel-sub">${swarms.length} active · demo simulation, not agent execution</p>
+            <div class="deck-panel-head"><div><div class="deck-kicker">PLANS</div><h2>Swarm records</h2></div><button class="deck-link" data-act="nav" data-to="teams">View all ${icon('right', 15)}</button></div>
+            <p class="deck-panel-sub">${swarms.length} saved · not executed by anything</p>
             ${swarms.length ? swarms.slice(0, 3).map((swarm) => `<button class="deck-swarm" data-act="open-swarm" data-id="${esc(swarm.id)}">
-              <div class="deck-swarm-icon">${icon('swarm', 18)}</div><div class="grow"><div class="deck-swarm-name">${esc(swarm.name)}</div><div class="deck-swarm-desc">${esc(swarm.objective)}</div><div class="progress"><i style="width:${Math.max(0, Math.min(100, Math.round(swarm.progress * 100)))}%"></i></div></div><span class="deck-percent">${Math.round(swarm.progress * 100)}%</span>
-            </button>`).join('') : '<div class="deck-empty">No active demo swarms.</div>'}
+              <div class="deck-swarm-icon">${icon('swarm', 18)}</div><div class="grow"><div class="deck-swarm-name">${esc(swarm.name)}</div><div class="deck-swarm-desc">${esc(swarm.objective)}</div><div class="progress"><i style="width:${Math.max(0, Math.min(100, Math.round(swarm.progress * 100)))}%"></i></div></div><span class="deck-percent">${Math.round(swarm.progress * 100)}% planned</span>
+            </button>`).join('') : '<div class="deck-empty">No swarm records yet.</div>'}
           </section>
           <section class="deck-panel">
             <div class="deck-panel-head"><div><div class="deck-kicker">EVENT STREAM</div><h2>Recent activity</h2></div>${sourceTagHTML('events')}</div>
@@ -495,16 +495,20 @@ views.teams = {
     const s = getState();
     return `
       <div class="page-head row between">
-        <div><h1>Teams & Swarms</h1><div class="sub">Compose teams · deploy swarms · watch live ${sourceTagHTML('swarms')}</div></div>
+        <div><h1>Teams & Swarms</h1><div class="sub">Compose teams · swarm records ${sourceTagHTML('swarms')}</div></div>
         <button class="btn primary sm" data-act="new-swarm">${icon('plus', 16)} Deploy</button>
       </div>
-      <div class="section-title" style="margin-top:0">Live swarms</div>
+      <div class="banner warn">${icon('shield', 16)}<div><strong>No swarm has ever executed anything.</strong>
+        These are records: no scheduler, worker or agent process reads them, and their progress does not
+        advance. The screen used to animate them from a browser timer.</div></div>
+      <div class="section-title" style="margin-top:0">Swarm records</div>
       ${s.swarms.map((w) => `
         <button class="list-card" data-act="open-swarm" data-id="${w.id}" style="width:100%;text-align:left">
           <div class="avatar" style="background:${w.status === 'live' ? 'color-mix(in srgb, var(--running) 25%, var(--elevated))' : 'var(--elevated)'};color:var(--brand)">${icon('swarm', 18)}</div>
           <div class="grow">
             <div class="row"><span class="strong small">${esc(w.name)}</span>
-              <span class="chip tiny ${w.status === 'live' ? 'run' : ''}">${esc(w.status)}</span></div>
+              <span class="chip tiny ${w.status === 'live' ? 'run' : ''}">${esc(w.status)}</span>
+              <span class="chip tiny warn" data-swarm-executed="no">not executed</span></div>
             <div class="tiny muted ellipsis">${esc(w.objective)}</div>
             <div class="progress" style="margin-top:6px"><i style="width:${Math.round(w.progress * 100)}%"></i></div>
             <div class="row between" style="margin-top:5px">
@@ -540,20 +544,19 @@ function swarmMonitor(id) {
     <div class="card" style="margin-top:12px">
       <div class="row between">
         <div><h2 style="font-size:17px">${esc(w.name)}</h2><div class="tiny muted">${esc(w.objective)}</div></div>
-        <span class="chip run"><span class="pulse-dot live"></span>${esc(w.status)}</span>
+        <span class="chip tiny">${esc(w.status)} record</span>
       </div>
       <div class="row between" style="margin-top:10px">
-        <span class="tiny muted">elapsed ${Math.round((now() - w.startedAt) / 60000)}m</span>
+        <span class="tiny muted">saved ${Math.round((now() - w.startedAt) / 60000)}m ago · never run</span>
         <span class="tiny strong">${fmtMoney(w.budget.spent)} / ${fmtMoney(w.budget.cap)}</span>
       </div>
       <div class="progress" style="margin-top:6px"><i style="width:${Math.round(w.progress * 100)}%"></i></div>
-      <div class="row" style="gap:8px;margin-top:12px">
-        <button class="btn sm grow" data-act="swarm-pause" data-id="${w.id}">${icon('pause', 13)} Pause</button>
-        <button class="btn sm grow" data-act="swarm-cancel" data-id="${w.id}">${icon('stop', 13)} Cancel</button>
-      </div>
+      <div class="banner warn" style="margin-top:12px">${icon('shield', 16)}<div><strong>Not executed.</strong>
+        No process is running, so there is nothing to pause or cancel. This record is a plan with a budget;
+        a scheduler is what would make it real.</div></div>
     </div>
 
-    <div class="section-title">Dependency graph</div>
+    <div class="section-title">Dependency graph (planned)</div>
     <div class="dag-wrap"><div class="dag"><svg viewBox="0 0 360 360" width="100%" height="330">
       ${edges.map(([a, b]) => {
         const [x1, y1] = pos[a]; const [x2, y2] = pos[b];
@@ -607,9 +610,11 @@ export function swarmDeploySheet(teamId) {
       <div class="field"><label>Channel</label>
         <div class="seg" id="sw-chan"><button class="active">App</button><button>Telegram</button><button>Both</button></div>
       </div>
-      <div class="banner info">${icon('shield', 16)}<div>Gate policy: <strong>all writes require approval</strong> · trust-tier routing enabled</div></div>`,
+      <div class="banner warn">${icon('shield', 16)}<div><strong>Nothing will run.</strong> This saves a swarm record
+        with the plan and the budget you set. There is no scheduler or worker to execute it, and the
+        estimate a deploy sheet would show has to be computed from a budget, not typed in.</div></div>`,
     foot: `<button class="btn grow" data-sheet-close>Cancel</button>
-           <button class="btn grow grad" data-act="swarm-deploy-go">Deploy · est $${'6.40'}</button>`,
+           <button class="btn grow grad" data-act="swarm-deploy-go">Save record</button>`,
   });
   on('swarm-deploy-go', () => {
     const sheet = document.querySelector('.sheet.open');
@@ -619,20 +624,22 @@ export function swarmDeploySheet(teamId) {
     setState((st) => {
       st.swarms.unshift({
         id: uid('sw'), teamId: teamId2, name: obj.toLowerCase().replace(/[^a-z0-9]+/g, '-').split('-').slice(0, 3).join('-'),
-        objective: obj, status: 'live', progress: 0.03, budget: { cap, spent: 0.1 }, startedAt: now(), channel: 'app',
+        // `executed: false` is the honest field: nothing read this row, nothing advanced it, and no money
+        // was spent — so `status` is 'planned', not 'live', and `spent` is 0 rather than a plausible 0.1.
+        objective: obj, status: 'planned', executed: false, progress: 0, budget: { cap, spent: 0 }, startedAt: now(), channel: 'app',
         nodes: [
-          { id: 'n1', label: 'planner', agent: 'ag-researcher', status: 'running', spent: 0.1, elapsed: '0:04' },
-          { id: 'n2', label: 'research-a', agent: 'ag-researcher', status: 'queued', spent: 0, elapsed: '—' },
-          { id: 'n3', label: 'research-b', agent: 'ag-content', status: 'queued', spent: 0, elapsed: '—' },
-          { id: 'n4', label: 'analyze', agent: 'ag-analyst', status: 'queued', spent: 0, elapsed: '—' },
-          { id: 'n5', label: 'writer', agent: 'ag-content', status: 'queued', spent: 0, elapsed: '—' },
-          { id: 'n6', label: 'assembler', agent: 'ag-researcher', status: 'queued', spent: 0, elapsed: '—' },
+          { id: 'n1', label: 'planner', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n2', label: 'research-a', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n3', label: 'research-b', agent: 'ag-content', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n4', label: 'analyze', agent: 'ag-analyst', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n5', label: 'writer', agent: 'ag-content', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n6', label: 'assembler', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
         ],
       });
-      logEvent('swarm', `Swarm deployed · ${obj.slice(0, 60)}`);
+      logEvent('swarm', `Swarm record saved (not executed) · ${obj.slice(0, 60)}`);
     }, 'deploy-swarm');
     import('./shell.js').then((m) => m.closeAllSheets());
-    toast('Swarm deployed 🚀', 'ok');
+    toast('Swarm record saved — nothing is executing', 'ok');
     import('./main.js').then((m) => m.navigate('teams'));
   });
 }
@@ -1340,29 +1347,3 @@ on('task-run', (el, ds) => {
   import('./main.js').then((m) => m.rerender());
 });
 
-on('swarm-pause', (el, ds) => {
-  setState((s) => {
-    const w = s.swarms.find((x) => x.id === ds.id);
-    if (w) w.status = w.status === 'live' ? 'paused' : 'live';
-    logEvent('swarm', `Swarm ${w?.name} ${w?.status}`);
-  }, 'swarm-pause');
-  toast('Swarm updated', 'ok');
-  import('./main.js').then((m) => m.rerender());
-});
-
-on('swarm-cancel', (el, ds) => {
-  confirmModal({
-    title: 'Cancel swarm?',
-    body: 'In-flight privileged actions are rolled back through gates. Budget settles at current spend.',
-    confirmText: 'Cancel swarm', danger: true,
-    onConfirm: () => {
-      setState((s) => {
-        const w = s.swarms.find((x) => x.id === ds.id);
-        if (w) w.status = 'cancelled';
-        logEvent('swarm', `Swarm ${w?.name} cancelled`);
-      }, 'swarm-cancel');
-      toast('Swarm cancelled', 'ok');
-      import('./main.js').then((m) => m.navigate('teams'));
-    },
-  });
-});

@@ -168,9 +168,9 @@ function swarmListAnswer() {
   if (!s.swarms.length) return una('No swarm instances exist yet.');
   return answer(
     s.swarms
-      .map((w) => `${w.name} — ${w.status} · ${Math.round((w.progress || 0) * 100)}% · $${w.budget?.spent ?? 0}/$${w.budget?.cap ?? 0} (simulated progress)`)
-      .join('\n') + '\n\nSwarms are not persisted by the gateway yet, so this is the local demo mirror.',
-    { title: 'Swarm instances', confidence: 'observed', refs: [REF_STATE('swarm list'), { label: 'src/main.js — ticker', ref: 'src/main.js', status: 'verified' }] }
+      .map((w) => `${w.name} — ${w.status} · ${Math.round((w.progress || 0) * 100)}% · budget cap $${w.budget?.cap ?? 0} · not executed`)
+      .join('\n') + '\n\nThese are plans. Nothing in this repo schedules or executes a swarm, and the gateway does not persist one.',
+    { title: 'Swarm instances', confidence: 'observed', refs: [REF_STATE('swarm list'), { label: 'src/views1.js — swarm records', ref: 'src/views1.js', status: 'verified' }] }
   );
 }
 
@@ -506,7 +506,7 @@ function deploySwarmProposal(objective, mode) {
   };
   return proposal({
     title: 'Deploy swarm',
-    summary: 'This is a consequential action in the spec’s risk taxonomy, so it needs two confirmations. In this build it starts a simulated swarm — no real agent executes and no money is spent.',
+    summary: 'This is a consequential action in the spec’s risk taxonomy, so it needs two confirmations. In this build it saves a swarm *record* — no scheduler reads it, no agent executes and no money is spent.',
     risk: 'consequential',
     rows: () => [
       ['Objective', params.objective],
@@ -514,15 +514,15 @@ function deploySwarmProposal(objective, mode) {
       ['Topology', params.topology],
       ['Budget cap', `$${Number(params.budget).toFixed(2)}`],
       ['Gate', params.gate],
-      ['Runtime', 'simulated (browser demo)'],
+      ['Runtime', 'none — a record is saved, nothing executes'],
     ],
     params,
     editable: ['objective'],
-    effects: 'Adds a live swarm to Teams & Swarms; the demo ticker advances its nodes and spend.',
+    effects: 'Adds a swarm record to Teams & Swarms, labelled not executed. No ticker advances it; nothing runs.',
     permissions: apiReady()
       ? 'Gateway has no swarm endpoint yet: this instance stays in the browser mirror even when signed in. No provider, tool or budget is invoked.'
       : 'Demo store write. No provider, tool or budget is actually invoked.',
-    rollback: 'Stop the swarm. Simulated spend is not recoverable, but nothing real was spent.',
+    rollback: 'Delete the record. Nothing was started, so there is nothing to undo.',
     confirm: 'Deploy swarm',
     mode,
     execute: async (p) => {
@@ -535,32 +535,33 @@ function deploySwarmProposal(objective, mode) {
           teamId: 'tm-research',
           name: slug,
           objective: p.objective,
-          status: 'live',
-          progress: 0.04,
-          budget: { cap: Number(p.budget) || 8, spent: 0.12 },
+          status: 'planned',
+          executed: false,
+          progress: 0,
+          budget: { cap: Number(p.budget) || 8, spent: 0 },
           startedAt: now(),
           channel: 'app',
           simulated: true,
           nodes: [
-            { id: 'n1', label: 'planner', agent: 'ag-researcher', status: 'running', spent: 0.12, elapsed: '0:05' },
-            { id: 'n2', label: 'research-a', agent: 'ag-researcher', status: 'queued', spent: 0, elapsed: '—' },
-            { id: 'n3', label: 'research-b', agent: 'ag-content', status: 'queued', spent: 0, elapsed: '—' },
-            { id: 'n4', label: 'assembler', agent: 'ag-analyst', status: 'queued', spent: 0, elapsed: '—' },
+            { id: 'n1', label: 'planner', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
+            { id: 'n2', label: 'research-a', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
+            { id: 'n3', label: 'research-b', agent: 'ag-content', status: 'planned', spent: 0, elapsed: '—' },
+            { id: 'n4', label: 'assembler', agent: 'ag-analyst', status: 'planned', spent: 0, elapsed: '—' },
           ],
         });
-        logEvent('swarm', `Swarm deployed via Copilot (simulated) · ${p.objective}`);
+        logEvent('swarm', `Swarm record saved via Copilot — not executed · ${p.objective}`);
       }, 'copilot-deploy');
       return {
         status: 'ok',
-        summary: 'Swarm instance created. Progress from here is simulated by the demo ticker, not executed by agents.',
+        summary: 'Swarm record created with status “planned”. There is no ticker and no worker: the plan will not move.',
         steps: [
           { label: 'Validate objective', state: 'ok' },
           { label: 'Create swarm instance', state: 'ok', detail: `id ${id}` },
           { label: 'Schedule nodes', state: 'blocked', detail: 'no scheduler/runtime — nodes are seeded' },
           { label: 'Persist on gateway', state: 'blocked', detail: apiReady() ? 'POST /swarms/:id/deploy is still planned, not implemented' : 'no gateway session' },
         ],
-        refs: [REF_STATE('swarm list'), { label: 'src/main.js — simulated progress', ref: 'src/main.js', status: 'verified' }],
-        verify: 'Open Teams & Swarms and watch nodes move — remember the movement is simulated.',
+        refs: [REF_STATE('swarm list'), { label: 'src/core.js — swarm fixtures', ref: 'src/core.js', status: 'verified' }],
+        verify: 'Open Teams & Swarms: the record is there, every node says planned, and the banner says not executed.',
       };
     },
   });
@@ -882,10 +883,10 @@ async function askIntent(lc, raw, ctx) {
     return answer(
       [
         'Honest answer: this build is demo data plus a real UI.',
-        '• Agents, swarms, tasks, approvals, files and provider costs are seeded in the browser store; a ticker animates live swarms.',
+        '• Agents, swarms, tasks, approvals and files are seeded in the browser store. Swarms are plans: no ticker, no worker, nothing executes.',
         `• ${enforcement}`,
         '• No LLM, scheduler, tool, training job, voice engine or SMS connector is invoked.',
-        '• Swarm progress is animated by the local ticker; the gateway does not persist swarms yet.',
+        '• Swarm progress is not animated and not persisted; a swarm is a plan with a budget cap.',
         'The panel header always shows the runtime status so this cannot be mistaken for live execution.',
       ].join('\n'),
       {
@@ -966,7 +967,7 @@ async function operateIntent(lc, raw, ctx) {
   const deployM = raw.match(/^deploy (?:a |new )?swarm(?: for| to| called| named|:)?\s*(.*)/i) || raw.match(/^deploy\s+(.+)/i);
   if (deployM) {
     return {
-      text: 'Consequential action: review the plan, then confirm twice. The runtime is simulated — read the card before you approve.',
+      text: 'Consequential action: review the plan, then confirm twice. There is no runtime — the card says a record is saved and nothing executes.',
       card: deploySwarmProposal(deployM[1], ctx.mode),
     };
   }

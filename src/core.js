@@ -102,7 +102,6 @@ export function seed() {
       selfImprove: 'suggest',
       copilotMode: 'operate',
       copilotMemory: true,
-      simulate: true,
       soundHaptics: true,
       // 'system' follows prefers-reduced-motion; 'full' and 'reduced' override it.
       motion: 'system',
@@ -222,16 +221,19 @@ export function seed() {
       { id: 'tm-red', name: 'Red Cell', topology: 'Pipeline', health: 'watch', description: 'Gated security assessment inside an engagement scope.' },
     ],
     swarms: [
+      // A swarm is a *plan*, and nothing in this repo executes one: there is no scheduler, no worker and
+      // no agent runtime. So the fixture is a plan too — it used to claim 62% progress and $3.41 spent on
+      // nodes marked `done`, every cent of which came from a literal in this file.
       {
         id: 'sw-market', teamId: 'tm-research', name: 'market-intel-swarm', objective: 'Map the EU AI-agent market: top 20 vendors, pricing, positioning.',
-        status: 'live', progress: 0.62, budget: { cap: 10, spent: 3.41 }, startedAt: mins(48), channel: 'telegram',
+        status: 'planned', executed: false, progress: 0, budget: { cap: 10, spent: 0 }, startedAt: mins(48), channel: 'telegram',
         nodes: [
-          { id: 'n1', label: 'planner', agent: 'ag-researcher', status: 'done', spent: 0.42, elapsed: '0:48' },
-          { id: 'n2', label: 'research-a', agent: 'ag-researcher', status: 'done', spent: 1.12, elapsed: '3:10' },
-          { id: 'n3', label: 'research-b', agent: 'ag-content', status: 'running', spent: 0.98, elapsed: '4:02' },
-          { id: 'n4', label: 'analyze', agent: 'ag-analyst', status: 'running', spent: 0.61, elapsed: '2:12' },
-          { id: 'n5', label: 'writer', agent: 'ag-content', status: 'queued', spent: 0, elapsed: '—' },
-          { id: 'n6', label: 'assembler', agent: 'ag-researcher', status: 'queued', spent: 0, elapsed: '—' },
+          { id: 'n1', label: 'planner', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n2', label: 'research-a', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n3', label: 'research-b', agent: 'ag-content', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n4', label: 'analyze', agent: 'ag-analyst', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n5', label: 'writer', agent: 'ag-content', status: 'planned', spent: 0, elapsed: '—' },
+          { id: 'n6', label: 'assembler', agent: 'ag-researcher', status: 'planned', spent: 0, elapsed: '—' },
         ],
       },
     ],

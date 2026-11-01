@@ -151,7 +151,7 @@ export const KNOWLEDGE = [
     updated: '2026-10-26',
     sensitivity: 'internal',
     body:
-      'On first load the app seeds a realistic fixture set (agents, swarms, tasks, approvals, files, events, provider catalogue). A ticker in main.js advances live swarms and adds simulated events while settings.simulate is on.\n' +
+      'On first load the app seeds a fixture set (agents, swarms, tasks, approvals, files, events, provider catalogue). Nothing advances it: the 4.2 s simulation ticker was deleted in M27, so what you see is what is stored.\n' +
       'Fixtures can be restored with `npm run seed -- --reset` (gateway) or by clearing the browser store. Nothing in the PWA is a live agent run today.\n' +
       'The Copilot panel labels this explicitly with a “Demo data” runtime chip and shows whether the gateway health endpoint answered.',
     sources: [
@@ -307,7 +307,7 @@ export const KNOWLEDGE = [
       '4. This is a consequential action: review the card (objective, team, topology, budget, gate) and confirm twice. Approval is bound to those exact values; editing them re-arms review.\n' +
       '5. Evidence: a swarm node with status `live`, nodes transitioning queued → running → done, and event “Swarm deployed”.\n' +
       '6. Rollback: stop the swarm; budget already spent is not recoverable.\n' +
-      'In the current demo runtime the swarm is a seeded/simulated instance — the ticker advances it. No real agents execute.',
+      'A swarm is a seeded plan with status “planned”. No scheduler, worker or agent executes it, nothing advances its progress, and no money is spent.',
     sources: [
       { label: 'src/copilot/orchestrator.js — deploySwarm()', ref: 'src/copilot/orchestrator.js' },
       { label: 'src/main.js — simulation', ref: 'src/main.js' },

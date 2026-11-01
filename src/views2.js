@@ -374,12 +374,15 @@ views.models = {
     const cats = [...new Set(s.providers.map((p) => p.category))];
     return `
       <div class="page-head">
-        <h1>Model Gateway</h1>
-        <div class="sub">26 providers · per-agent overrides · routing policies · budgets</div>
+        <h1>Model catalogue</h1>
+        <div class="sub">${s.providers.length} providers in the catalogue · not configured</div>
       </div>
+      <div class="banner warn">${icon('shield', 16)}<div><strong>No provider client is installed in this build.</strong>
+        This is a catalogue, not a gateway: nothing here is called, no key is stored, and no token is billed.
+        Wiring one provider is roadmap session 7 — until then every model row is reference data.</div></div>
       <div class="grid-2">
-        <div class="stat"><div class="k">Active providers</div><div class="v">${s.providers.filter((p) => p.status === 'on').length}</div><div class="d">of ${s.providers.length}</div></div>
-        <div class="stat"><div class="k">Spend MTD</div><div class="v">${fmtMoney(s.providers.reduce((a, p) => a + p.spendMTD, 0))}</div><div class="d">across all models</div></div>
+        <div class="stat"><div class="k">Catalogue</div><div class="v">${s.providers.length}</div><div class="d">reference rows</div></div>
+        <div class="stat"><div class="k">Calls made by this app</div><div class="v">0</div><div class="d">no client, no key, no spend</div></div>
       </div>
       ${cats.map((cat) => `
         <div class="section-title">${esc(cat)}</div>
@@ -389,143 +392,101 @@ views.models = {
             <div class="grow">
               <div class="row" style="gap:6px"><span class="strong small">${esc(p.name)}</span>
                 <span class="pulse-dot ${p.status === 'on' ? 'live' : 'idle'}"></span></div>
-              <div class="tiny muted">${esc(p.models.join(' · '))} · ${esc(p.auth)}</div>
+              <div class="tiny muted">${esc(p.models.join(' · '))}</div>
             </div>
             <div class="col" style="align-items:flex-end;gap:4px">
-              <span class="switch ${p.status === 'on' ? 'on' : ''}" data-act="toggle-provider" data-id="${p.id}"></span>
-              <span class="tiny muted">${p.latency}ms</span>
+              <span class="chip tiny">not configured</span>
+              <span class="tiny muted">${esc(p.auth)}</span>
             </div>
           </div>`).join('')}`).join('')}
 
-      <div class="section-title">Routing policies</div>
+      <div class="section-title">Routing policies (illustrative)</div>
+      <div class="banner info">${icon('info', 15)}<div>These rules are written down, not enforced. With no provider client there is nothing to route.</div></div>
       ${s.policies.map((p) => `
         <div class="card">
-          <div class="row between"><strong class="small mono">${esc(p.name)}</strong><span class="chip tiny brand">p${p.priority}</span></div>
+          <div class="row between"><strong class="small mono">${esc(p.name)}</strong><span class="chip tiny">not enforced</span></div>
           <div class="tiny muted mono" style="margin-top:6px;line-height:1.6">${esc(p.rules)}</div>
         </div>`).join('')}
 
       <div class="section-title">Budgets</div>
-      <div class="card">
-        ${[['Workspace daily', 17.93, 50], ['Research Squad', 6.21, 20], ['Per-agent hard cap', 3.19, 8]].map(([k, v, cap]) => `
-          <div style="margin-bottom:10px">
-            <div class="row between tiny"><span class="muted">${k}</span><span class="strong">${fmtMoney(v)} / ${fmtMoney(cap)}</span></div>
-            <div class="progress ${v / cap > 0.8 ? 'warn' : ''}"><i style="width:${Math.min(100, (v / cap) * 100)}%"></i></div>
-          </div>`).join('')}
+      <div class="card tiny muted" style="line-height:1.8">
+        Not metered: this app makes no model calls, so there is no spend to cap. A daily cap that is
+        checked *before* a call is roadmap session 8 — it needs the client from session 7 first.
       </div>`;
   },
 };
 
-on('toggle-provider', (el, ds) => {
-  setState((s) => {
-    const p = s.providers.find((x) => x.id === ds.id);
-    if (p) { p.status = p.status === 'on' ? 'off' : 'on'; logEvent('model', `Provider ${p.name} ${p.status}`); }
-  }, 'toggle-provider');
-  import('./main.js').then((m) => m.rerender());
-});
-
-/* ================= PLUGINS (MCP) ================= */
+/* ================= PLUGINS (MCP) =================
+ * There is no MCP client in this repo: no JSON-RPC transport, no server process, no tool invocation and
+ * no key vault. The screen used to say the opposite in three places — “all calls proxied & audited by
+ * the gateway”, a per-plugin *calls today* counter, and an Install button that flipped a local boolean,
+ * toasted success and asked for an API key it then discarded. Collecting a secret the app cannot store
+ * is the worst of the three, so that field is gone as well. What is left is a catalogue that says so.
+ */
 views.plugins = {
-  title: 'Plugin Marketplace',
+  title: 'Plugin catalogue',
   render() {
     const s = getState();
     return `
       <div class="page-head">
-        <h1>Plugins</h1>
-        <div class="sub">MCP integrations · all calls proxied & audited by the gateway</div>
+        <h1>Plugin catalogue</h1>
+        <div class="sub">${s.plugins.length} MCP integrations · no client installed</div>
       </div>
-      <div class="banner info">${icon('shield', 16)}<div>Agents never hold raw credentials — the gateway injects <strong>short-lived scoped tokens</strong> per call.</div></div>
+      <div class="banner warn">${icon('shield', 16)}<div><strong>No MCP client is installed in this build.</strong>
+        Nothing below connects to a server, invokes a tool or holds a credential. Connecting one needs a
+        transport, a tool executor, an egress policy that can deny a call, and a sealed key store.</div></div>
       ${s.plugins.map((p) => `
         <div class="card">
           <div class="row">
-            <div class="avatar" style="background:${p.installed ? 'color-mix(in srgb, var(--brand) 22%, var(--elevated))' : 'var(--elevated)'};color:var(--brand)">${icon('plug', 18)}</div>
+            <div class="avatar" style="background:var(--elevated);color:var(--text-3)">${icon('plug', 18)}</div>
             <div class="grow">
               <div class="row" style="gap:6px">
                 <span class="strong small">${esc(p.name)}</span>
-                ${p.verified ? `<span class="chip tiny ok">verified</span>` : `<span class="chip tiny warn">unverified</span>`}
                 <span class="chip tiny">${esc(p.category)}</span>
+                <span class="chip tiny">catalogue</span>
               </div>
-              <div class="tiny muted">${p.tools.length} tools · ${p.callsToday} calls today</div>
+              <div class="tiny muted">${p.tools.length} tools defined · not connected</div>
             </div>
-            <button class="btn sm ${p.installed ? '' : 'primary'}" data-act="plugin-toggle" data-id="${p.id}">
-              ${p.installed ? 'Manage' : 'Install'}
-            </button>
+            <button class="btn sm" data-act="plugin-toggle" data-id="${p.id}">What it needs</button>
           </div>
-          ${p.installed ? `
-            <div class="divider"></div>
-            <div class="row wrap">${p.tools.map((t) => `<span class="chip tiny mono">${esc(t)}</span>`).join('')}</div>
-            <div class="row wrap" style="margin-top:8px">
-              ${p.scopes.map((sc) => `<span class="chip tiny warn">${icon('shield', 10)} ${esc(sc)}</span>`).join('')}
-            </div>` : ''}
+          <div class="divider"></div>
+          <div class="row wrap">${p.tools.map((t) => `<span class="chip tiny mono">${esc(t)}</span>`).join('')}</div>
+          <div class="row wrap" style="margin-top:8px">
+            ${p.scopes.map((sc) => `<span class="chip tiny warn">${icon('shield', 10)} ${esc(sc)}</span>`).join('')}
+            <span class="tiny muted">scopes this entry would request</span>
+          </div>
         </div>`).join('')}
-      <div class="section-title">Custom MCP server</div>
-      <button class="btn block" data-act="plugin-custom">＋ Add MCP server (stdio / SSE / HTTP)</button>`;
+      <div class="section-title">A custom MCP server</div>
+      <div class="card tiny muted" style="line-height:1.8">
+        Not offered here, deliberately. Adding one would mean asking for a command and an environment secret
+        that this app has nowhere safe to put — there is no sealed vault, so it would end up in
+        localStorage. It ships with the client, not before it.
+      </div>`;
   },
 };
 
 on('plugin-toggle', (el, ds) => {
   const p = getState().plugins.find((x) => x.id === ds.id);
   if (!p) return;
-  if (p.installed) {
-    openSheet({
-      title: `Manage ${esc(p.name)}`,
-      body: `
-        <div class="section-title" style="margin-top:0">Tool permissions</div>
-        ${p.tools.map((t) => `
-          <div class="kv"><span class="row mono" style="gap:8px">${esc(t)}</span>
-          <span class="switch on" data-act="toggle-perm"></span></div>`).join('')}
-        <div class="section-title">Bound agents</div>
-        <div class="row wrap">${getState().agents.slice(0, 3).map((a) => `<span class="chip tiny">${esc(a.name)}</span>`).join('')}</div>
-        <div class="section-title">Danger zone</div>
-        <button class="btn danger block" data-act="plugin-uninstall" data-id="${p.id}">Uninstall plugin</button>`,
-    });
-  } else {
-    openSheet({
-      title: `Install ${esc(p.name)}`,
-      body: `
-        <div class="small">This plugin requests:</div>
-        <div class="row wrap" style="margin:10px 0">
-          ${p.tools.map((t) => `<span class="chip tiny mono">${esc(t)}</span>`).join('')}
-        </div>
-        <div class="banner warn">${icon('shield', 16)}<div>Scopes requested: <strong>${p.scopes.map(esc).join(', ')}</strong>. Privileged actions will hit approval gates.</div></div>
-        <div class="field"><label>Auth</label><input class="input" type="password" placeholder="Paste API key (sealed in gateway vault)" value=""></div>`,
-      foot: `<button class="btn grow primary" data-act="plugin-install-go" data-id="${p.id}">Install plugin</button>`,
-    });
-    on('plugin-install-go', () => {
-      setState((s) => {
-        const x = s.plugins.find((y) => y.id === ds.id);
-        if (x) x.installed = true;
-        logEvent('plugin', `Plugin ${p.name} installed`);
-      }, 'plugin-install');
-      closeAllSheets(); toast(`${p.name} installed`, 'ok'); import('./main.js').then((m) => m.rerender());
-    });
-  }
-});
-on('plugin-uninstall', (el, ds) => {
-  setState((s) => {
-    const x = s.plugins.find((y) => y.id === ds.id);
-    if (x) x.installed = false;
-    logEvent('plugin', `Plugin uninstalled`);
-  }, 'plugin-uninstall');
-  closeAllSheets(); toast('Plugin uninstalled'); import('./main.js').then((m) => m.rerender());
-});
-on('plugin-custom', () => {
   openSheet({
-    title: 'Custom MCP server',
+    title: `${esc(p.name)} · not connected`,
     body: `
-      <div class="field"><label>Name</label><input class="input" placeholder="my-internal-tools"></div>
-      <div class="field"><label>Transport</label>
-        <div class="seg"><button class="active">stdio</button><button>SSE</button><button>HTTP</button></div>
-      </div>
-      <div class="field"><label>Command / URL</label><input class="input mono" placeholder="npx -y @my/mcp-server"></div>
-      <div class="field"><label>Env (sealed)</label><textarea class="input mono" placeholder="API_TOKEN=..."></textarea></div>
-      <div class="banner warn">${icon('shield', 16)}<div>Custom servers are flagged <strong>unverified</strong>. Traffic still flows through the egress proxy.</div></div>`,
-    foot: `<button class="btn grow primary" data-act="custom-install-go">Add server</button>`,
-  });
-  on('custom-install-go', () => {
-    closeAllSheets();
-    toast('Custom MCP server added (health check running)', 'ok');
+      <div class="banner warn">${icon('shield', 16)}<div>This entry is reference data. MMM has no MCP client,
+        so it cannot install it, reach a server, or call any of its tools.</div></div>
+      <div class="section-title">Tools it declares</div>
+      <div class="row wrap">${p.tools.map((t) => `<span class="chip tiny mono">${esc(t)}</span>`).join('')}</div>
+      <div class="section-title">Scopes it would request</div>
+      <div class="row wrap">${p.scopes.map((sc) => `<span class="chip tiny warn">${icon('shield', 10)} ${esc(sc)}</span>`).join('')}</div>
+      <div class="section-title">What wiring it needs</div>
+      <div class="tiny muted" style="line-height:1.8">
+        A JSON-RPC transport per server (stdio · SSE · HTTP), an executor that runs one call at a time, an
+        egress policy that can deny it, a sealed key store, and an audit row per invocation. Until those
+        exist, a key pasted here would be a liability sitting in your browser.
+      </div>`,
+    foot: `<button class="btn grow" data-sheet-close>Close</button>`,
   });
 });
+
 on('toggle-perm', (el) => { el.classList.toggle('on'); if (el.getAttribute('role') === 'switch') el.setAttribute('aria-checked', String(el.classList.contains('on'))); });
 
 /* ================= CHAT ================= */
@@ -832,7 +793,7 @@ views.analytics = {
       <div class="grid-2">
         <div class="stat"><div class="k">Spend today</div><div class="v">${fmtMoney(spend)}</div><div class="d">▲ 8% vs yesterday</div></div>
         <div class="stat"><div class="k">Tasks done</div><div class="v">${s.tasks.filter((t) => t.column === 'done').length + 12}</div><div class="d">87% success</div></div>
-        <div class="stat"><div class="k">MCP calls</div><div class="v">${s.plugins.reduce((a, p) => a + p.callsToday, 0)}</div><div class="d">2 denied by policy</div></div>
+        <div class="stat"><div class="k">MCP calls</div><div class="v">—</div><div class="d">not measured · no client</div></div>
         <div class="stat"><div class="k">Approvals</div><div class="v">${pendingApprovals().length}</div><div class="d">median resolve 4m</div></div>
       </div>
 
@@ -878,26 +839,33 @@ views.analytics = {
       </div>
 
       <div class="section-title">MCP activity</div>
-      <div class="card">
-        ${s.plugins.filter((p) => p.installed).map((p) => `
-          <div class="row between mcp-row">
-            <span class="small grow ellipsis">${esc(p.name)}</span>
-            <div class="progress mcp-bar"><i style="width:${Math.min(100, p.callsToday / 4)}%"></i></div>
-            <span class="tiny muted mcp-count">${p.callsToday}</span>
-          </div>`).join('')}
+      <div class="card tiny muted" style="line-height:1.8">
+        No tool calls are made by this app — there is no MCP client — so there is nothing to chart. This
+        panel used to draw bars from a seed counter, which is a number that could never change.
       </div>`;
   },
 };
 
 on('export-report', () => {
-  toast('Report exported → artifacts/reports/analytics-24h.csv', 'ok');
+  // The CSV used to be a constant string — `spend_today,17.93` and `mcp_calls,535` were typed in, not
+  // measured, and `size` was the number 2204 regardless of what was written. Every figure now comes from
+  // the rows on this screen; anything this build does not measure is omitted rather than invented.
+  const st = getState();
+  const content = [
+    'metric,value',
+    `spend_today,${(st.agents.reduce((a, x) => a + x.costToday, 0)).toFixed(2)}`,
+    `tasks_done,${st.tasks.filter((t) => t.column === 'done').length}`,
+    `approvals_pending,${pendingApprovals().length}`,
+    `swarm_records,${st.swarms.length}`,
+    'mcp_calls,not_measured',
+  ].join('\n') + '\n';
   setState((s) => {
     s.files.unshift({
-      id: uid('fl'), path: 'reports/analytics-24h.csv', type: 'csv', size: 2204, createdBy: 'me', ts: now(),
-      content: 'metric,value\nspend_today,17.93\nmcp_calls,535\napprovals_pending,2\n',
+      id: uid('fl'), path: 'reports/analytics-24h.csv', type: 'csv', size: content.length, createdBy: 'me', ts: now(), content,
     });
-    logEvent('artifact', 'Analytics report exported');
+    logEvent('artifact', 'Analytics report written to artifacts');
   }, 'export');
+  toast('Report saved to Artifacts · this browser only', 'ok');
 });
 
 /* ================= ARTIFACTS ================= */
@@ -1036,7 +1004,6 @@ views.settings = {
             ${['off', 'suggest', 'auto-with-review', 'full-auto'].map((m) => `<option ${st.selfImprove === m ? 'selected' : ''}>${m}</option>`).join('')}
           </select>
         </div>
-        <div class="kv"><span class="k">Live simulation feed</span><span class="switch ${st.simulate ? 'on' : ''}" data-act="toggle-sim"></span></div>
       </div>
 
       <div class="section-title">Copilot</div>
@@ -1066,27 +1033,31 @@ views.settings = {
       <div class="card">
         ${Object.entries(st.notify).map(([k, v]) => `
           <div class="kv"><span class="k">${esc(k)}</span><span class="switch ${v ? 'on' : ''}" data-act="toggle-notify" data-k="${k}"></span></div>`).join('')}
+        <div class="tiny muted" style="line-height:1.8">Saved on this device only. MMM does not send email,
+          push or SMS in this build, so these switches choose nothing yet.</div>
       </div>
 
       <div class="section-title">Security & governance</div>
       <div class="card">
-        <div class="kv"><span class="k">Approval gates</span><span class="strong">4 templates active</span></div>
-        <div class="kv"><span class="k">Audit log</span><span class="strong">hash-chained · append-only</span></div>
-        <div class="kv"><span class="k">Secrets</span><span class="strong">AEAD-sealed vault</span></div>
-        <div class="kv"><span class="k">Egress</span><span class="strong">default-deny · proxy</span></div>
+        <div class="kv"><span class="k">Approval gates</span><span class="strong">${pendingApprovals().length} pending · enforced by the gateway when signed in</span></div>
+        <div class="kv"><span class="k">Audit log</span><span class="strong">hash-chained on the gateway · nothing is recorded in demo mode</span></div>
+        <div class="kv"><span class="k">Secrets</span><span class="strong">no key vault in this build · no provider key is stored</span></div>
+        <div class="kv"><span class="k">Egress</span><span class="strong">not enforced by this app</span></div>
       </div>
+
 
       <div class="section-title">Data</div>
       <div class="card">
         <div class="kv"><span class="k">Storage</span><span class="strong">${esc(s.gateway.sqlite)} · localStorage-backed demo</span></div>
         <div class="kv"><span class="k">Retention</span><span class="strong">runs ${esc(st.retention.runs)} · logs ${esc(st.retention.logs)}</span></div>
+        <div class="tiny muted">Display text: nothing is deleted on this schedule yet.</div>
         <button class="btn danger block" data-act="reset-demo" style="margin-top:10px">${icon('undo', 15)} Reset demo data</button>
       </div>
 
       <div class="section-title">About</div>
       <div class="card tiny muted" style="line-height:1.8">
         MMM PWA prototype · v0.1.0<br>
-        Self-hosted gateway · zero external dependencies<br>
+        Self-hosted gateway · no cloud dependency in the default path<br>
         PWA: installable · offline shell · background queue
         <button class="btn block sm" data-act="install-pwa" style="margin-top:10px">${icon('download', 14)} Install app</button>
       </div>`;
@@ -1118,7 +1089,6 @@ on('toggle-sound', () => {
   setState((s) => { s.settings.soundHaptics = !s.settings.soundHaptics; }, 'sound');
   import('./main.js').then((m) => m.rerender());
 });
-on('toggle-sim', () => { setState((s) => { s.settings.simulate = !s.settings.simulate; }, 'sim'); import('./main.js').then((m) => m.rerender()); });
 on('toggle-memory', () => { setState((s) => { s.settings.copilotMemory = !s.settings.copilotMemory; }, 'mem'); import('./main.js').then((m) => m.rerender()); });
 on('toggle-notify', (el, ds) => { setState((s) => { s.settings.notify[ds.k] = !s.settings.notify[ds.k]; }, 'notify'); import('./main.js').then((m) => m.rerender()); });
 on('trust-weight', (el, ds, ev) => {
