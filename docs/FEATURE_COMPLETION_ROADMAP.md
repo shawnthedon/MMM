@@ -138,7 +138,7 @@ Every real feature in this repo is built the same way. Learn this once; reuse it
 | **skills** | ❌ | ❌ | Skills Hub, Matrix |
 | **plugins** | ❌ | ❌ | Plugin Marketplace |
 | **providers, model_policies** | ❌ | ❌ | Model Gateway |
-| **threads, messages** | ❌ | ❌ | Chat |
+| **threads, messages** | ❌ | ✅ | Chat |
 | **files** | ❌ | ❌ | Artifacts |
 | **jobs** | ❌ (unused) | ❌ | nothing yet — this is your runtime |
 | settings | ❌ | localStorage | Settings |
@@ -170,7 +170,7 @@ Every row cites the file where the behaviour lives, so you can verify it in unde
 | 9 | **Skills Matrix** | `#/matrix` | 🎭 | Relationship editing is local state only | `src/views2.js` |
 | 10 | **Model Gateway** | `#/models` | 🎭 | 26 seeded providers; the on/off switch flips a local boolean; `latency`, `spendMTD` are constants; **no provider client, no key storage, no streaming** | `src/views2.js:328-380`, `fixtures/providers.json` |
 | 11 | **Plugins / MCP** | `#/plugins` | 🎭 | “Install” sets `installed = true` locally and toasts success; the pasted API key is discarded; `callsToday` counts are seed data; the banner claims calls are “proxied & audited by the gateway” | `src/views2.js:385-470` |
-| 12 | **Chat** | `#/chat` | 🎭 | Sending a message schedules a **canned reply** after 0.9–1.8 s, one of which invents a cost (`Estimated cost: $0.42`) | `src/views2.js:559` `simulateReply()` |
+| 12 | **Chat** | `#/chat` | ✅ | Real transcript end to end: threads and messages persist on the gateway, survive a reload and a restart, and the read receipt is a write. **Nothing answers**: there is no model runtime, the API says so in every read (`runtime.configured: false`) and the screen prints it. A request body cannot claim an agent spoke. Writes are idempotent by `clientId` | `apps/gateway/src/chat.js`, `server.js`, `src/views2.js`, `src/datastore.js` |
 | 13 | **Copilot** | overlay | 🟠 | Real UI, real consent flow, real capability registry; answers are deterministic retrieval over local state; actions are labelled `demo` | `src/copilot/*` |
 | 14 | **Analytics** | `#/analytics` | 🎭 | Four tiles, a chart and a “Live · last 24h” subtitle built from `+ 12`, `87% success`, `▲ 8%`, `median 4m`, `2 denied by policy` typed into the template | `src/views2.js:734-800` |
 | 15 | **Artifacts / Files** | `#/artifacts` | 🎭 | File list is seed; “Upload” writes into local state; storage reads `248 MB / 2 GB` as a string; `files` table exists unused | `src/views2.js:816-880` |
@@ -926,16 +926,16 @@ returns 429 without contacting the provider, and `grep -r "sk-" dist/` is empty.
 
 ### M10 · Chat
 
-**Today.** Sending a message writes it locally and schedules one of four canned replies after
-0.9–1.8 s, one of which invents a spend figure:
+**Today.** Shipped in M25. Threads and messages are gateway rows; the fabricated replies are gone.
 
 ```js
-// src/views2.js:559
-`Good call — dispatching as a task with a review gate. Estimated cost: $0.42.`,
+// deleted, not gated: src/views2.js no longer contains simulateReply()
+// `Good call — dispatching as a task with a review gate. Estimated cost: $0.42.`
 ```
 
-**The gap.** `threads` and `messages` tables exist and are seeded, **no routes**. No model. The reply
-text is generated in the browser, which is the worst place for it.
+**The gap that remains.** There is still no model runtime, so a message is stored and *not answered* —
+and the API and the screen both say exactly that. The remaining work is M09 (a real provider call)
+followed by streaming; nothing else about chat is simulated.
 
 **Done means.** Threads and messages are server rows; a reply only exists if a runtime produced it;
 with no model configured the server stores an explicit “not answered” message and the UI renders it as
@@ -1415,6 +1415,45 @@ trail. Deleting a team is irreversible from the UI (the audit entry is the recor
 
 **URLs:** A.28.
 
+### M25 · Chat that tells the truth about answering
+
+**Today.** Implemented and proven end to end. The transcript is real; the reply is absent, and that
+absence is a first-class part of the API surface rather than an omission.
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| Storage | `messages`, `threads` (001), `apps/gateway/migrations/007_chat_idempotency.sql` | Every message is a row with a sender, a timestamp and an optional client key. `007` adds `client_id` and a **partial** unique index, so a retried write cannot become a second message while pre-existing rows stay untouched. |
+| Module | `apps/gateway/src/chat.js` | `listThreads`, `getThread`, `createThread`, `appendMessage`, `markRead`, `deleteThread`, and one `runtimeStatus()` that is the single source of the "no reply is generated" statement. |
+| Honesty rules | `chat.js` | `from` is decided by the server; a body asserting `from: 'agent'` is refused with `400` and the reason ("must come from a runtime"). `unread` is a stored counter raised only by a message from someone else and cleared only by an explicit read mark. The audit row records that a message was stored and how long it was — **never its text**. |
+| Routes | `server.js` | `GET /threads`, `GET /threads/:id`, `POST /threads`, `POST /threads/:id/messages`, `POST /threads/:id/read`, `DELETE /threads/:id`. Reads need `chat:read` (Observer), writes `chat:write` (Operator); WS topic `chat`. A duplicate `clientId` answers `200 { duplicate: true }` and broadcasts nothing. |
+| Client | `src/datastore.js`, `src/api.js` | `threads` joins `GATEWAY_SLICES`; a gateway that does not serve chat leaves the slice on **demo** provenance instead of failing the refresh or showing fixtures as live. Each send carries a generated `clientId`. |
+| Screen | `src/views2.js`, `src/styles.css` | The runtime notice is rendered from state (the gateway's own `note` when live, the local default when not). Sending shows exactly one message; a failed write keeps the text in the box and says what failed; opening a thread sends the read receipt — but only when the tab is visible. A stale remembered thread id is replaced by the thread actually shown. |
+| Deleted | `src/views2.js` | `simulateReply()` and both call sites, the four canned sentences, and the invented `Estimated cost: $0.42`. |
+
+**Acceptance tests.** `npm run test:chat` — 16 checks against a real gateway on a temporary
+`DATA_DIR`, including a restart: the transcript survives, a retried `clientId` stores one row, an agent
+message in a request body is refused, and the audit trail holds no message text.
+`npm run test:chat:ui` — 10 checks: the canned replies are absent from the source, demo and gateway
+banners both say no reply is generated, a send posts once, a failed write changes nothing, the read
+receipt goes to the gateway, and a gateway without chat routes is reported rather than faked.
+`npm run test:chat:browser` — 5 checks in real Chromium: the notice is visible at 390 px, the real
+composer stores one message, **nothing appears after 3.2 s**, 320 px does not scroll sideways, and no
+background request is fired after a send.
+
+**The gap.** There is no model runtime, so chat is a notebook with a delivery guarantee. No streaming,
+no attachments, no edit/delete of a single message, and the per-thread message cap (200) returns the
+newest with `truncated: true` rather than paginating.
+
+**Next steps**
+
+1. M09 first: one real provider call with a sealed key, then `POST /threads/:id/messages` may call it and
+   store an assistant row with `model_id`, tokens and cost.
+2. Streaming over SSE, writing the assistant row only when the stream completes.
+3. Pagination for threads above the 200-message window.
+4. Per-thread membership so a channel is readable by the team it belongs to rather than by every reader.
+
+**URLs:** A.1 (completion + streaming), A.14 (SSE in the browser).
+
 ---
 
 ## 6. Master implementation checklist
@@ -1597,6 +1636,20 @@ within each module; modules can interleave except where marked `⛓` (blocked by
 - [ ] Per-team budget ceilings
 - [ ] Membership history surface
 
+### M25 · Chat
+- [x] `threads` / `messages` served over HTTP with `chat:read` / `chat:write`
+- [x] Sends are idempotent by `clientId` (partial unique index; retry returns the same row)
+- [x] `simulateReply()` and the four canned sentences deleted, including the invented cost
+- [x] Every read and every write carries `runtime: { configured: false, generatesReplies: false }`
+- [x] The screen renders that statement from state, in demo and in gateway mode
+- [x] A request body cannot assert that an agent spoke
+- [x] Failed write keeps the text, adds nothing, and says what failed
+- [x] Read receipt is a gateway write, sent only from a visible tab
+- [x] Gateway without the chat routes reported as such, never shown as live
+- [ ] A real model reply (blocked on M09)
+- [ ] Streaming, attachments, per-message edit/delete
+- [ ] Pagination beyond the 200-message window
+
 ---
 
 ## 7. TODO — the next twelve sessions
@@ -1610,7 +1663,7 @@ One session ≈ one sitting. Each is independently shippable.
 | 3 | **Swarms: read path** | `swarms` table → routes → slice → WS → real list | new `test:swarms` |
 | 4 | **Swarms: write path** | Deploy persists; pause/resume/cancel; delete the `$6.40` literal | two-browser test |
 | 5 | **Teams** | Teams CRUD + membership; swarms reads the team | `test:teams` |
-| 6 | **Chat persists** | threads/messages routes; delete `simulateReply`; `runtime: 'none'` notice | persistence test |
+| 6 | ~~**Chat persists**~~ ✅ M25 | threads/messages routes; `simulateReply` deleted; `runtime: { configured: false }` in every payload | `test:chat` 16 · `test:chat:ui` 10 · real browser 5 |
 | 7 | **Provider key + one real call** | Seal a key, one adapter, `modelCall()`, `usage_events` | recorded call + `dist/` grep |
 | 8 | **Metering + budgets** | Daily cap enforced pre-call; Models page shows real spend | budget refusal test |
 | 9 | **Agents run** | `agent_runs` + worker + recomputed stats + honest seed | `test:agent-runs` |
@@ -1845,6 +1898,16 @@ re-litigate a decision that cost a bug to learn.
 | Why is the delete a transaction? | Three tables change together — agents, swarms and teams. A half-applied delete would either orphan membership or leave a team with no row. The audit event is written inside it, so there is no state without a record. | `src/teams.js` `deleteTeam` |
 | Why does the panel show the agent row rather than its own copy? | The panel, grid and designer all read the same slice; the WS `agents` broadcast invalidates it after every write. Nothing caches a second source of truth. | `src/core.js`, `src/datastore.js` |
 | What is honestly missing? | Position is not used for dispatch, teams have no budget, and there is no membership history screen — only the audit trail. | M24 “The gap” |
+
+### A.29 Chat: what “no model runtime” means
+
+| Question | Answer | Where |
+| --- | --- | --- |
+| Why does the API carry a `runtime` object on every response? | So no screen has to guess, and no future screen can quietly assume a reply is coming. One function builds it; the UI renders `note` verbatim. | `apps/gateway/src/chat.js` `runtimeStatus()` |
+| Why refuse `from: 'agent'` in a request body? | If a client could write agent rows, the transcript could be made to show a conversation that never happened. Agent rows will be written by the runtime, in the gateway, when one exists. | `chat.js` `appendMessage` |
+| Why a partial unique index instead of a unique `client_id`? | Rows written before `007` have no key; they must not collide with each other. `WHERE client_id <> ''` keeps the constraint exactly where it is meaningful. | `007_chat_idempotency.sql` |
+| Why is message text absent from the audit trail? | Audit rows are read by Reviewers for governance, not for conversation. Length plus thread id answers "was it stored" without copying private text into a second store. | `chat.js`, `db.js` `audit()` |
+| What is honestly missing? | No model, so no reply; no streaming; no pagination past 200 messages per thread; no per-thread access control beyond `chat:read`. | M25 “The gap” |
 
 ## Appendix B — Beginner reference
 

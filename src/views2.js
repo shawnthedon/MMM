@@ -6,6 +6,7 @@ import {
 import { openSheet, toast, confirmModal, on, applyTheme, closeAllSheets } from './shell.js';
 import { sparkline } from './views1.js';
 import { views } from './views1.js';
+import { isLive, sendChatMessage, createChatThread, markChatRead } from './datastore.js';
 
 /* ================= SKILLS HUB ================= */
 const SKILL_TABS = [
@@ -533,36 +534,83 @@ views.chat = {
   persistent: false,
   render(params) {
     const s = getState();
-    const id = params?.id || window.__chatThread || s.threads[0].id;
-    window.__chatThread = id;
-    const th = s.threads.find((t) => t.id === id) || s.threads[0];
-    return `
-      <div class="row between" style="margin-bottom:12px">
+    const threads = s.threads || [];
+    const header = `
+      <div class="row between wrap" style="margin-bottom:12px;gap:8px">
         <h1 style="font-size:20px">Chat</h1>
         <button class="btn sm" data-act="new-chat">${icon('plus', 15)} New</button>
       </div>
+      ${chatRuntimeHTML()}`;
+
+    if (!threads.length) {
+      return `${header}
+        <div class="empty" data-chat-empty>
+          <div class="empty-title">No conversations yet</div>
+          <p class="muted">Start one with <strong>New</strong>. Messages are stored; nothing answers them.</p>
+        </div>`;
+    }
+
+    // A remembered id can be stale (a different transcript, or a thread that was deleted). What is
+    // shown is the thread that is found, and the remembered id is corrected to match it.
+    const wanted = params?.id || window.__chatThread;
+    const th = threads.find((t) => t.id === wanted) || threads[0];
+    window.__chatThread = th.id;
+    const older = th.truncated ? `<div class="tiny muted" data-chat-truncated>Older messages in this thread are not loaded here (the newest ${th.messages.length} are shown).</div>` : '';
+    return `
+      ${header}
       <div class="scroll-x" style="margin-bottom:12px">
-        ${s.threads.map((t) => `<button class="chip ${t.id === th.id ? 'brand' : ''}" data-act="chat-open" data-id="${t.id}">
+        ${threads.map((t) => `<button class="chip ${t.id === th.id ? 'brand' : ''}" data-act="chat-open" data-id="${t.id}">
           ${t.kind === 'channel' ? '#' : '💬'} ${esc(t.title)}${t.unread ? ` ·${t.unread}` : ''}
         </button>`).join('')}
       </div>
       <div class="msgs" id="chat-msgs">
+        ${older}
         ${th.messages.map((m) => renderMsg(m, th)).join('')}
       </div>
       <div class="composer" style="margin-top:12px;border:1px solid var(--border-soft);border-radius:16px">
-        <textarea id="chat-input" rows="1" placeholder="Message… (@ to mention an agent, / for commands)"></textarea>
+        <textarea id="chat-input" rows="1" placeholder="Message… (stored, not answered)"></textarea>
         <button class="send-btn" data-act="chat-send">${icon('send', 18)}</button>
-      </div>`;
+      </div>
+      <div class="tiny muted" id="chat-send-status" role="status" aria-live="polite"></div>`;
   },
   mount() {
     const box = document.getElementById('chat-msgs');
     if (box) box.scrollTop = box.scrollHeight;
     const input = document.getElementById('chat-input');
     input?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(input.value); input.value = ''; }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const text = input.value;
+        input.value = '';
+        sendChat(text, input);
+      }
     });
+    // Opening a thread is the read receipt: clear the counter on the gateway, not in the UI alone.
+    // A hidden tab has not been read, so it does not send the receipt.
+    const open = window.__chatThread;
+    const thread = (getState().threads || []).find((t) => t.id === open);
+    const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
+    if (thread?.unread && visible) markChatRead(open).catch(() => {});
   },
 };
+
+/**
+ * What this screen can honestly promise. The note comes from the gateway when the transcript slice is
+ * live and from the local default otherwise — it is never written to look like a working model.
+ */
+function chatRuntimeHTML() {
+  const live = isLive('threads');
+  const rt = getState().chatRuntime || {};
+  const source = live ? 'gateway transcript' : 'this browser only';
+  return `
+    <div class="chat-runtime" data-chat-runtime="${live ? 'gateway' : 'demo'}" data-replies="${rt.generatesReplies ? 'yes' : 'no'}" role="note">
+      <span class="chat-runtime-icon" aria-hidden="true">${icon('info', 16)}</span>
+      <div>
+        <div class="chat-runtime-title">Transcript · ${esc(source)} · no model runtime</div>
+        <div class="chat-runtime-note">${esc(rt.note || 'No model runtime is configured, so no reply is generated.')}</div>
+      </div>
+    </div>`;
+}
 
 function renderMsg(m, th) {
   if (m.kind === 'approval') {
@@ -597,33 +645,30 @@ function renderMsg(m, th) {
     </div>`;
 }
 
-function simulateReply(thId) {
-  const agentName = getState().threads.find((t) => t.id === thId)?.title.replace(/^[#💬]\s*/, '') || 'Agent';
-  setTimeout(() => {
-    const replies = [
-      `On it. I'll fold that into the current run and report back with artifacts.`,
-      `Good call — dispatching as a task with a review gate. Estimated cost: $0.42.`,
-      `Done — wrote the output to artifacts/. Want me to push a summary to the Telegram digest?`,
-      `Noted. I'm raising a follow-up question to the planner node before proceeding.`,
-    ];
-    setState((st) => {
-      const th = st.threads.find((t) => t.id === thId);
-      if (th) th.messages.push({ id: uid('m'), from: 'agent', agent: agentName, text: replies[Math.floor(Math.random() * replies.length)], ts: now() });
-    }, 'chat-reply');
-    import('./main.js').then((m) => m.rerender());
-  }, 900 + Math.random() * 900);
-}
-
-function sendChat(text) {
-  if (!text.trim()) return;
+/**
+ * Send a message. There is no reply to wait for: the row is stored (on the gateway when the slice is
+ * live) and nothing is scheduled afterwards. A failed write says so and keeps the text in the box.
+ */
+async function sendChat(text, input) {
+  const body = String(text || '').trim();
+  if (!body) return;
   const s = getState();
-  const thId = window.__chatThread || s.threads[0].id;
-  setState((st) => {
-    const th = st.threads.find((t) => t.id === thId);
-    if (th) { th.messages.push({ id: uid('m'), from: 'me', text, ts: now() }); th.unread = 0; }
-  }, 'chat-send');
-  import('./main.js').then((m) => m.rerender());
-  simulateReply(thId);
+  const thread = (s.threads || []).find((t) => t.id === window.__chatThread) || (s.threads || [])[0];
+  if (!thread) { toast('No conversation to send to'); return; }
+  const status = document.getElementById('chat-send-status');
+  if (status) status.textContent = 'Sending…';
+  try {
+    await sendChatMessage(thread.id, body);
+    const m = await import('./main.js');
+    m.rerender();
+    const fresh = document.getElementById('chat-send-status');
+    if (fresh) fresh.textContent = isLive('threads') ? 'Stored on the gateway. No reply is generated.' : 'Stored in this browser. No reply is generated.';
+  } catch (error) {
+    if (input) input.value = body; // never lose what the person typed
+    const fresh = document.getElementById('chat-send-status');
+    if (fresh) fresh.textContent = '';
+    toast(error?.message || 'The message was not stored');
+  }
 }
 
 on('chat-open', (el, ds) => {
@@ -632,7 +677,7 @@ on('chat-open', (el, ds) => {
 });
 on('chat-send', () => {
   const input = document.getElementById('chat-input');
-  if (input?.value.trim()) { sendChat(input.value); input.value = ''; }
+  if (input?.value.trim()) { const text = input.value; input.value = ''; sendChat(text, input); }
 });
 on('new-chat', () => {
   openSheet({
@@ -647,7 +692,7 @@ on('new-chat', () => {
       </div>`,
     foot: `<button class="btn grow primary" data-act="new-chat-go">Start chat</button>`,
   });
-  on('new-chat-go', () => {
+  on('new-chat-go', async () => {
     const sheet = document.querySelector('.sheet.open');
     const target = sheet.querySelector('#nc-agent').value;
     const msg = sheet.querySelector('#nc-msg').value.trim() || 'Hello!';
@@ -656,14 +701,16 @@ on('new-chat', () => {
       import('./copilot.js').then((m) => { m.openCopilot(); setTimeout(() => window.__copilotChip?.(msg), 350); });
       return;
     }
-    const id = uid('th');
-    setState((s) => {
-      s.threads.unshift({ id, kind: 'direct', title: target, unread: 0, messages: [{ id: uid('m'), from: 'me', text: msg, ts: now() }] });
-    }, 'new-chat');
-    closeAllSheets();
-    window.__chatThread = id;
-    import('./main.js').then((m) => m.navigate(`chat/${id}`));
-    simulateReply(id);
+    try {
+      const thread = await createChatThread({ title: target, kind: 'direct' });
+      closeAllSheets();
+      window.__chatThread = thread.id;
+      import('./main.js').then((m) => m.navigate(`chat/${thread.id}`));
+      await sendChatMessage(thread.id, msg);
+      import('./main.js').then((m) => m.rerender());
+    } catch (error) {
+      toast(error?.message || 'The conversation was not created');
+    }
   });
 });
 

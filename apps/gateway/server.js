@@ -19,6 +19,7 @@ import * as comms from './src/comms.js';
 import { runner as browserRunner, browserCapability, setBrowserBroadcast } from './src/browser/index.js';
 import { evolution, setEvolutionBroadcast, ensurePoliciesForAllAgents } from './src/evolution/index.js';
 import * as teams from './src/teams.js';
+import * as chat from './src/chat.js';
 import * as auth from './src/auth.js';
 import {
   can,
@@ -139,6 +140,7 @@ function subscriptionFilter(topic, principal) {
   if (topic === 'approvals') return can(principal, 'approval:read');
   if (topic === 'browser') return can(principal, 'browser:read');
   if (topic === 'evolution') return can(principal, 'evolution:read');
+  if (topic === 'chat') return can(principal, 'chat:read');
   if (topic === 'audit') return can(principal, 'audit:read');
   return can(principal, 'read');
 }
@@ -590,6 +592,79 @@ route('DELETE', /^\/api\/v1\/teams\/([\w-]+)\/members\/([\w-]+)$/, { permission:
     return { code: 200, body: result };
   } catch (error) {
     return teamFail(error);
+  }
+});
+
+/* ---- Chat: a transcript store (see src/chat.js) ----
+ * No route here generates a reply. Every read carries `runtime: { configured: false }` so the screen
+ * cannot show a conversation as if an agent had answered.
+ */
+const chatFail = (error) => {
+  const code = error?.code || 'error';
+  const status = code === 'not-found' ? 404 : code === 'conflict' ? 409 : 400;
+  return { code: status, body: { error: error.message, code } };
+};
+
+route('GET', /^\/api\/v1\/threads$/, { permission: 'chat:read' }, () => ({ code: 200, body: chat.listThreads() }));
+
+route('GET', /^\/api\/v1\/threads\/([\w-]+)$/, { permission: 'chat:read' }, (ctx) => {
+  try {
+    return { code: 200, body: chat.getThread(ctx.match[1]) };
+  } catch (error) {
+    return chatFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/threads$/, { permission: 'chat:write', mutating: true }, (ctx) => {
+  try {
+    const thread = chat.createThread({ ...(ctx.body || {}), principal: ctx.principal.id });
+    broadcast('chat', { type: 'thread.created', entity: thread.id });
+    return { code: 201, body: { thread, runtime: chat.runtimeStatus() } };
+  } catch (error) {
+    return chatFail(error);
+  }
+});
+
+/**
+ * Append a message. `from` is decided here, not by the caller: a request body cannot claim an agent
+ * spoke, because no runtime is attached to answer. The reply to this route never contains one.
+ */
+route('POST', /^\/api\/v1\/threads\/([\w-]+)\/messages$/, { permission: 'chat:write', mutating: true }, (ctx) => {
+  try {
+    const out = chat.appendMessage(ctx.match[1], {
+      text: ctx.body?.text,
+      from: ctx.body?.from ?? 'me',
+      kind: ctx.body?.kind ?? 'text',
+      payload: ctx.body?.payload ?? {},
+      clientId: ctx.body?.clientId ?? '',
+      principal: ctx.principal.id,
+    });
+    // A duplicate key is not a second message: report it, and do not broadcast a "new" one.
+    if (out.duplicate) return { code: 200, body: out };
+    broadcast('chat', { type: 'thread.message', entity: ctx.match[1], messageId: out.message.id });
+    return { code: 201, body: out };
+  } catch (error) {
+    return chatFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/threads\/([\w-]+)\/read$/, { permission: 'chat:write', mutating: true }, (ctx) => {
+  try {
+    const out = chat.markRead(ctx.match[1], ctx.principal.id);
+    if (out.cleared) broadcast('chat', { type: 'thread.read', entity: ctx.match[1] });
+    return { code: 200, body: out };
+  } catch (error) {
+    return chatFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/threads\/([\w-]+)$/, { permission: 'chat:write', mutating: true }, (ctx) => {
+  try {
+    const out = chat.deleteThread(ctx.match[1], ctx.principal.id);
+    broadcast('chat', { type: 'thread.deleted', entity: ctx.match[1] });
+    return { code: 200, body: out };
+  } catch (error) {
+    return chatFail(error);
   }
 });
 
@@ -1172,7 +1247,7 @@ export function createGateway() {
           return;
         }
         if (msg?.type === 'subscribe' && Array.isArray(msg.topics)) {
-          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'system', 'audit', '*'].includes(t));
+          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'chat', 'system', 'audit', '*'].includes(t));
           const refused = wanted.filter((t) => t !== '*' && !subscriptionFilter(t, client.principal));
           client.topics = new Set(wanted.filter((t) => !refused.includes(t)));
           ws.send(JSON.stringify({ topic: 'system', type: 'subscribed', topics: [...client.topics], refused, ts: Date.now() }));

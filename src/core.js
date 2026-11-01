@@ -73,6 +73,7 @@ export const icons = {
   hash: svg(P('M9 4 7 20M17 4l-2 16M4 9h16M3 15h16')),
   key: svg(P('M14 10a4 4 0 1 0-4-4 4 4 0 0 0 4 4zM11 13l-7 7v2h3l1-2h2v-2h2z')),
   doc: svg(P('M7 3h7l4 4v14H7zM14 3v5h4M9.5 12h5M9.5 16h5')),
+  info: svg(P('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5h.01')),
 };
 
 export const icon = (n, s) => (icons[n] ? icons[n].replace(/width="\d+" height="\d+"/, `width="${s || 22}" height="${s || 22}"`) : '');
@@ -132,7 +133,13 @@ export function seed() {
     gateway: { status: 'healthy', version: '0.1.0-proto', uptimeSince: mins(60 * 24 * 3), storageMb: 248, sqlite: 'WAL' },
     // Where each slice came from. 'demo' = seeded fixtures in this browser; 'gateway' = fetched
     // from the live API. Nothing may present gateway data as demo, or the reverse.
-    provenance: { agents: 'demo', tasks: 'demo', approvals: 'demo', events: 'demo', swarms: 'demo', teams: 'demo', usage: 'demo' },
+    provenance: { agents: 'demo', tasks: 'demo', approvals: 'demo', events: 'demo', swarms: 'demo', teams: 'demo', threads: 'demo', usage: 'demo' },
+    // What this build can do with a chat message. Defaults to the honest answer; the gateway
+    // replaces it with its own when the transcript slice is live.
+    chatRuntime: {
+      connected: false, configured: false, generatesReplies: false, driver: 'none',
+      note: 'Demo mode — messages stay in this browser. No model runtime is configured, so no reply is generated.',
+    },
     agents: [
       {
         id: 'ag-researcher', name: 'Researcher-01', role: 'Deep research & citation capture', framework: 'LangGraph',

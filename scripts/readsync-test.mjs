@@ -99,6 +99,14 @@ globalThis.fetch = async (url, options = {}) => {
   if (path === '/api/v1/approvals' && method === 'GET') return json(behaviour.listApprovals.body, behaviour.listApprovals.status);
   if (/^\/api\/v1\/approvals\/[^/]+\/(allow|deny)$/.test(path)) return json(behaviour.decide.body, behaviour.decide.status);
   if (path.startsWith('/api/v1/events')) return json(behaviour.listEvents.body, behaviour.listEvents.status);
+  // Chat is a gateway slice too: a transcript the server owns, and a runtime statement from it.
+  if (path === '/api/v1/threads' && method === 'GET') {
+    return json({
+      threads: [{ id: 'th-gw-1', kind: 'direct', title: 'Gateway thread', unread: 0, createdAt: 1, messageCount: 1,
+        messages: [{ id: 'm-gw-1', from: 'me', text: 'from the gateway', ts: 1_700_000_400_000 }] }],
+      runtime: { configured: false, generatesReplies: false, driver: 'none', note: 'No model runtime is configured on this gateway. Messages are stored; no reply is generated.' },
+    });
+  }
   if (path.startsWith('/api/v1/audit')) return json([]);
   return json({ error: 'not found' }, 404);
 };
@@ -170,6 +178,8 @@ await check('signing in adopts the gateway rows for agents, tasks, approvals and
   assert(!s.agents.some((a) => demoAgentNames.includes(a.name)), 'demo agents must be gone, not merged');
   for (const slice of data.GATEWAY_SLICES) eq(core.getProvenance()[slice], 'gateway', `${slice} provenance`);
   eq(core.getProvenance().swarms, 'demo', 'swarms stay local (no gateway endpoint)');
+  eq(s.threads[0].title, 'Gateway thread', 'the transcript is the gateway’s, not a fixture');
+  eq(s.chatRuntime.generatesReplies, false, 'and it says it cannot answer');
 });
 
 await check('the agents screen renders gateway rows and says "live gateway"', async () => {
