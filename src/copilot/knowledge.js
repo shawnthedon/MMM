@@ -515,21 +515,24 @@ export const KNOWLEDGE = [
   },
   {
     id: 'models.catalogue',
-    title: 'Model providers and routing are demo data',
+    title: 'Model gateway: one sealed key, one adapter, a metered ledger',
     type: 'reference',
     module: 'models',
-    tags: ['model', 'provider', 'routing', 'fallback', 'llm', 'anthropic', 'openai', 'ollama', 'cost'],
+    tags: ['model', 'provider', 'routing', 'fallback', 'llm', 'anthropic', 'openai', 'ollama', 'cost', 'budget', 'key'],
     status: 'verified',
     version: PACK.version,
-    updated: '2026-10-26',
+    updated: '2026-11-01',
     sensitivity: 'internal',
     body:
-      'The Models screen lists a catalogue of providers (frontier clouds, mid-tier clouds, local/self-hosted, specialised, enterprise) with auth type, latency and month-to-date spend, plus routing policies such as default-task-routing, cheap-night-shift and code-escalation.\n' +
-      'All of it is demo data. There is no API key handling, no provider health check, no model discovery and no real completion call — the real model gateway is an unstarted phase.\n' +
-      'Agents reference model ids like anthropic/claude-sonnet-4 with a fallback; those ids are illustrative and have not been validated against provider documentation here.',
+      'The Models screen is a real gateway since M29, over a 26-provider catalogue (frontier clouds, mid-tier clouds, local/self-hosted, specialised, enterprise). A provider is “configured” only when an Owner has sealed a key on the gateway; otherwise it is “unconfigured”, no key store, and no button that would pretend to try.\n' +
+      'One OpenAI-compatible adapter: the gateway POSTs to {baseUrl}/chat/completions with the key in an Authorization header, never follows a redirect, applies a timeout and a 256 KB response cap, and refuses plain http off loopback. The key is sealed with AES-256-GCM (key material from MMM_SECRET or a 0600 file) and is never returned — a read gives a 16-hex fingerprint and a hint like ••••abcd.\n' +
+      'Every attempt is written to the model_calls ledger as ok, blocked or error, with token counts, latency and an ESTIMATED cost from a price table (not an invoice). Spend is SUM(cost_usd) over ok rows only, so a refusal can never inflate it; the daily and per-call budgets are checked before the request leaves the process (HTTP 402 + a blocked row, provider contacted zero times). Prompts and replies are never stored — only reply_chars.\n' +
+      'Not built: streaming (a long completion blocks), retries or fallback, and routing — the routing policies on the screen are notes labelled “not enforced”. Chat and Copilot do not call this funnel yet, so they still answer nothing and say so.',
     sources: [
-      { label: 'src/core.js — providers/policies', ref: 'src/core.js' },
-      { label: 'docs/PROGRESS.md — Phase 6 ⬜', ref: 'docs/PROGRESS.md' },
+      { label: 'apps/gateway/src/models.js — the funnel and the ledger', ref: 'apps/gateway/src/models.js' },
+      { label: 'apps/gateway/src/secrets.js — sealed key material', ref: 'apps/gateway/src/secrets.js' },
+      { label: 'apps/gateway/migrations/010_model_calls.sql — ledger schema', ref: 'apps/gateway/migrations/010_model_calls.sql' },
+      { label: 'src/views2.js — the screen reads the ledger', ref: 'src/views2.js' },
     ],
   },
   {
@@ -816,7 +819,11 @@ export function describeScreen(route) {
     chat: () => `Chat: ${s.threads.length} threads (${s.threads.map((t) => t.title).join(', ')}).`,
     skills: () => `Skills Hub: ${s.skills.length} skills (${s.skills.filter((k) => k.installed !== false).length} installed, ${s.skills.filter((k) => k.origin === 'marketplace').length} in the marketplace, ${s.skills.filter((k) => k.status === 'pending').length} awaiting review), ${(s.relations || []).length} typed relationships. Import (next to New) accepts SKILL.md, manifests, registries, YAML, packages and zip bundles; installed imports stay quarantined until approved and never grant tools.`,
     matrix: () => `Skills Matrix: ${s.skills.length} skills, ${(s.relations || []).length} typed links, version v${s.matrixVersion || 1}. Relationships are configuration only — no runtime events exist, so nothing is shown as executed.`,
-    models: () => `Model Gateway: ${s.providers.length} providers, ${s.policies.length} routing policies — demo catalogue, no live calls.`,
+    models: () => {
+      const configured = (s.providers || []).filter((p) => p.status === 'configured' || p.status === 'on').length;
+      const spend = s.provenance?.providers === 'gateway' ? 'the ledger' : 'no ledger (demo)';
+      return `Model gateway: ${s.providers.length} providers, ${configured} configured, ${s.policies.length} routing policies that are not enforced. Spend comes from ${spend}.`;
+    },
     plugins: () => `Plugin Marketplace: MCP servers and tool plugins.`,
     telegram: () => `Telegram Bridge: now part of Comms (#/comms) as the Telegram channel — the bridge opens the channel settings; no bot transport is running.`,
     local: () => 'Local AI: on-device GGUF preflight. No model is bundled or downloaded and no inference runs on this screen. A separate experimental local-runtime spike accepts a user-provided model; mobile-device validation and the production feature remain unfinished, with no cloud fallback.',

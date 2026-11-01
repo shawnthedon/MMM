@@ -3,39 +3,36 @@
     "id": "pv-openai",
     "category": "Frontier Cloud",
     "name": "OpenAI",
-    "status": "on",
+    "status": "off",
     "auth": "API key",
     "models": [
       "GPT-5",
       "o3"
     ],
-    "latency": 640,
-    "spendMTD": 128.4
+    "latency": 640
   },
   {
     "id": "pv-anthropic",
     "category": "Frontier Cloud",
     "name": "Anthropic",
-    "status": "on",
+    "status": "off",
     "auth": "API key",
     "models": [
       "Claude Opus 4",
       "Claude Sonnet 4"
     ],
-    "latency": 520,
-    "spendMTD": 214.9
+    "latency": 520
   },
   {
     "id": "pv-google",
     "category": "Frontier Cloud",
     "name": "Google",
-    "status": "on",
+    "status": "off",
     "auth": "API key",
     "models": [
       "Gemini 3 Pro"
     ],
-    "latency": 580,
-    "spendMTD": 76.2
+    "latency": 580
   },
   {
     "id": "pv-xai",
@@ -46,21 +43,19 @@
     "models": [
       "Grok 3"
     ],
-    "latency": 710,
-    "spendMTD": 0
+    "latency": 710
   },
   {
     "id": "pv-openrouter",
     "category": "Mid-Tier Cloud",
     "name": "OpenRouter",
-    "status": "on",
+    "status": "off",
     "auth": "API key",
     "models": [
       "auto",
       "many"
     ],
-    "latency": 820,
-    "spendMTD": 41.7
+    "latency": 820
   },
   {
     "id": "pv-together",
@@ -71,21 +66,19 @@
     "models": [
       "Qwen2.5-72B"
     ],
-    "latency": 460,
-    "spendMTD": 0
+    "latency": 460
   },
   {
     "id": "pv-mistral",
     "category": "Mid-Tier Cloud",
     "name": "Mistral",
-    "status": "on",
+    "status": "off",
     "auth": "API key",
     "models": [
       "Large",
       "Codestral"
     ],
-    "latency": 430,
-    "spendMTD": 22.8
+    "latency": 430
   },
   {
     "id": "pv-cohere",
@@ -96,8 +89,7 @@
     "models": [
       "Command R+"
     ],
-    "latency": 550,
-    "spendMTD": 0
+    "latency": 550
   },
   {
     "id": "pv-ai21",
@@ -108,33 +100,30 @@
     "models": [
       "Jamba"
     ],
-    "latency": 600,
-    "spendMTD": 0
+    "latency": 600
   },
   {
     "id": "pv-zhipu",
     "category": "Mid-Tier Cloud",
     "name": "Zhipu GLM",
-    "status": "on",
+    "status": "off",
     "auth": "API key",
     "models": [
       "GLM-4 Plus"
     ],
-    "latency": 490,
-    "spendMTD": 9.3
+    "latency": 490
   },
   {
     "id": "pv-ollama",
     "category": "Local/Self-Hosted",
     "name": "Ollama",
-    "status": "on",
+    "status": "off",
     "auth": "local URL",
     "models": [
       "qwen2.5:32b",
       "llama3.3"
     ],
-    "latency": 220,
-    "spendMTD": 0
+    "latency": 220
   },
   {
     "id": "pv-lmstudio",
@@ -145,8 +134,7 @@
     "models": [
       "any GGUF"
     ],
-    "latency": 260,
-    "spendMTD": 0
+    "latency": 260
   },
   {
     "id": "pv-llamacpp",
@@ -157,20 +145,18 @@
     "models": [
       "any GGUF"
     ],
-    "latency": 190,
-    "spendMTD": 0
+    "latency": 190
   },
   {
     "id": "pv-vllm",
     "category": "Local/Self-Hosted",
     "name": "vLLM",
-    "status": "on",
+    "status": "off",
     "auth": "local URL",
     "models": [
       "qwen2.5-72b"
     ],
-    "latency": 150,
-    "spendMTD": 0
+    "latency": 150
   },
   {
     "id": "pv-localai",
@@ -181,8 +167,7 @@
     "models": [
       "any"
     ],
-    "latency": 300,
-    "spendMTD": 0
+    "latency": 300
   },
   {
     "id": "pv-tabby",
@@ -193,21 +178,19 @@
     "models": [
       "exl2 models"
     ],
-    "latency": 210,
-    "spendMTD": 0
+    "latency": 210
   },
   {
     "id": "pv-deepseek",
     "category": "Specialized",
     "name": "DeepSeek",
-    "status": "on",
+    "status": "off",
     "auth": "API key",
     "models": [
       "DeepSeek-V3",
       "R1"
     ],
-    "latency": 380,
-    "spendMTD": 18.6
+    "latency": 380
   },
   {
     "id": "pv-qwen",
@@ -218,8 +201,7 @@
     "models": [
       "Qwen-Max"
     ],
-    "latency": 420,
-    "spendMTD": 0
+    "latency": 420
   },
   {
     "id": "pv-minimax",
@@ -230,8 +212,7 @@
     "models": [
       "MiniMax-01"
     ],
-    "latency": 470,
-    "spendMTD": 0
+    "latency": 470
   },
   {
     "id": "pv-moonshot",
@@ -242,32 +223,29 @@
     "models": [
       "Kimi K2"
     ],
-    "latency": 510,
-    "spendMTD": 0
+    "latency": 510
   },
   {
     "id": "pv-perplexity",
     "category": "Specialized",
     "name": "Perplexity",
-    "status": "on",
+    "status": "off",
     "auth": "API key",
     "models": [
       "Sonar"
     ],
-    "latency": 640,
-    "spendMTD": 6.9
+    "latency": 640
   },
   {
     "id": "pv-groq",
     "category": "Specialized",
     "name": "Groq",
-    "status": "on",
+    "status": "off",
     "auth": "API key",
     "models": [
       "Llama-3.3-70B"
     ],
-    "latency": 90,
-    "spendMTD": 3.2
+    "latency": 90
   },
   {
     "id": "pv-azure",
@@ -278,8 +256,7 @@
     "models": [
       "GPT-5"
     ],
-    "latency": 560,
-    "spendMTD": 0
+    "latency": 560
   },
   {
     "id": "pv-bedrock",
@@ -291,8 +268,7 @@
       "Claude",
       "Nova"
     ],
-    "latency": 590,
-    "spendMTD": 0
+    "latency": 590
   },
   {
     "id": "pv-vertex",
@@ -303,8 +279,7 @@
     "models": [
       "Gemini 3"
     ],
-    "latency": 570,
-    "spendMTD": 0
+    "latency": 570
   },
   {
     "id": "pv-watsonx",
@@ -315,7 +290,6 @@
     "models": [
       "Granite"
     ],
-    "latency": 660,
-    "spendMTD": 0
+    "latency": 660
   }
 ]

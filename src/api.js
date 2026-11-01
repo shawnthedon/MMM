@@ -239,6 +239,17 @@ export const api = {
   updateSwarm: (id, body) => request(`/api/v1/swarms/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
   setSwarmStatus: (id, status) => request(`/api/v1/swarms/${encodeURIComponent(id)}/status`, { method: 'POST', body: { status } }),
   deleteSwarm: (id) => request(`/api/v1/swarms/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  providers: () => request('/api/v1/providers'),
+  provider: (id) => request(`/api/v1/providers/${encodeURIComponent(id)}`),
+  saveProviderKey: (id, body) => request(`/api/v1/providers/${encodeURIComponent(id)}/key`, { method: 'PUT', body }),
+  clearProviderKey: (id) => request(`/api/v1/providers/${encodeURIComponent(id)}/key`, { method: 'DELETE' }),
+  // A model call is a network request to a provider, so it is given a real budget of time rather
+  // than the 8 s default used by ordinary reads.
+  callProviderModel: (id, body, timeoutMs = 65000) =>
+    request(`/api/v1/providers/${encodeURIComponent(id)}/call`, { method: 'POST', body, timeoutMs }),
+  usage: (days = 14) => request(`/api/v1/usage?days=${Number(days) || 14}`),
+  modelCalls: (limit = 20) => request(`/api/v1/model-calls?limit=${Number(limit) || 20}`),
+  setModelBudget: (body) => request('/api/v1/budget', { method: 'PUT', body }),
   terminal: () => request('/api/v1/terminal'),
   terminalWorkspaces: () => request('/api/v1/terminal/workspaces'),
   createTerminalWorkspace: (body) => request('/api/v1/terminal/workspaces', { method: 'POST', body }),

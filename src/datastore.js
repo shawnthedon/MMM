@@ -16,7 +16,7 @@ import { api, ApiError, isApiMode, gatewayUrl } from './api.js';
 import { getAuth, getAuthVersion, subscribeAuth, isAuthenticated, refreshSession } from './auth.js';
 import { demoCommsForPersistence } from './commsGateway.js';
 
-export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events', 'teams', 'threads', 'swarms'];
+export const GATEWAY_SLICES = ['agents', 'tasks', 'approvals', 'events', 'teams', 'threads', 'swarms', 'providers'];
 export const LOCAL_SLICES = ['usage'];
 
 const listeners = new Set();
@@ -45,6 +45,12 @@ let ownerVersion = null;
 /** Server sentence about swarm plans ("nothing executes one"); null while the slice is demo. */
 let swarmsRuntimeNote = null;
 export const getSwarmsRuntime = () => swarmsRuntimeNote;
+
+/* The model ledger: every number on the Models screen comes from here, and here is the gateway's own
+ * answer to `GET /usage` + `GET /model-calls`. It is null in demo mode, which is the signal the screen
+ * uses to say "no ledger" instead of drawing a chart. */
+let modelsLedger = null;
+export const getModelsLedger = () => modelsLedger;
 
 /* ---------- formatting adapters (server columns → app shape) ---------- */
 const arr = (value) => (Array.isArray(value) ? value : []);
@@ -185,6 +191,30 @@ export function adaptChatRuntime(runtime) {
   };
 }
 
+/** A provider row from the gateway. `status` is `configured` only when a key is actually sealed. */
+export function adaptProvider(row) {
+  const status = row?.status === 'configured' ? 'configured' : 'unconfigured';
+  return {
+    id: row?.id || '',
+    name: row?.name || row?.id || '',
+    category: row?.category || 'Other',
+    auth: row?.auth || 'API key',
+    models: arr(row?.models),
+    defaultModel: row?.defaultModel || '',
+    status,
+    endpoint: row?.endpoint || '',
+    endpointHost: row?.endpointHost || '',
+    fingerprint: row?.fingerprint || '',
+    hint: row?.hint || '',
+    configuredAt: row?.configuredAt ?? null,
+    configuredBy: row?.configuredBy || '',
+    spendMtd: num(row?.spendMtd, 0),
+    callsMtd: num(row?.callsMtd, 0),
+    lastCallAt: row?.lastCallAt ?? null,
+    source: 'gateway',
+  };
+}
+
 export function adaptTask(row) {
   return {
     id: row.id,
@@ -305,6 +335,9 @@ function adopt(data, { requestId = null } = {}) {
   // screen has to say "this gateway serves no transcript" rather than show demo threads as live.
   const threads = Array.isArray(data.threads) ? data.threads.map(adaptThread) : null;
   const swarms = Array.isArray(data.swarms) ? data.swarms.map(adaptSwarm) : null;
+  // A gateway without the model routes returns nothing here; `null` keeps the slice on demo
+  // provenance and the screen says it has no ledger.
+  const providers = Array.isArray(data.providers) ? data.providers.map(adaptProvider) : null;
 
   // Set ownership before publishing rows to subscribers or persistence.
   // Slices without a server store stay local and keep their demo provenance.
@@ -314,14 +347,29 @@ function adopt(data, { requestId = null } = {}) {
     approvals: 'gateway',
     events: 'gateway',
     swarms: swarms ? 'gateway' : 'demo',
+    providers: providers ? 'gateway' : 'demo',
     teams: 'gateway',
     threads: threads ? 'gateway' : 'demo',
     usage: 'demo',
   });
   const chatRuntime = threads ? adaptChatRuntime(data.chatRuntime) : getState().chatRuntime;
   swarmsRuntimeNote = swarms ? (data.swarmsRuntime || null) : null;
+  modelsLedger = providers
+    ? {
+      runtime: data.modelsRuntime || null,
+      budget: data.modelsBudget || null,
+      usage: data.modelsUsage || null,
+      calls: Array.isArray(data.modelsCalls) ? data.modelsCalls : [],
+      at: Date.now(),
+    }
+    : null;
   replaceSlices(
-    { agents, tasks, approvals, events, teams, chatRuntime, ...(threads ? { threads } : {}), ...(swarms ? { swarms } : {}) },
+    {
+      agents, tasks, approvals, events, teams, chatRuntime,
+      ...(threads ? { threads } : {}),
+      ...(swarms ? { swarms } : {}),
+      ...(providers ? { providers } : {}),
+    },
     'data:gateway',
   );
   // Reflect the real gateway in the demo `gateway` object so header dots are not lies.
@@ -359,7 +407,8 @@ export function releaseGatewayData({ reason = 'signed-out' } = {}) {
     demoSnapshot = null;
   }
   swarmsRuntimeNote = null;
-  setProvenance({ agents: 'demo', tasks: 'demo', approvals: 'demo', events: 'demo', swarms: 'demo', teams: 'demo', threads: 'demo', usage: 'demo' });
+  modelsLedger = null;
+  setProvenance({ agents: 'demo', tasks: 'demo', approvals: 'demo', events: 'demo', swarms: 'demo', providers: 'demo', teams: 'demo', threads: 'demo', usage: 'demo' });
   Object.assign(sync, { status: isApiMode() ? 'degraded' : 'demo', error: reason === 'signed-out' ? null : sync.error, at: Date.now(), ws: 'off' });
   emit();
 }
@@ -371,7 +420,7 @@ export function reloadDemoData() {
 }
 
 async function fetchAll() {
-  const [agents, tasks, approvals, events, teams, threads, swarms] = await Promise.all([
+  const [agents, tasks, approvals, events, teams, threads, swarms, providers, modelsUsage, modelsCalls] = await Promise.all([
     api.agents(),
     api.tasks(),
     api.approvals(),
@@ -384,6 +433,10 @@ async function fetchAll() {
     // A gateway older than the swarm routes returns 404 here. That must not fail the whole refresh, and
     // it must not make demo fixtures look live: `swarms: null` keeps the slice on demo provenance.
     api.swarms().catch(() => null),
+    // Same rule for the model routes: absent on an older gateway, and that must not fail the refresh.
+    api.providers().catch(() => null),
+    api.usage().catch(() => null),
+    api.modelCalls(12).catch(() => null),
   ]);
   return {
     agents: agents.body,
@@ -395,6 +448,11 @@ async function fetchAll() {
     chatRuntime: threads?.body?.runtime ?? null,
     swarms: Array.isArray(swarms?.body?.swarms) ? swarms.body.swarms : null,
     swarmsRuntime: swarms?.body?.runtime ?? null,
+    providers: Array.isArray(providers?.body?.providers) ? providers.body.providers : null,
+    modelsRuntime: providers?.body?.runtime ?? null,
+    modelsBudget: providers?.body?.budget ?? null,
+    modelsUsage: modelsUsage?.body ?? null,
+    modelsCalls: Array.isArray(modelsCalls?.body?.calls) ? modelsCalls.body.calls : null,
     requestId: agents.requestId,
   };
 }
@@ -507,7 +565,7 @@ export function connectLive() {
     reconnectAttempt = 0;
     setWs('open');
     try {
-      ws.send(JSON.stringify({ type: 'subscribe', topics: ['agents', 'tasks', 'approvals', 'system', 'evolution', 'chat', 'swarms'] }));
+      ws.send(JSON.stringify({ type: 'subscribe', topics: ['agents', 'tasks', 'approvals', 'system', 'evolution', 'chat', 'swarms', 'models'] }));
     } catch {
       /* ignore: the server will just use its default subscription */
     }
@@ -541,7 +599,7 @@ export function connectLive() {
       evolutionListeners.forEach((fn) => { try { fn(msg); } catch { /* a panel must not break the socket */ } });
       return;
     }
-    if (['agents', 'tasks', 'approvals', 'system', 'chat', 'swarms'].includes(msg?.topic)) scheduleRefresh();
+    if (['agents', 'tasks', 'approvals', 'system', 'chat', 'swarms', 'models'].includes(msg?.topic)) scheduleRefresh();
   };
   ws.onerror = () => {
     /* onclose handles the state machine */
@@ -760,6 +818,38 @@ export async function deleteSwarmPlan(id) {
   return out.body;
 }
 
+
+/* ---------- model gateway ----------
+ * A key is written once and never read back: the row that lands in state carries a fingerprint and a
+ * four-character hint. A call is metered by the gateway, so the client never invents a cost — it asks
+ * for a refresh and shows what the ledger says.
+ */
+export async function saveProviderKey(id, body) {
+  const out = await api.saveProviderKey(id, body);
+  if (isLive('providers')) upsert('providers', adaptProvider(out.body.provider));
+  scheduleRefresh(200);
+  return out.body.provider;
+}
+
+export async function clearProviderKey(id) {
+  const out = await api.clearProviderKey(id);
+  if (isLive('providers')) upsert('providers', adaptProvider(out.body.provider));
+  scheduleRefresh(200);
+  return out.body;
+}
+
+export async function setModelBudget(body) {
+  const out = await api.setModelBudget(body);
+  scheduleRefresh(150);
+  return out.body.budget;
+}
+
+/** One real model call. The reply is returned to the caller; the ledger is re-read from the server. */
+export async function callProviderModel(id, body) {
+  const out = await api.callProviderModel(id, body);
+  scheduleRefresh(150);
+  return out.body;
+}
 
 export async function deleteAgent(id) {
   const out = await api.deleteAgent(id);

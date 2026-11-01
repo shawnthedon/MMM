@@ -50,7 +50,7 @@ export function modelOptions() {
         id: `${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/${String(m).toLowerCase().replace(/[^a-z0-9.]+/g, '-')}`,
         provider: p.name,
         model: m,
-        providerStatus: p.status === 'on' ? 'on' : 'off',
+        providerStatus: p.status === 'on' || p.status === 'configured' ? 'on' : 'off',
         auth: p.auth,
       });
     });

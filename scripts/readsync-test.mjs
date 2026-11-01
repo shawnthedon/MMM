@@ -120,6 +120,21 @@ globalThis.fetch = async (url, options = {}) => {
       runtime: { executed: false, scheduler: false, note: 'A swarm is a saved plan. Nothing in MMM schedules, starts or advances one.' },
     });
   }
+  // The model gateway's read path: providers with no key installed and an empty ledger, so the slice
+  // can be adopted without inventing a call or a spend figure.
+  if (path === '/api/v1/providers' && method === 'GET') {
+    return json({
+      providers: [{
+        id: 'pv-openai', name: 'OpenAI', category: 'Frontier Cloud', auth: 'API key', models: [], defaultModel: '',
+        status: 'unconfigured', endpoint: '', endpointHost: '', fingerprint: '', hint: '',
+        configuredAt: null, configuredBy: '', spendMtd: 0, callsMtd: 0, lastCallAt: null,
+      }],
+      budget: { dailyUsd: 5, perCallUsd: 0.5, enforced: true, spentTodayUsd: 0, callsToday: 0, remainingUsd: 5 },
+      runtime: { adapter: 'openai-compatible', streaming: false, providerCount: 1, configuredCount: 0, keySource: 'env', costBasis: 'estimated', note: 'Nothing is configured.' },
+    });
+  }
+  if (path === '/api/v1/usage') return json({ windowDays: 14, days: [], byProvider: [], totals: { usd: 0, calls: 0, tokens: 0, blocked: 0, errors: 0 }, today: { usd: 0, calls: 0 }, costBasis: 'estimated' });
+  if (path.startsWith('/api/v1/model-calls')) return json({ calls: [] });
   if (path.startsWith('/api/v1/audit')) return json([]);
   return json({ error: 'not found' }, 404);
 };

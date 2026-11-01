@@ -62,15 +62,17 @@ await check('the swarm screen says nothing executes', () => {
 });
 
 /* ---------- 3. models ---------- */
-await check('the models screen is a catalogue, not a gateway', () => {
-  assert(/Model catalogue/.test(views2), 'titled as a catalogue');
-  assert(/No provider client is installed in this build/.test(views2), 'says there is no client');
-  assert(!/Spend MTD/.test(views2), 'the invented spend tile is gone');
-  assert(!/toggle-provider/.test(views2), 'no switch that pretends to enable a provider');
-  assert(!/Active providers/.test(views2), 'and no “active providers” count');
-  const models = views2.slice(views2.indexOf('views.models'), views2.indexOf('/* ================= PLUGINS'));
+await check('the models screen reads the gateway ledger, and invents nothing when there is none', () => {
+  const models = views2.slice(views2.indexOf('const liveLedger'), views2.indexOf('views.plugins ='));
+  assert(/getModelsLedger/.test(models), 'every figure comes from the ledger');
+  assert(/No gateway is connected, so nothing here is callable/.test(models), 'without a gateway it says nothing is callable');
+  assert(/estimated/.test(models), 'cost is labelled an estimate, because it comes from a price table');
+  assert(!/Spend MTD/.test(models), 'the invented spend tile is gone');
+  assert(!/spendMTD/.test(models), 'and the fixture spend figure with it');
+  assert(!/toggle-provider/.test(models), 'no switch that pretends to enable a provider');
   assert(!/Workspace daily/.test(models) && !/6\.21/.test(models), 'no typed budget numbers');
-  assert(/not enforced/.test(views2), 'routing policies are labelled illustrative');
+  assert(/not enforced/.test(models), 'routing policies are labelled as not enforced');
+  assert(/never\s+returned to this browser/.test(models), 'and the key sheet says the key does not come back');
 });
 
 /* ---------- 4. plugins ---------- */
@@ -78,7 +80,8 @@ await check('the plugins screen does not claim a client it does not have', () =>
   assert(!/all calls proxied & audited by the gateway/.test(views2), 'the proxy claim is gone');
   assert(!/short-lived scoped tokens/.test(views2), 'and the token-injection claim');
   assert(/No MCP client is installed in this build/.test(views2), 'says there is no client');
-  assert(!/callsToday/.test(views2), 'no call counter from a seed field');
+  const plugins = views2.slice(views2.indexOf('views.plugins'), views2.indexOf('views.chat ='));
+  assert(!/callsToday/.test(plugins), 'no call counter from a seed field');
   assert(!/sealed in gateway vault/.test(views2), 'no credential field for a vault that does not exist');
   assert(!/plugin-custom/.test(views2), 'no custom-server sheet that collects a secret');
   assert(!/'Plugin installed'|installed`, 'ok'/.test(views2), 'nothing toasts a successful install');

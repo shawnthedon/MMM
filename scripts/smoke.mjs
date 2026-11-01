@@ -62,7 +62,7 @@ const { navigate, rerender } = await import('../src/main.js');
 
 const markers = {
   home: 'Quick actions', designer: 'Agent Designer', agents: 'LangGraph', teams: 'Swarm records', tasks: 'Drag a card, then confirm',
-  chat: 'chat-input', skills: 'Skills Hub', matrix: 'Skills Matrix', models: 'Model catalogue', plugins: 'no client installed',
+  chat: 'chat-input', skills: 'Skills Hub', matrix: 'Skills Matrix', models: 'Model gateway', plugins: 'no client installed',
   comms: 'Comms', local: 'Local AI', telegram: 'Telegram Bridge', analytics: 'Agent leaderboard', artifacts: 'Artifacts',
   terminal: 'term-screen', settings: 'Trust score weights',
 };

@@ -20,6 +20,7 @@ import { runner as browserRunner, browserCapability, setBrowserBroadcast } from 
 import { evolution, setEvolutionBroadcast, ensurePoliciesForAllAgents } from './src/evolution/index.js';
 import * as teams from './src/teams.js';
 import * as swarms from './src/swarms.js';
+import * as models from './src/models.js';
 import * as chat from './src/chat.js';
 import * as terminal from './src/terminal/index.js';
 import * as auth from './src/auth.js';
@@ -144,6 +145,7 @@ function subscriptionFilter(topic, principal) {
   if (topic === 'evolution') return can(principal, 'evolution:read');
   if (topic === 'chat') return can(principal, 'chat:read');
   if (topic === 'terminal') return can(principal, 'terminal:read');
+  if (topic === 'models') return can(principal, 'model:read');
   if (topic === 'audit') return can(principal, 'audit:read');
   return can(principal, 'read');
 }
@@ -665,6 +667,106 @@ route('DELETE', /^\/api\/v1\/swarms\/([\w-]+)$/, { permission: 'swarm:write', mu
     return { code: 200, body: result };
   } catch (error) {
     return swarmFail(error);
+  }
+});
+
+/* ---- Model gateway: sealed keys, one adapter, a metered ledger (see src/models.js) ----
+ * Reading is `model:read`; spending money is `model:call`; installing or removing a key, and setting the
+ * budget, is `model:key` — Owner only. A key is never returned by any route: the read carries a
+ * fingerprint and a four-character hint, and nothing else.
+ */
+const modelFail = (error) => {
+  const code = error?.code || 'error';
+  const status = code === 'not-found' ? 404
+    : code === 'conflict' ? 409
+      : code === 'budget-exceeded' ? 402
+        : code === 'timeout' ? 504
+          : code === 'network' || code === 'bad-gateway' ? 502
+            : code === 'provider-error' ? 502
+              : 400;
+  return { code: status, body: { error: error.message, code } };
+};
+
+route('GET', /^\/api\/v1\/providers$/, { permission: 'model:read' }, () => {
+  try {
+    return { code: 200, body: models.listProviders() };
+  } catch (error) {
+    return modelFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/providers\/([\w-]+)$/, { permission: 'model:read' }, (ctx) => {
+  try {
+    return { code: 200, body: { provider: models.getProvider(ctx.match[1]), runtime: models.runtimeStatus() } };
+  } catch (error) {
+    return modelFail(error);
+  }
+});
+
+route('PUT', /^\/api\/v1\/providers\/([\w-]+)\/key$/, { permission: 'model:key', mutating: true }, (ctx) => {
+  try {
+    const provider = models.saveProviderKey(ctx.match[1], ctx.body || {}, ctx.principal.id, ctx.principal.via);
+    broadcast('models', { type: 'models.key.set', entity: provider.id, fingerprint: provider.fingerprint });
+    return { code: 200, body: { provider } };
+  } catch (error) {
+    return modelFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/providers\/([\w-]+)\/key$/, { permission: 'model:key', mutating: true }, (ctx) => {
+  try {
+    const out = models.clearProviderKey(ctx.match[1], ctx.principal.id, ctx.principal.via);
+    broadcast('models', { type: 'models.key.clear', entity: out.provider.id });
+    return { code: 200, body: out };
+  } catch (error) {
+    return modelFail(error);
+  }
+});
+
+/** The one route that spends money. Every attempt — allowed, refused or failed — reaches the ledger. */
+route('POST', /^\/api\/v1\/providers\/([\w-]+)\/call$/, { permission: 'model:call', mutating: true }, async (ctx) => {
+  try {
+    const body = ctx.body || {};
+    const out = await models.callModel({
+      providerId: ctx.match[1],
+      model: body.model,
+      messages: body.messages,
+      purpose: body.purpose,
+      maxTokens: body.maxTokens,
+      timeoutMs: body.timeoutMs,
+      principal: ctx.principal.id,
+      via: ctx.principal.via,
+    });
+    broadcast('models', { type: 'models.call', entity: ctx.match[1], callId: out.callId, costUsd: out.costUsd });
+    return { code: 200, body: out };
+  } catch (error) {
+    return modelFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/usage$/, { permission: 'model:read' }, (ctx) => {
+  try {
+    return { code: 200, body: models.usageSummary({ days: ctx.query.days }) };
+  } catch (error) {
+    return modelFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/model-calls$/, { permission: 'model:read' }, (ctx) => {
+  try {
+    return { code: 200, body: models.recentCalls({ limit: ctx.query.limit }) };
+  } catch (error) {
+    return modelFail(error);
+  }
+});
+
+route('PUT', /^\/api\/v1\/budget$/, { permission: 'model:key', mutating: true }, (ctx) => {
+  try {
+    const budget = models.setBudget(ctx.body || {}, ctx.principal.id);
+    broadcast('models', { type: 'models.budget', entity: 'budget' });
+    return { code: 200, body: { budget } };
+  } catch (error) {
+    return modelFail(error);
   }
 });
 
@@ -1585,7 +1687,7 @@ export function createGateway() {
           return;
         }
         if (msg?.type === 'subscribe' && Array.isArray(msg.topics)) {
-          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'chat', 'terminal', 'swarms', 'system', 'audit', '*'].includes(t));
+          const wanted = msg.topics.filter((t) => typeof t === 'string' && ['agents', 'tasks', 'approvals', 'browser', 'evolution', 'chat', 'terminal', 'swarms', 'models', 'system', 'audit', '*'].includes(t));
           const refused = wanted.filter((t) => t !== '*' && !subscriptionFilter(t, client.principal));
           client.topics = new Set(wanted.filter((t) => !refused.includes(t)));
           ws.send(JSON.stringify({ topic: 'system', type: 'subscribed', topics: [...client.topics], refused, ts: Date.now() }));
