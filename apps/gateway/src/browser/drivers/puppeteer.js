@@ -44,15 +44,26 @@ const classify = (error) => {
   return new BrowserError('unsupported', message);
 };
 
-async function resolveExecutable() {
-  if (process.env.MMM_BROWSER_CHROMIUM_PATH) return process.env.MMM_BROWSER_CHROMIUM_PATH;
-  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
+async function resolveChromiumRuntime() {
+  if (process.env.MMM_BROWSER_CHROMIUM_PATH) {
+    return { executablePath: process.env.MMM_BROWSER_CHROMIUM_PATH, args: [], headless: true };
+  }
+  if (process.env.CHROME_PATH) {
+    return { executablePath: process.env.CHROME_PATH, args: [], headless: true };
+  }
   try {
-    const sparticuz = (await import('@sparticuz/chromium')).default;
-    const path = await sparticuz.executablePath();
-    if (path) return path;
+    const chromium = (await import('@sparticuz/chromium')).default;
+    const executablePath = await chromium.executablePath();
+    if (executablePath) {
+      return {
+        executablePath,
+        // Sparticuz supplies the flags required by its compressed serverless Chromium build.
+        args: Array.isArray(chromium.args) ? chromium.args : [],
+        headless: chromium.headless || 'shell',
+      };
+    }
   } catch { /* not installed: fall through */ }
-  return ''; // let puppeteer use its own resolution (channel or downloaded build)
+  return { executablePath: '', args: [], headless: true }; // use Puppeteer's configured local Chrome resolution
 }
 
 export async function createPuppeteerDriver({ task } = {}) {
@@ -62,7 +73,7 @@ export async function createPuppeteerDriver({ task } = {}) {
   } catch {
     throw new BrowserError('unsupported', 'puppeteer-core is not installed on the gateway host');
   }
-  const executablePath = await resolveExecutable();
+  const chromiumRuntime = await resolveChromiumRuntime();
   const [vw, vh] = String(process.env.MMM_BROWSER_VIEWPORT || '390x844').split('x').map((n) => Number(n) || 0);
 
   let browser = null;
@@ -73,10 +84,11 @@ export async function createPuppeteerDriver({ task } = {}) {
   async function launch() {
     if (browser?.connected) return;
     browser = await puppeteer.launch({
-      executablePath: executablePath || undefined,
-      headless: true,
+      executablePath: chromiumRuntime.executablePath || undefined,
+      headless: chromiumRuntime.headless,
       args: [
         ...LAUNCH_ARGS,
+        ...chromiumRuntime.args,
         ...(process.env.MMM_BROWSER_PROXY ? [`--proxy-server=${process.env.MMM_BROWSER_PROXY}`] : []),
       ],
     });
