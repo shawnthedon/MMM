@@ -23,6 +23,7 @@ import * as swarms from './src/swarms.js';
 import * as models from './src/models.js';
 import * as copilot from './src/copilot.js';
 import * as agentDrafts from './src/agentDrafts.js';
+import * as swarmPlanDrafts from './src/swarmPlanDrafts.js';
 import * as chat from './src/chat.js';
 import * as terminal from './src/terminal/index.js';
 import * as auth from './src/auth.js';
@@ -974,6 +975,107 @@ route('POST', /^\/api\/v1\/copilot\/drafts\/([\w-]+)\/archive$/, { permission: '
   try {
     const draft = agentDrafts.archive(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via });
     broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state });
+    return { code: 200, body: { draft } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+/* ---- Swarm-plan drafts: the same gate, applied to a plan instead of an agent ----
+ * A workflow in MMM is a swarm plan, so there is no new schema here: the draft validates exactly what
+ * `createSwarm` accepts, and activation calls `createSwarm` itself. The permission that saves a plan is
+ * `swarm:write` — the same one `POST /swarms` needs — because saving is the act being gated.
+ */
+route('GET', /^\/api\/v1\/copilot\/plans$/, { permission: 'copilot:read' }, (ctx) => {
+  try {
+    return { code: 200, body: { drafts: swarmPlanDrafts.list({ principalId: ctx.principal.id, role: ctx.principal.role }) } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/copilot\/plans\/([\w-]+)$/, { permission: 'copilot:read' }, (ctx) => {
+  try {
+    return { code: 200, body: { draft: swarmPlanDrafts.get(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role }) } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+/** A plan draft from a description (`text`) or from a plan object (`plan`). */
+route('POST', /^\/api\/v1\/copilot\/plans$/, { permission: 'copilot:write', mutating: true }, async (ctx) => {
+  try {
+    // The limit guards the thing that costs money: asking a model to write a plan. A plan object from the
+    // API or a form calls no provider, so throttling it would be a limit on typing.
+    if (!ctx.body?.plan) {
+      const limit = auth.rateLimit(`copilot:plan:${ctx.principal.id}`, { limit: 10, windowMs: 60 * 1000 });
+      if (!limit.allowed) return { code: 429, body: { error: 'too many plan drafts in a minute; wait a moment' }, headers: { 'Retry-After': String(limit.retryAfter) } };
+    }
+    if (ctx.body?.plan) {
+      const draft = swarmPlanDrafts.create({ principalId: ctx.principal.id, via: ctx.principal.via, plan: ctx.body.plan });
+      broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state });
+      return { code: 201, body: { draft } };
+    }
+    const out = await swarmPlanDrafts.fromConversation({
+      principalId: ctx.principal.id, via: ctx.principal.via, text: ctx.body?.text, route: ctx.body?.route || '',
+    });
+    broadcast('copilot', { type: 'copilot.plan', entity: out.draft.id, state: out.draft.state });
+    return { code: 201, body: out };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('PATCH', /^\/api\/v1\/copilot\/plans\/([\w-]+)$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
+  try {
+    const draft = swarmPlanDrafts.update(ctx.match[1], {
+      principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, plan: ctx.body?.plan,
+    });
+    broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state });
+    return { code: 200, body: { draft } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/copilot\/plans\/([\w-]+)\/submit$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
+  try {
+    const out = swarmPlanDrafts.submit(ctx.match[1], {
+      principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, name: ctx.principal.name,
+    });
+    broadcast('approvals', { type: 'approval.created', entity: out.approval?.id || null });
+    broadcast('copilot', { type: 'copilot.plan', entity: out.id, state: out.state });
+    return { code: 200, body: out };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+/**
+ * Saving a plan from an approved draft. Three conditions, all in code: `swarm:write`, an allowed approval
+ * this principal did not decide, and a plan that still validates. The row is written by `createSwarm`, so
+ * `executed` is 0 and no status can claim a run.
+ */
+route('POST', /^\/api\/v1\/copilot\/plans\/([\w-]+)\/activate$/, { permission: 'swarm:write', mutating: true }, (ctx) => {
+  try {
+    const check = swarmPlanDrafts.activationCheck(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role });
+    if (check.approval.decider_id && check.approval.decider_id === ctx.principal.id) {
+      return { code: 403, body: { error: 'the approval for this plan was decided by you, and saving it as the same principal is refused', code: 'forbidden' } };
+    }
+    const swarm = swarmPlanDrafts.saveAsSwarm(check.plan, ctx.principal.name || ctx.principal.id);
+    const draft = swarmPlanDrafts.markActive(ctx.match[1], { swarmId: swarm.id, principalId: ctx.principal.id, via: ctx.principal.via });
+    broadcast('swarms', { type: 'swarm.created', entity: swarm.id });
+    broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state });
+    return { code: 201, body: { draft, swarm } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/copilot\/plans\/([\w-]+)\/archive$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
+  try {
+    const draft = swarmPlanDrafts.archive(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via });
+    broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state });
     return { code: 200, body: { draft } };
   } catch (error) {
     return draftFail(error);

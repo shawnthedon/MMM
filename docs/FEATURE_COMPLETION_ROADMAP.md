@@ -1024,9 +1024,9 @@ registry, action cards with two-step confirmation, honest labels (`demo`, `block
 **Today (M30).** Messages persist, replies are real model calls and `llm` reads the runtime. See
 [`copilot/conversation.md`](copilot/conversation.md).
 
-**The gap.** Actions still write to the local store in demo mode, and the Copilot cannot draft a swarm
-plan or a browser task — units 3–5 of the upgrade, not built yet. Agent drafts (M31) are the first
-artefact it produces, and they go through an approval gate.
+**The gap.** Actions still write to the local store in demo mode, and the Copilot cannot draft a browser
+task or speak — units 4–6 of the upgrade, not built yet. Agent drafts (M31) and swarm-plan drafts (M32)
+are the artefacts it produces, and both go through an approval gate a different principal decides.
 
 **Done means.** Messages persist; the capability registry drives every claim; when an action cannot be
 performed server-side the card ends `blocked` with the reason; `llm` becomes `available` only with a
@@ -1908,7 +1908,7 @@ One session ≈ one sitting. Each is independently shippable.
 | 12 | **Files** | Upload/download/checksum/quota | hash round-trip |
 | 13 | ~~**Copilot conversation**~~ ✅ M30 | `011_copilot.sql`, `apps/gateway/src/copilot.js`, `src/copilot/conversation.js`: turns persist per principal, every reply carries the `model_calls` id that produced it, and a refusal writes no assistant row | `test:copilot-api` 19 (real gateway + real loopback provider) · `test:copilot:ui` 8 · a reply with no ledger row cannot be stored |
 | 14 | ~~**Copilot agent drafts**~~ ✅ M31 | `packages/shared/agentDraft.js` + `012_agent_drafts.sql` + `agentDrafts.js`: a conversation writes a canonical draft, the validator decides its state, submitting creates a real approvals row, activation needs a different principal's approval, and the builder saves back to the same draft | `test:drafts` 21 (real gateway + real provider) · `test:drafts:ui` 11 · `test:drafts:browser` 10 in real Chromium at 320 px · a model's `state: "active"` is ignored, and activation is refused before the gate |
-| 15 | **Copilot swarm-plan drafts** | A conversation drafts a swarm *plan* (no new schema — plans already exist), with the same state model and the same gate; nothing executes | a plan draft is created, refused when invalid, and no run is implied |
+| 15 | ~~**Copilot swarm-plan drafts**~~ ✅ M32 | `packages/shared/swarmPlanDraft.js` + `013_swarm_plan_drafts.sql` + `swarmPlanDrafts.js`: a conversation drafts a swarm *plan* (no new plan schema — the validator mirrors `createSwarm` case by case), same state model, same gate, and saving goes through `createSwarm` so `executed` is 0 | `test:plans` 24 (real gateway + real provider, incl. five refusals compared against `POST /swarms`) · `test:plans:ui` 10 · `test:plans:browser` 10 in real Chromium · saving stores one planned swarm with zero progress and zero spend |
 
 After session 12 the app has no simulated *data* left; what remains (skills execution, MCP, training,
 local AI) is genuinely `blocked`/`unconfigured` and labelled as such — which is a finished state, not
@@ -1916,9 +1916,9 @@ an unfinished one.
 
 Sessions 13–17 are the Copilot upgrade (`MMM-Copilot-Design-Spec-2026-11-01.md`): conversation, agent
 drafts, swarm-plan (workflow) drafts, Agent Browser JSON, and open-source voice. They are ordered so each
-one is verifiable alone: 13 and 14 are shipped and proven, 15 is next. The Copilot can now produce an
-agent definition and get it approved; it cannot yet produce a swarm plan or a browser task, and the
-system brief says exactly that.
+one is verifiable alone: 13, 14 and 15 are shipped and proven, 16 is next. The Copilot can now produce an
+agent definition and a swarm plan, each gated on an approval a different principal made; it cannot yet
+produce a browser task, and the system brief says exactly that.
 
 ---
 
