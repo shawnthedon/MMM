@@ -220,6 +220,8 @@ export function newDraft() {
     storage: 'artifacts',
     storageRetention: '90d',
     validatedAt: null,
+    // Set only when this session started from a Copilot draft; saving then writes back to that draft.
+    sourceId: null,
   };
 }
 
@@ -661,6 +663,11 @@ export async function saveDefinition() {
     toast('Definition has blocking errors — open Validate to see them', 'bad');
     return { ok: false, reason: 'invalid', check };
   }
+  // A definition that came from a Copilot draft is that draft: save it back (it still needs an approval
+  // to become an agent) rather than creating a second, ungated agent behind the gate's back.
+  if (draft.sourceId && isApiMode() && isAuthenticated()) {
+    return saveToDraft(draft);
+  }
   const record = toAgentRecord(draft);
   try {
     if (isApiMode()) {
@@ -683,6 +690,32 @@ export async function saveDefinition() {
     return { ok: true, id, mode: 'demo' };
   } catch (err) {
     toast(`Not saved: ${esc(err.message)}`, 'bad');
+    return { ok: false, reason: 'error', error: err.message };
+  }
+}
+
+/**
+ * Saving a builder session that started from a Copilot draft. The canonical spec is rebuilt from the
+ * builder's fields, sent to the gateway, and re-validated there — so the draft the reviewer sees is the
+ * definition the person just edited, and the state is the server's verdict, not the builder's.
+ */
+async function saveToDraft(d) {
+  const { fromDesignerDraft } = await import('../packages/shared/agentDraft.js');
+  const api = await import('./api.js');
+  const spec = fromDesignerDraft(d);
+  try {
+    const out = await api.api.draftUpdate(d.sourceId, { spec });
+    const saved = out.body?.draft;
+    const state = saved?.stateLabel || saved?.state || 'draft';
+    toast(`Draft saved (${state}). Activation still needs an approval on the Approvals screen.`, 'ok');
+    globalThis.localStorage?.removeItem(DRAFT_KEY);
+    draft = newDraft();
+    session = { ...session, step: 0, node: 'runtime', savedLabel: 'draft updated' };
+    emit();
+    import('./main.js').then((m) => m.navigate('agents')).catch(() => {});
+    return { ok: true, id: d.sourceId, mode: 'draft', draft: saved };
+  } catch (err) {
+    toast(`Draft not saved: ${esc(err.message)}`, 'bad');
     return { ok: false, reason: 'error', error: err.message };
   }
 }
@@ -1184,15 +1217,21 @@ views.designer = {
 /** Open the designer, optionally seeded from the New-agent wizard. */
 export function openDesigner({ seed, step } = {}) {
   ensureDraft();
+  if (seed?.draftId) {
+    // A builder session started from a Copilot draft is still that draft. Saving writes back to it, so
+    // there are never two definitions of the same agent — one in the panel and one in the builder.
+    patchDraft({ sourceId: String(seed.draftId) }, { repaint: false });
+  }
   if (seed) {
-    const assumptions = [];
+    // Anything the caller could not map exactly is carried as a visible assumption rather than dropped.
+    const assumptions = [...(Array.isArray(seed.assumptions) ? seed.assumptions : [])];
     if (seed.name) assumptions.push(`Name taken from the New-agent flow: ${seed.name}.`);
     if (seed.role) assumptions.push(`Role from the New-agent flow: ${seed.role}.`);
     patchDraft(
       {
         name: seed.name || draft.name,
         role: seed.role || draft.role,
-        goal: draft.goal || seed.role || '',
+        goal: seed.goal || draft.goal || seed.role || '',
         framework: seed.framework || draft.framework,
         model: seed.model || draft.model,
         autonomy: typeof seed.autonomy === 'number' ? seed.autonomy : draft.autonomy,

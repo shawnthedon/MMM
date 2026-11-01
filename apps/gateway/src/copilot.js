@@ -66,6 +66,8 @@ export const SYSTEM_PROMPT = [
   '- Say when you are unsure, and separate what you know from what you assume.',
   '',
   'What is true in this build (do not contradict it, do not embellish it):',
+  '- Asking for an agent produces a DRAFT, not an agent. The draft is validated by the gateway, someone',
+  '  other than you must approve it, and activation stores an idle definition at most.',
   '- No agent runtime exists: an agent is a stored definition and cannot run or act.',
   '- No workflow runner and no scheduler exist: a swarm plan is a saved intention that nothing executes.',
   '- The model gateway makes real, metered calls, but only when an Owner has sealed a provider key; cost is',
@@ -196,7 +198,7 @@ function messageRows(threadId, limit = LIMITS.perThread) {
   return { rows: rows.slice(0, limit).reverse(), truncated };
 }
 
-const publicMessage = (row) => {
+export const publicMessage = (row) => {
   const base = messageRow(row);
   return {
     ...base,
@@ -218,7 +220,7 @@ export function listConversation(principalId) {
 }
 
 /** The last N turns, oldest first, as the provider expects them. */
-function historyFor(threadId, { excludeId = '' } = {}) {
+export function historyFor(threadId, { excludeId = '' } = {}) {
   const rows = db.prepare('SELECT * FROM messages WHERE thread_id=? ORDER BY ts DESC, rowid DESC LIMIT ?')
     .all(threadId, LIMITS.historyTurns * 2).reverse();
   const out = [];
@@ -233,6 +235,23 @@ function historyFor(threadId, { excludeId = '' } = {}) {
     out.push({ role: row.from_principal === 'me' ? 'user' : 'assistant', content });
   }
   return out;
+}
+
+/**
+ * Store the person's turn. Used by `send` and by the draft route: asking for a draft is still something
+ * the person said, and the transcript should show it whether or not a draft came out the other end.
+ */
+export function storeUserTurn(threadId, { text, clientId = '', principalId = '', via = 'api' }) {
+  const row = insertMessage(threadId, { from: 'me', text, clientId });
+  audit(principalId, via, 'copilot.message', { threadId, id: row.id, length: String(text).length }, 'allow', 'ok');
+  return row;
+}
+
+/** Store a model turn. There is deliberately no way to call this without the call that produced it. */
+export function storeModelTurn(threadId, { text, callId, payload = {} }) {
+  const row = insertMessage(threadId, { from: 'agent', text, callId, payload });
+  audit('agent', 'model', 'copilot.reply', { threadId, id: row.id, callId, length: String(text).length }, 'allow', 'ok');
+  return row;
 }
 
 /** One insert path, with the rule that matters enforced in code: a model turn needs a call id. */
@@ -271,8 +290,7 @@ export async function send({ principalId, via = 'api', text, clientId = '', rout
     }
   }
 
-  const userMessage = insertMessage(thread.id, { from: 'me', text: body, clientId: key });
-  audit(principalId, via, 'copilot.message', { threadId: thread.id, id: userMessage.id, length: body.length }, 'allow', 'ok');
+  const userMessage = storeUserTurn(thread.id, { text: body, clientId: key, principalId, via });
 
   const model = resolveModel();
   if (!model.configured) {
@@ -306,8 +324,7 @@ export async function send({ principalId, via = 'api', text, clientId = '', rout
     throw Object.assign(error, { userMessage: publicMessage(userMessage), runtime: runtimeStatus() });
   }
 
-  const reply = insertMessage(thread.id, {
-    from: 'agent',
+  const reply = storeModelTurn(thread.id, {
     text: String(out.text || '').slice(0, LIMITS.replyChars),
     callId: out.callId,
     payload: {
@@ -320,7 +337,6 @@ export async function send({ principalId, via = 'api', text, clientId = '', rout
       callId: out.callId,
     },
   });
-  audit(principalId, via, 'copilot.reply', { threadId: thread.id, id: reply.id, callId: out.callId, tokens: out.usage?.totalTokens ?? 0 }, 'allow', 'ok');
   logEvent('copilot', `Copilot answered (${out.model}) · ${out.usage?.totalTokens ?? 0} tokens · call #${out.callId}`, thread.id);
 
   return {

@@ -3,11 +3,11 @@
 | Field | Value |
 | --- | --- |
 | Parent spec | `MMM-Copilot-Design-Spec-2026-11-01.md` §2 (conversation), §9 (permissions), §11 (copy) |
-| Unit | 1 of 6 — **conversation** (later units: agent drafts, workflow drafts, browser JSON, voice, hardening) |
+| Unit | 1 of 6 — **conversation** (unit 2, agent drafts, shipped as M31: [`agent-drafts.md`](agent-drafts.md)) |
 | Baseline | `a140b8d` → branch `arena/db668586-mmm` |
 | Files | `apps/gateway/migrations/011_copilot.sql`, `apps/gateway/src/copilot.js`, `apps/gateway/server.js`, `apps/gateway/src/rbac.js`, `apps/gateway/src/chat.js`, `src/copilot/conversation.js`, `src/copilot/panel.js`, `src/copilot/capabilities.js`, `src/copilot.css`, `src/api.js` |
 | Evidence | `npm run test:copilot-api` (**19 passed**, real gateway + real loopback OpenAI-compatible provider) · `npm run test:copilot:ui` (**8 passed**) · `npm run test:copilot:browser` (**8 passed** in real Chromium) · `npm run test:copilot` (6, unchanged) · `npm run test:honesty` (13) · `npm test` (41 suites) · `npm run build` |
-| Status | **PASS for the conversation scope.** Drafts, workflow plans, browser JSON and voice are *not* built yet and the panel says so. |
+| Status | **PASS for the conversation scope.** Agent drafts (unit 2) shipped afterwards as M31 and are documented separately; swarm-plan drafts, browser JSON and voice are *not* built yet and the panel says so. |
 
 ---
 
@@ -129,8 +129,10 @@ real loopback OpenAI-compatible provider, and performs the loop a person perform
   That is unit 2, and the system brief says so rather than letting the model imply otherwise.
 - **A live conversation is model-only.** When the model is what answers, the old deterministic action
   cards are not offered on that turn, because two answers to one message is not a conversation.
-- **Multi-turn context only, no tool calls.** The Copilot cannot read your board or create anything yet.
-  Unit 2 (agent drafts) is where it starts producing artifacts that need approval.
+- **No streaming and no tool calls.** Multi-turn context only, plus one artefact: **agent drafts** (unit 2,
+  [`agent-drafts.md`](agent-drafts.md)). A draft is validated on the gateway and needs another principal's
+  approval before it can become an idle definition. Swarm-plan drafts, Agent Browser JSON and open-source
+  voice are units 3–5 and are not built; the panel does not imply otherwise.
 - **Cost is an estimate** from a price table, never an invoice.
 - **The `llm` capability now reads the runtime.** It says `available` only when the gateway reports a
   provider with a sealed key, `not configured` when the gateway exists without one, and `unverified` in

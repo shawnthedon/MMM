@@ -634,3 +634,20 @@ button.cp-chip:active { background: var(--elevated); }
 @media (min-width: 900px) {
   .cp-notice { font-size: var(--text-base, var(--text-sm)); }
 }
+
+/* ---------- agent drafts: a definition with a state, not a chat bubble ----------
+ * The card has to read as an artefact: a title and a state at the top, the findings that produced that
+ * state in the middle, and only the actions the state allows at the bottom. Nothing here is a shortcut —
+ * there is no "run" control, because no runtime exists to run.
+ */
+.cp-draft { border: 1px solid var(--line-2); }
+.cp-draft[data-draft-state='invalid'] { border-color: color-mix(in srgb, var(--accent-bad, var(--danger)) 45%, var(--line-2)); }
+.cp-draft[data-draft-state='active'] { border-color: color-mix(in srgb, var(--accent-ok) 45%, var(--line-2)); }
+.cp-draft-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
+.cp-draft-meta span { white-space: nowrap; }
+.cp-draft-finding { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-top: 1px solid var(--line-1, var(--line-2)); }
+.cp-draft-finding:first-of-type { border-top: 0; }
+.cp-draft-finding .cp-badge { flex: none; }
+.cp-draft-note { margin-top: 8px; line-height: 1.45; }
+.cp-draft-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cp-draft-actions .cp-chip { min-height: 44px; }

@@ -22,6 +22,7 @@ import * as teams from './src/teams.js';
 import * as swarms from './src/swarms.js';
 import * as models from './src/models.js';
 import * as copilot from './src/copilot.js';
+import * as agentDrafts from './src/agentDrafts.js';
 import * as chat from './src/chat.js';
 import * as terminal from './src/terminal/index.js';
 import * as auth from './src/auth.js';
@@ -449,11 +450,11 @@ route('GET', /^\/api\/v1\/agents$/, { permission: 'read' }, () => ({
   body: db.prepare('SELECT * FROM agents WHERE deleted_at IS NULL ORDER BY last_active DESC').all().map(hydrateAgent),
 }));
 
-route('POST', /^\/api\/v1\/agents$/, { permission: 'agent:write', mutating: true }, (ctx) => {
-  const b = ctx.body;
-  if (!b?.name || typeof b.name !== 'string' || b.name.length > 120) {
-    return { code: 400, body: { error: 'name is required (max 120 chars)' } };
-  }
+/**
+ * The one place an agent row is written. Both `POST /agents` and draft activation go through it, so an
+ * approval-gated activation cannot quietly differ from a direct creation in what it stores.
+ */
+function insertAgent(ctx, b, { reason = 'via API' } = {}) {
   const id = typeof b.id === 'string' && /^[\w-]{1,64}$/.test(b.id) ? b.id : `ag-${Date.now().toString(36)}`;
   const teamId = b.teamId ?? b.team_id ?? null;
   if (teamId) teams.getTeam(teamId); // 404 rather than a dangling foreign key
@@ -466,10 +467,18 @@ route('POST', /^\/api\/v1\/agents$/, { permission: 'agent:write', mutating: true
       teamId, 0, JSON.stringify(Array.isArray(b.responsibilities) ? b.responsibilities : []), JSON.stringify(b.approvalGates || {}));
   if (teamId) teams.assignAgent(id, teamId, position, ctx.principal.id);
   try { evolution.ensurePolicy(id); } catch { /* policy is created lazily on first use */ }
-  const ev = logEvent('agent', `Agent ${b.name} created via API by ${ctx.principal.name}`, id);
+  const ev = logEvent('agent', `Agent ${b.name} created ${reason} by ${ctx.principal.name}`, id);
   audit(ctx.principal.id, ctx.principal.via, 'agent.create', { id, name: b.name }, 'allow', 'ok');
   broadcast('agents', { type: 'agent.created', entity: id, event: ev });
-  return { code: 201, body: hydrateAgent(db.prepare('SELECT * FROM agents WHERE id=?').get(id)) };
+  return hydrateAgent(db.prepare('SELECT * FROM agents WHERE id=?').get(id));
+}
+
+route('POST', /^\/api\/v1\/agents$/, { permission: 'agent:write', mutating: true }, (ctx) => {
+  const b = ctx.body;
+  if (!b?.name || typeof b.name !== 'string' || b.name.length > 120) {
+    return { code: 400, body: { error: 'name is required (max 120 chars)' } };
+  }
+  return { code: 201, body: insertAgent(ctx, b) };
 });
 
 route('GET', /^\/api\/v1\/agents\/([\w-]+)$/, { permission: 'read' }, (ctx) => {
@@ -847,6 +856,127 @@ route('PUT', /^\/api\/v1\/copilot\/model$/, { permission: 'copilot:model', mutat
     return { code: 200, body: { runtime } };
   } catch (error) {
     return copilotFail(error);
+  }
+});
+
+/* ---- Agent drafts: a conversation produces a definition, an approval produces an agent ----
+ * Reading and editing are `copilot:read`/`copilot:write` (a draft belongs to the person who asked for
+ * it). Activating is `agent:write` **and** an allowed approval row created by someone else — the second
+ * condition is enforced in `agentDrafts.activationCheck`, in code, because a prompt cannot hold a lock.
+ */
+const draftFail = (error) => {
+  const code = error?.code || 'error';
+  const status = code === 'not-found' ? 404
+    : code === 'forbidden' ? 403
+      : code === 'conflict' ? 409
+        : code === 'no-model' ? 409
+          : code === 'budget-exceeded' ? 402
+            : code === 'timeout' ? 504
+              : ['network', 'bad-gateway', 'unusable-draft'].includes(code) ? 422
+                : 400;
+  return {
+    code: status,
+    body: {
+      error: error.message, code,
+      ...(error.draft ? { draft: error.draft } : {}),
+      ...(error.findings ? { findings: error.findings } : {}),
+      ...(error.usage ? { usage: error.usage } : {}),
+      ...(error.reply ? { reply: error.reply } : {}),
+      ...(error.userMessage ? { userMessage: error.userMessage } : {}),
+      ...(error.runtime ? { runtime: error.runtime } : {}),
+    },
+  };
+};
+
+route('GET', /^\/api\/v1\/copilot\/drafts$/, { permission: 'copilot:read' }, (ctx) => {
+  try {
+    return { code: 200, body: { drafts: agentDrafts.list({ principalId: ctx.principal.id, role: ctx.principal.role }) } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/copilot\/drafts\/([\w-]+)$/, { permission: 'copilot:read' }, (ctx) => {
+  try {
+    return { code: 200, body: { draft: agentDrafts.get(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role }) } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+/** A draft from a description. The model writes JSON; the canonical validator decides what it means. */
+route('POST', /^\/api\/v1\/copilot\/drafts$/, { permission: 'copilot:write', mutating: true }, async (ctx) => {
+  const limit = auth.rateLimit(`copilot:draft:${ctx.principal.id}`, { limit: 10, windowMs: 60 * 1000 });
+  if (!limit.allowed) return { code: 429, body: { error: 'too many drafts in a minute; wait a moment' }, headers: { 'Retry-After': String(limit.retryAfter) } };
+  try {
+    // With `spec`, this is the visual builder saving back; without it, the conversation asking for a draft.
+    if (ctx.body?.spec) {
+      const draft = agentDrafts.create({
+        principalId: ctx.principal.id, via: ctx.principal.via, spec: ctx.body.spec, source: 'designer',
+      });
+      broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state });
+      return { code: 201, body: { draft } };
+    }
+    const out = await agentDrafts.fromConversation({
+      principalId: ctx.principal.id, via: ctx.principal.via, text: ctx.body?.text, route: ctx.body?.route || '',
+    });
+    broadcast('copilot', { type: 'copilot.draft', entity: out.draft.id, state: out.draft.state });
+    return { code: 201, body: out };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('PATCH', /^\/api\/v1\/copilot\/drafts\/([\w-]+)$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
+  try {
+    const draft = agentDrafts.update(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, spec: ctx.body?.spec });
+    broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state });
+    return { code: 200, body: { draft } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/copilot\/drafts\/([\w-]+)\/submit$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
+  try {
+    const out = agentDrafts.submit(ctx.match[1], {
+      principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, name: ctx.principal.name,
+    });
+    broadcast('approvals', { type: 'approval.created', entity: out.approval?.id || null });
+    broadcast('copilot', { type: 'copilot.draft', entity: out.id, state: out.state });
+    return { code: 200, body: out };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+/**
+ * Activation. Three conditions, all in code: `agent:write` (the route), an approval this principal did
+ * not make (the gate), and a draft that is still valid now (the validator). The agent row is written by
+ * the same `insertAgent` that `POST /agents` uses.
+ */
+route('POST', /^\/api\/v1\/copilot\/drafts\/([\w-]+)\/activate$/, { permission: 'agent:write', mutating: true }, (ctx) => {
+  try {
+    const check = agentDrafts.activationCheck(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role });
+    if (check.approval.decider_id && check.approval.decider_id === ctx.principal.id) {
+      return { code: 403, body: { error: 'the approval for this draft was decided by you, and activation by the same principal is refused', code: 'forbidden' } };
+    }
+    const agent = insertAgent(ctx, check.record, { reason: 'from an approved Copilot draft' });
+    const draft = agentDrafts.markActive(ctx.match[1], { agentId: agent.id, principalId: ctx.principal.id, via: ctx.principal.via });
+    broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state });
+    return { code: 201, body: { draft, agent } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/copilot\/drafts\/([\w-]+)\/archive$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
+  try {
+    const draft = agentDrafts.archive(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via });
+    broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state });
+    return { code: 200, body: { draft } };
+  } catch (error) {
+    return draftFail(error);
   }
 });
 

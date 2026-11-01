@@ -1,5 +1,11 @@
 # Copilot UI — FAB, Panel, Holographic Empty State, Cards
 
+> **Live conversations superseded the mode tabs.** When the gateway reports a configured provider the
+> panel becomes a conversation with no mode tabs; the seven modes below are the built-in engine's
+> deterministic answers, used when no model can answer and in demo mode. See
+> [`conversation.md`](conversation.md) for the live path and [`agent-drafts.md`](agent-drafts.md) for what
+> a conversation can now produce.
+
 | Field | Value |
 | --- | --- |
 | Parent spec | `Copilot_Master_MMM_V2.md` v1.0 (§2, §3, §2.5, §11) |
