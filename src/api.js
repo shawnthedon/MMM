@@ -264,6 +264,15 @@ export const api = {
   planSubmit: (id) => request(`/api/v1/copilot/plans/${encodeURIComponent(id)}/submit`, { method: 'POST', body: {} }),
   planSave: (id) => request(`/api/v1/copilot/plans/${encodeURIComponent(id)}/activate`, { method: 'POST', body: {} }),
   planArchive: (id) => request(`/api/v1/copilot/plans/${encodeURIComponent(id)}/archive`, { method: 'POST', body: {} }),
+  // Browser-script drafts: the artefact whose approval actually runs a browser task.
+  scriptList: () => request('/api/v1/copilot/scripts'),
+  scriptGet: (id) => request(`/api/v1/copilot/scripts/${encodeURIComponent(id)}`),
+  scriptFromText: (body) => request('/api/v1/copilot/scripts', { method: 'POST', body, timeoutMs: 90000 }),
+  scriptFromObject: (body) => request('/api/v1/copilot/scripts', { method: 'POST', body }),
+  scriptUpdate: (id, body) => request(`/api/v1/copilot/scripts/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
+  scriptSubmit: (id) => request(`/api/v1/copilot/scripts/${encodeURIComponent(id)}/submit`, { method: 'POST', body: {} }),
+  scriptRun: (id) => request(`/api/v1/copilot/scripts/${encodeURIComponent(id)}/activate`, { method: 'POST', body: {}, timeoutMs: 45000 }),
+  scriptArchive: (id) => request(`/api/v1/copilot/scripts/${encodeURIComponent(id)}/archive`, { method: 'POST', body: {} }),
 
   providers: () => request('/api/v1/providers'),
   provider: (id) => request(`/api/v1/providers/${encodeURIComponent(id)}`),

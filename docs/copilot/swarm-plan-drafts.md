@@ -6,7 +6,7 @@
 | Unit | 3 of 6 — **workflow / swarm-plan drafts** (unit 2, agent drafts: [`agent-drafts.md`](agent-drafts.md)) |
 | Files | `packages/shared/swarmPlanDraft.js`, `apps/gateway/migrations/013_swarm_plan_drafts.sql`, `apps/gateway/src/swarmPlanDrafts.js`, `apps/gateway/server.js`, `src/copilot/plans.js`, `src/copilot/panel.js`, `src/copilot.css`, `src/api.js`, `packages/shared/api-routes.json` |
 | Evidence | `npm run test:plans` (**24 passed**, real gateway + real loopback provider) · `npm run test:plans:ui` (**10 passed**) · `npm run test:plans:browser` (**10 passed** in real Chromium at a phone viewport) · `npm run test:drafts` 21 · `npm test` · `npm run build` |
-| Status | **PASS for the plan-draft scope.** Nothing in this unit schedules, starts or advances a plan; Agent Browser JSON and voice are units 4–5 and are not built. |
+| Status | **PASS for the plan-draft scope.** Nothing in this unit schedules, starts or advances a plan. Unit 4 (Agent Browser JSON) landed afterwards — [`browser-scripts.md`](browser-scripts.md); voice is unit 5 and is not built. |
 
 ---
 
@@ -144,5 +144,6 @@ card fitting 320 px with 44 px buttons and no page errors.
   time (there is no run time).
 - **Plan drafts are not shared.** Like agent drafts, a second person meets the plan on the Approvals
   screen, not in their own Copilot.
-- **Not built yet**: Agent Browser JSON from conversation (unit 4), open-source voice (unit 5), hardening
+- **Built after this unit**: Agent Browser JSON from conversation (unit 4,
+  [`browser-scripts.md`](browser-scripts.md)). **Not built yet**: open-source voice (unit 5), hardening
   (unit 6). The Copilot discusses those and cannot produce them.

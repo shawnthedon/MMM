@@ -11,8 +11,9 @@ A stock checkout has **no engine**, so the panel reports `unconfigured` until yo
 
 ## 1. What it does
 
-An operator (or the Copilot, later) gives the gateway an **objective**, **success criteria** and a
-**plan** of steps. The gateway runs the plan one action per tick, in a browser it owns, and only
+An operator — or the Copilot, which proposes a script as a draft a person must approve
+([`../copilot/browser-scripts.md`](../copilot/browser-scripts.md)) — gives the gateway an **objective**,
+**success criteria** and a **plan** of steps. The gateway runs the plan one action per tick, in a browser it owns, and only
 claims a step happened when the page changed:
 
 ```

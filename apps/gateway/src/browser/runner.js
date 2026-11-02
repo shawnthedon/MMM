@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import {
   DEFAULT_LIMITS, STATES, TERMINAL, isTerminal, isActive, canTransition, normalisePlan,
   normaliseCriteria, detectBlock, blockOutcome, ladderFor, isSensitiveStep, resourceProblem,
-  BLOCK_KINDS,
+  BLOCK_KINDS, urlProblem,
 } from './policy.js';
 import { assessProgress, createWatchdog, progressAgeLabel } from './watchdog.js';
 import { createLoopDetector, actionSignature, loopResponse, LOOP_REASONS } from './loops.js';
@@ -220,6 +220,12 @@ export function createBrowserRunner({
   }) {
     const text = String(objective || '').trim();
     if (text.length < 10) throw new Error('objective must be at least 10 characters');
+    // The entry URL is a URL like any other: an http(s) rule here keeps `file:` off the disk and keeps
+    // this check in the executor, where a draft, the screen and the raw API all inherit it.
+    if (entryUrl) {
+      const problem = urlProblem(entryUrl);
+      if (problem) throw new Error(`entryUrl: ${problem}`);
+    }
     const steps = normalisePlan(plan);
     if (!steps.length) throw new Error('a plan needs at least one step');
     const resolved = await resolveDriverId(driver);

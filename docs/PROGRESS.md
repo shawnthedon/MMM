@@ -643,6 +643,57 @@ name.
   board or create an agent yet. Drafts, swarm plans, Agent Browser JSON and open-source voice are units 2–5
   and are not built; the panel does not imply otherwise.
 
+## 🌐 2026-11-02 — The Copilot writes a browser script, and approving it *is* the run (M33)
+
+Unit 4 of the Copilot upgrade. Units 2 and 3 end at a stored row; this one ends at a real `browser_tasks`
+row, so the whole design is about never letting the card imply a run that has not been approved.
+
+- **One validator, mirrored by the executor** (`packages/shared/browserScript.js`): `normaliseScript`,
+  `validateScript`, `previewScript`, `toTaskBody`, `summariseScript`, `scriptInstruction`,
+  `parseScriptReply`. `file:` / `javascript:` schemes, an action outside `allowActions`, a
+  `click`/`type`/`extract` with no operand and a short objective are refused here **and** refused by
+  `policy.urlProblem` / `runner.createTask` / the driver — asserted on the same script, so the draft is
+  never stricter than the run it predicts.
+- **A preview derived from the script, not from prose** — *Open "https://…"*, *Read "heading" from "h1"*,
+  *Click "Sign in"*. A committing step is flagged and badged *commits you*; a `type` step never prints the
+  text it types. A model that writes friendlier sentences cannot add, remove or soften a line.
+- **Schema** (`014_browser_script_drafts.sql`): its own table, with no `status`, `progress` or `evidence`
+  column. The draft reads `browser_tasks` / `browser_evidence` live through `taskSnapshot()`, so a card
+  cannot show a stale "running" or a remembered "completed".
+- **Gateway** (`apps/gateway/src/browserScriptDrafts.js`): `fromConversation` asks the funnel with
+  `purpose: 'copilot.script'`; a reply that is not a script stores the refusal turn and **no** draft.
+  `submit` writes a real `approvals` row (`browser.script.run`, risk `high`, evidence = the preview);
+  `activate` needs `browser:run` plus an allowed approval this principal did not decide, then queues the
+  task through `runner.createTask` — one write path, the same as `POST /api/v1/browser/tasks`.
+- **A blocked script cannot be submitted.** Activation *is* execution, so a draft with no engine behind it
+  never reaches a Reviewer: an approval nothing could execute is theatre.
+- **Routes**: `GET/POST /copilot/scripts`, `GET/PATCH /:id`, `POST /:id/submit|activate|archive`; all seven
+  in `packages/shared/api-routes.json`. The 10/min rate limit covers only the model path.
+- **Panel** (`src/copilot/scripts.js`, `panel.js`, `copilot.css`): `wantsScript()` needs a browsing verb
+  *and* a place to browse, so "how do I scrape a site?" stays a question and "build an agent that checks
+  pricing" stays an agent. The card shows the objective, canonical state, the page, the preview with the
+  committing step tinted, the findings, and the sentence that approval runs it once. `Run` is offered only
+  with `browser:run` on an `awaiting-approval` draft; after a run the card shows the task's real status,
+  step index, evidence count, outcome, blocker and *simulated engine — not a real browser* when that is
+  what ran. A reload rebuilds the card from `GET /copilot/scripts` via `payload.draftKind`.
+- Evidence: `npm run test:scripts` — **25 passed** (no key → 409 and nothing created; a real reply → the
+  validator's state; preview immune to prose; a secret never previewed; a non-JSON reply 422 with no draft;
+  `file:`/`javascript:`/unknown action/selector-less click refused identically by the draft and by
+  `POST /browser/tasks`; no engine → `blocked` + submit 409; submit → a real approvals row; run refused
+  before the decision, refused for the decider, refused without `browser:run`, allowed for another
+  principal and queued as **one** task with its criteria; the failure timeline reported honestly; a second
+  run 409; denial, scope, archive and restart). `npm run test:scripts:ui` — **10 passed**.
+  `npm run test:scripts:browser` — **9 passed** in real Chromium at 320 px (key sealed, request typed, one
+  metered `copilot.script` row while zero browser tasks exist, Submit → a real approvals row,
+  Reviewer allows and cannot run, Owner reloads and runs exactly one queued task, second run 409, 44 px
+  targets, no page errors). `npm test` (46 suites) and `npm run build` green. Design + limits:
+  [`copilot/browser-scripts.md`](copilot/browser-scripts.md).
+- Honest limit: **the gateway host decides what can run.** With neither Chromium nor the test-only
+  simulated driver, every script is `blocked` and nothing can be submitted. A run is a real run — there is
+  no dry-run mode, which is exactly why the preview comes from the script. The script vocabulary is the
+  existing Agent Browser one: no new action, field or selector dialect. Open-source voice is unit 5 and is
+  not built.
+
 ## 🧩 2026-11-01 — The Copilot drafts a workflow, and saving it stores a plan that nothing runs (M32)
 
 Unit 3 of the Copilot upgrade. A workflow in MMM **is** a swarm plan, so this unit adds no schema: it adds
