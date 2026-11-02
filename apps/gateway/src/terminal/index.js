@@ -116,6 +116,14 @@ function sessionRow(id) {
   return db.prepare('SELECT * FROM terminal_sessions WHERE id=?').get(id);
 }
 
+/**
+ * Who opened a session. Routing and authorisation only — it is never added to the serialised session,
+ * because the only people who may learn it are the owner and an Owner, and they already know.
+ */
+export function sessionOwner(id) {
+  return sessionRow(String(id || ''))?.principal_id || '';
+}
+
 export function runRow(id) {
   return db.prepare('SELECT * FROM terminal_runs WHERE id=?').get(id);
 }

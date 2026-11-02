@@ -289,3 +289,12 @@ export async function fromConversation({ principalId, via = 'api', text, route =
 }
 
 export { DRAFT_STATES, DRAFT_ONLY_STATES, KIND as DRAFT_KIND };
+
+/**
+ * Routing-only owner lookup for live events. Deliberately *not* part of the serialised draft: the websocket
+ * needs to know whose socket may hear about a row, and nobody needs to learn it from a response body.
+ */
+export function ownerOf(id) {
+  const row = db.prepare('SELECT owner_id FROM swarm_plan_drafts WHERE id=?').get(String(id || ''));
+  return row?.owner_id || '';
+}

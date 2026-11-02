@@ -141,4 +141,5 @@ errors.
   Agent Designer's Save is the existing designer path, and it is not wired to an existing draft id yet.
 - **Built after this unit**: swarm-plan drafts (unit 3, [`swarm-plan-drafts.md`](swarm-plan-drafts.md)),
   Agent Browser JSON (unit 4, [`browser-scripts.md`](browser-scripts.md)) and open-source voice (unit 5,
-  [`voice-input.md`](voice-input.md)). **Not built yet**: the hardening pass (unit 6).
+  [`voice-input.md`](voice-input.md)). Hardening (unit 6) closed the upgrade afterwards —
+  [`hardening.md`](hardening.md).

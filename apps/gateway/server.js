@@ -197,12 +197,24 @@ function currentSocketPrincipal(client) {
   return principal;
 }
 
+/**
+ * A payload may name its `owner`. When it does, the event is delivered only to that principal — and to an
+ * Owner, who is the one role the API lets read every artefact (`list`/`get` in the draft modules all scope
+ * the same way). The `owner` field is stripped before sending: it is routing, not content.
+ *
+ * This exists because a topic is not a scope. `copilot` was one topic for every principal's drafts, so an
+ * Observer subscribed to it learned that `bs-…` had become `blocked` — while `GET /copilot/scripts/bs-…`
+ * answered 404 to the same person. A broadcast that tells you more than the API will is a leak even when
+ * the leaked thing is only an id and a state.
+ */
 function broadcast(topic, payload) {
-  const msg = JSON.stringify({ topic, ...payload, ts: Date.now() });
+  const { owner, ...rest } = payload || {};
+  const msg = JSON.stringify({ topic, ...rest, ts: Date.now() });
   for (const c of clients) {
     if (c.ws.readyState !== 1) continue;
     if (!currentSocketPrincipal(c)) continue;
     if (!c.topics.has(topic) && !c.topics.has('*')) continue;
+    if (owner && c.principal.id !== owner && c.principal.role !== 'Owner') continue;
     if (!subscriptionFilter(topic, c.principal)) continue;
     try {
       c.ws.send(msg);
@@ -855,7 +867,7 @@ route('POST', /^\/api\/v1\/copilot\/messages$/, { permission: 'copilot:write', m
       route: typeof ctx.body?.route === 'string' ? ctx.body.route.slice(0, 40) : '',
     });
     if (!out.duplicate && out.reply) {
-      broadcast('copilot', { type: 'copilot.message', entity: out.reply.id, callId: out.reply.modelCallId });
+      broadcast('copilot', { type: 'copilot.message', entity: out.reply.id, callId: out.reply.modelCallId, owner: ctx.principal.id });
     }
     return { code: 200, body: out };
   } catch (error) {
@@ -866,7 +878,7 @@ route('POST', /^\/api\/v1\/copilot\/messages$/, { permission: 'copilot:write', m
 route('DELETE', /^\/api\/v1\/copilot$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
   try {
     const out = copilot.clearConversation(ctx.principal.id, ctx.principal.via);
-    broadcast('copilot', { type: 'copilot.cleared', entity: ctx.principal.id });
+    broadcast('copilot', { type: 'copilot.cleared', entity: ctx.principal.id, owner: ctx.principal.id });
     return { code: 200, body: out };
   } catch (error) {
     return copilotFail(error);
@@ -947,13 +959,13 @@ route('POST', /^\/api\/v1\/copilot\/drafts$/, { permission: 'copilot:write', mut
       const draft = agentDrafts.create({
         principalId: ctx.principal.id, via: ctx.principal.via, spec: ctx.body.spec, source: 'designer',
       });
-      broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state });
+      broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state, owner: agentDrafts.ownerOf(draft.id) });
       return { code: 201, body: { draft } };
     }
     const out = await agentDrafts.fromConversation({
       principalId: ctx.principal.id, via: ctx.principal.via, text: ctx.body?.text, route: ctx.body?.route || '',
     });
-    broadcast('copilot', { type: 'copilot.draft', entity: out.draft.id, state: out.draft.state });
+    broadcast('copilot', { type: 'copilot.draft', entity: out.draft.id, state: out.draft.state, owner: agentDrafts.ownerOf(out.draft.id) });
     return { code: 201, body: out };
   } catch (error) {
     return draftFail(error);
@@ -963,7 +975,7 @@ route('POST', /^\/api\/v1\/copilot\/drafts$/, { permission: 'copilot:write', mut
 route('PATCH', /^\/api\/v1\/copilot\/drafts\/([\w-]+)$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
   try {
     const draft = agentDrafts.update(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, spec: ctx.body?.spec });
-    broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state });
+    broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state, owner: agentDrafts.ownerOf(draft.id) });
     return { code: 200, body: { draft } };
   } catch (error) {
     return draftFail(error);
@@ -976,7 +988,7 @@ route('POST', /^\/api\/v1\/copilot\/drafts\/([\w-]+)\/submit$/, { permission: 'c
       principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, name: ctx.principal.name,
     });
     broadcast('approvals', { type: 'approval.created', entity: out.approval?.id || null });
-    broadcast('copilot', { type: 'copilot.draft', entity: out.id, state: out.state });
+    broadcast('copilot', { type: 'copilot.draft', entity: out.id, state: out.state, owner: agentDrafts.ownerOf(out.id) });
     return { code: 200, body: out };
   } catch (error) {
     return draftFail(error);
@@ -996,7 +1008,7 @@ route('POST', /^\/api\/v1\/copilot\/drafts\/([\w-]+)\/activate$/, { permission: 
     }
     const agent = insertAgent(ctx, check.record, { reason: 'from an approved Copilot draft' });
     const draft = agentDrafts.markActive(ctx.match[1], { agentId: agent.id, principalId: ctx.principal.id, via: ctx.principal.via });
-    broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state });
+    broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state, owner: agentDrafts.ownerOf(draft.id) });
     return { code: 201, body: { draft, agent } };
   } catch (error) {
     return draftFail(error);
@@ -1006,7 +1018,7 @@ route('POST', /^\/api\/v1\/copilot\/drafts\/([\w-]+)\/activate$/, { permission: 
 route('POST', /^\/api\/v1\/copilot\/drafts\/([\w-]+)\/archive$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
   try {
     const draft = agentDrafts.archive(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via });
-    broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state });
+    broadcast('copilot', { type: 'copilot.draft', entity: draft.id, state: draft.state, owner: agentDrafts.ownerOf(draft.id) });
     return { code: 200, body: { draft } };
   } catch (error) {
     return draftFail(error);
@@ -1045,13 +1057,13 @@ route('POST', /^\/api\/v1\/copilot\/plans$/, { permission: 'copilot:write', muta
     }
     if (ctx.body?.plan) {
       const draft = swarmPlanDrafts.create({ principalId: ctx.principal.id, via: ctx.principal.via, plan: ctx.body.plan });
-      broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state });
+      broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state, owner: swarmPlanDrafts.ownerOf(draft.id) });
       return { code: 201, body: { draft } };
     }
     const out = await swarmPlanDrafts.fromConversation({
       principalId: ctx.principal.id, via: ctx.principal.via, text: ctx.body?.text, route: ctx.body?.route || '',
     });
-    broadcast('copilot', { type: 'copilot.plan', entity: out.draft.id, state: out.draft.state });
+    broadcast('copilot', { type: 'copilot.plan', entity: out.draft.id, state: out.draft.state, owner: swarmPlanDrafts.ownerOf(out.draft.id) });
     return { code: 201, body: out };
   } catch (error) {
     return draftFail(error);
@@ -1063,7 +1075,7 @@ route('PATCH', /^\/api\/v1\/copilot\/plans\/([\w-]+)$/, { permission: 'copilot:w
     const draft = swarmPlanDrafts.update(ctx.match[1], {
       principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, plan: ctx.body?.plan,
     });
-    broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state });
+    broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state, owner: swarmPlanDrafts.ownerOf(draft.id) });
     return { code: 200, body: { draft } };
   } catch (error) {
     return draftFail(error);
@@ -1076,7 +1088,7 @@ route('POST', /^\/api\/v1\/copilot\/plans\/([\w-]+)\/submit$/, { permission: 'co
       principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, name: ctx.principal.name,
     });
     broadcast('approvals', { type: 'approval.created', entity: out.approval?.id || null });
-    broadcast('copilot', { type: 'copilot.plan', entity: out.id, state: out.state });
+    broadcast('copilot', { type: 'copilot.plan', entity: out.id, state: out.state, owner: swarmPlanDrafts.ownerOf(out.id) });
     return { code: 200, body: out };
   } catch (error) {
     return draftFail(error);
@@ -1097,7 +1109,7 @@ route('POST', /^\/api\/v1\/copilot\/plans\/([\w-]+)\/activate$/, { permission: '
     const swarm = swarmPlanDrafts.saveAsSwarm(check.plan, ctx.principal.name || ctx.principal.id);
     const draft = swarmPlanDrafts.markActive(ctx.match[1], { swarmId: swarm.id, principalId: ctx.principal.id, via: ctx.principal.via });
     broadcast('swarms', { type: 'swarm.created', entity: swarm.id });
-    broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state });
+    broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state, owner: swarmPlanDrafts.ownerOf(draft.id) });
     return { code: 201, body: { draft, swarm } };
   } catch (error) {
     return draftFail(error);
@@ -1107,7 +1119,7 @@ route('POST', /^\/api\/v1\/copilot\/plans\/([\w-]+)\/activate$/, { permission: '
 route('POST', /^\/api\/v1\/copilot\/plans\/([\w-]+)\/archive$/, { permission: 'copilot:write', mutating: true }, (ctx) => {
   try {
     const draft = swarmPlanDrafts.archive(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via });
-    broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state });
+    broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state, owner: swarmPlanDrafts.ownerOf(draft.id) });
     return { code: 200, body: { draft } };
   } catch (error) {
     return draftFail(error);
@@ -1152,13 +1164,13 @@ route('POST', /^\/api\/v1\/copilot\/scripts$/, { permission: 'copilot:write', mu
     }
     if (ctx.body?.script) {
       const draft = await browserScriptDrafts.create({ principalId: ctx.principal.id, via: ctx.principal.via, script: ctx.body.script });
-      broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: draft.state });
+      broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: draft.state, owner: browserScriptDrafts.ownerOf(draft.id) });
       return { code: 201, body: { draft } };
     }
     const out = await browserScriptDrafts.fromConversation({
       principalId: ctx.principal.id, via: ctx.principal.via, text: ctx.body?.text, route: ctx.body?.route || '',
     });
-    broadcast('copilot', { type: 'copilot.script', entity: out.draft.id, state: out.draft.state });
+    broadcast('copilot', { type: 'copilot.script', entity: out.draft.id, state: out.draft.state, owner: browserScriptDrafts.ownerOf(out.draft.id) });
     return { code: 201, body: out };
   } catch (error) {
     return draftFail(error);
@@ -1170,7 +1182,7 @@ route('PATCH', /^\/api\/v1\/copilot\/scripts\/([\w-]+)$/, { permission: 'copilot
     const draft = await browserScriptDrafts.update(ctx.match[1], {
       principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, script: ctx.body?.script,
     });
-    broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: draft.state });
+    broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: draft.state, owner: browserScriptDrafts.ownerOf(draft.id) });
     return { code: 200, body: { draft } };
   } catch (error) {
     return draftFail(error);
@@ -1183,7 +1195,7 @@ route('POST', /^\/api\/v1\/copilot\/scripts\/([\w-]+)\/submit$/, { permission: '
       principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, name: ctx.principal.name,
     });
     broadcast('approvals', { type: 'approval.created', entity: out.approval?.id || null });
-    broadcast('copilot', { type: 'copilot.script', entity: out.id, state: out.state });
+    broadcast('copilot', { type: 'copilot.script', entity: out.id, state: out.state, owner: browserScriptDrafts.ownerOf(out.id) });
     return { code: 200, body: out };
   } catch (error) {
     return draftFail(error);
@@ -1206,7 +1218,7 @@ route('POST', /^\/api\/v1\/copilot\/scripts\/([\w-]+)\/activate$/, { permission:
     // of a draft (including its live task snapshot) rather than a second, narrower one.
     const draft = await browserScriptDrafts.get(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role });
     broadcast('browser', { type: 'task.created', taskId: task.id });
-    broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: 'active' });
+    broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: 'active', owner: browserScriptDrafts.ownerOf(draft.id) });
     return { code: 201, body: { draft, task } };
   } catch (error) {
     if (error.code === 'no-engine') {
@@ -1219,7 +1231,7 @@ route('POST', /^\/api\/v1\/copilot\/scripts\/([\w-]+)\/activate$/, { permission:
 route('POST', /^\/api\/v1\/copilot\/scripts\/([\w-]+)\/archive$/, { permission: 'copilot:write', mutating: true }, async (ctx) => {
   try {
     const draft = await browserScriptDrafts.archive(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via });
-    broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: draft.state });
+    broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: draft.state, owner: browserScriptDrafts.ownerOf(draft.id) });
     return { code: 200, body: { draft } };
   } catch (error) {
     return draftFail(error);
@@ -1323,6 +1335,17 @@ route('POST', /^\/api\/v1\/voice\/transcribe$/, {
  * The browser cannot execute anything, so execution lives here. Every route is permissioned, every
  * run is audited, and the destructive set stops at an approval gate rather than a warning.
  */
+
+/**
+ * Terminal rows belong to the principal who created them. `terminal:read` is an Observer permission, so
+ * without this an Observer could read the command line and output of somebody else's shell — and the live
+ * topic delivered those commands to every subscriber. Owner sees everything, as it does for draft rows;
+ * everybody else gets the same 404 that a nonexistent id returns, so an id cannot be probed either.
+ */
+function terminalVisible(ownerId, principal) {
+  return !ownerId || ownerId === principal?.id || principal?.role === 'Owner';
+}
+
 const terminalFail = (error) => {
   const code = error?.code || 'error';
   const status = code === 'not-found' ? 404
@@ -1370,7 +1393,7 @@ route('POST', /^\/api\/v1\/terminal\/sessions$/, { permission: 'terminal:run', m
       cwd: ctx.body?.cwd || '.',
       env: ctx.body?.env || {},
     });
-    broadcast('terminal', { type: 'terminal.session', id: session.id });
+    broadcast('terminal', { type: 'terminal.session', id: session.id, owner: ctx.principal.id });
     return { code: 201, body: { session } };
   } catch (error) {
     return terminalFail(error);
@@ -1379,7 +1402,9 @@ route('POST', /^\/api\/v1\/terminal\/sessions$/, { permission: 'terminal:run', m
 
 route('GET', /^\/api\/v1\/terminal\/sessions\/([\w-]+)$/, { permission: 'terminal:read' }, (ctx) => {
   try {
-    return { code: 200, body: { session: terminal.getSession(ctx.match[1]) } };
+    const session = terminal.getSession(ctx.match[1]);
+    if (!terminalVisible(terminal.sessionOwner(ctx.match[1]), ctx.principal)) return { code: 404, body: { error: 'session not found', code: 'not-found' } };
+    return { code: 200, body: { session } };
   } catch (error) {
     return terminalFail(error);
   }
@@ -1387,8 +1412,9 @@ route('GET', /^\/api\/v1\/terminal\/sessions\/([\w-]+)$/, { permission: 'termina
 
 route('DELETE', /^\/api\/v1\/terminal\/sessions\/([\w-]+)$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
   try {
+    if (!terminalVisible(terminal.sessionOwner(ctx.match[1]), ctx.principal)) return { code: 404, body: { error: 'session not found', code: 'not-found' } };
     const out = terminal.closeSession(ctx.match[1], ctx.principal);
-    broadcast('terminal', { type: 'terminal.session.closed', id: ctx.match[1] });
+    broadcast('terminal', { type: 'terminal.session.closed', id: ctx.match[1], owner: ctx.principal.id });
     return { code: 200, body: out };
   } catch (error) {
     return terminalFail(error);
@@ -1397,6 +1423,7 @@ route('DELETE', /^\/api\/v1\/terminal\/sessions\/([\w-]+)$/, { permission: 'term
 
 route('POST', /^\/api\/v1\/terminal\/sessions\/([\w-]+)\/cwd$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
   try {
+    if (!terminalVisible(terminal.sessionOwner(ctx.match[1]), ctx.principal)) return { code: 404, body: { error: 'session not found', code: 'not-found' } };
     return { code: 200, body: { session: terminal.changeDirectory(ctx.match[1], ctx.body?.cwd || '.', ctx.principal) } };
   } catch (error) {
     return terminalFail(error);
@@ -1405,6 +1432,7 @@ route('POST', /^\/api\/v1\/terminal\/sessions\/([\w-]+)\/cwd$/, { permission: 't
 
 route('POST', /^\/api\/v1\/terminal\/sessions\/([\w-]+)\/env$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
   try {
+    if (!terminalVisible(terminal.sessionOwner(ctx.match[1]), ctx.principal)) return { code: 404, body: { error: 'session not found', code: 'not-found' } };
     return { code: 200, body: { session: terminal.setSessionEnv(ctx.match[1], ctx.body?.env || {}, ctx.principal) } };
   } catch (error) {
     return terminalFail(error);
@@ -1416,6 +1444,8 @@ route('POST', /^\/api\/v1\/terminal\/sessions\/([\w-]+)\/exec$/, { permission: '
   try {
     const command = String(ctx.body?.command || ctx.body?.line || '').trim();
     if (!command) return { code: 400, body: { error: 'a command is required' } };
+    // Running into someone else's session would inherit its cwd and env; treat it as absent.
+    if (!terminalVisible(terminal.sessionOwner(ctx.match[1]), ctx.principal)) return { code: 404, body: { error: 'session not found', code: 'not-found' } };
     const out = terminal.runCommand(ctx.match[1], command, { principal: ctx.principal, timeoutMs: ctx.body?.timeoutMs ?? null });
     return { code: out.refused ? 200 : out.run.status === 'awaiting_approval' ? 202 : 202, body: out };
   } catch (error) {
@@ -1425,7 +1455,9 @@ route('POST', /^\/api\/v1\/terminal\/sessions\/([\w-]+)\/exec$/, { permission: '
 
 route('GET', /^\/api\/v1\/terminal\/runs\/([\w-]+)$/, { permission: 'terminal:read' }, (ctx) => {
   try {
-    return { code: 200, body: { run: terminal.getRun(ctx.match[1]) } };
+    const run = terminal.getRun(ctx.match[1]);
+    if (!terminalVisible(terminal.runRow(ctx.match[1])?.principal_id, ctx.principal)) return { code: 404, body: { error: 'run not found', code: 'not-found' } };
+    return { code: 200, body: { run } };
   } catch (error) {
     return terminalFail(error);
   }
@@ -1433,6 +1465,7 @@ route('GET', /^\/api\/v1\/terminal\/runs\/([\w-]+)$/, { permission: 'terminal:re
 
 route('GET', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/output$/, { permission: 'terminal:read' }, (ctx) => {
   try {
+    if (!terminalVisible(terminal.runRow(ctx.match[1])?.principal_id, ctx.principal)) return { code: 404, body: { error: 'run not found', code: 'not-found' } };
     return { code: 200, body: terminal.runOutput(ctx.match[1], { since: Number(ctx.query.since || 0) }) };
   } catch (error) {
     return terminalFail(error);
@@ -1452,6 +1485,10 @@ route('GET', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/stream$/, { permission: 'ter
     run = terminal.getRun(runId);
   } catch (error) {
     return terminalFail(error);
+  }
+  // An event stream is the same disclosure as the output route, so it is guarded by the same rule.
+  if (!terminalVisible(terminal.runRow(runId)?.principal_id, ctx.principal)) {
+    return { code: 404, body: { error: 'run not found', code: 'not-found' } };
   }
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -1501,6 +1538,7 @@ route('GET', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/stream$/, { permission: 'ter
 
 route('POST', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/input$/, { permission: 'terminal:run', mutating: true }, (ctx) => {
   try {
+    if (!terminalVisible(terminal.runRow(ctx.match[1])?.principal_id, ctx.principal)) return { code: 404, body: { error: 'run not found', code: 'not-found' } };
     return { code: 200, body: terminal.sendInput(ctx.match[1], ctx.body?.text ?? '') };
   } catch (error) {
     return terminalFail(error);
@@ -1510,6 +1548,7 @@ route('POST', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/input$/, { permission: 'ter
 /** Ctrl+C. SIGINT goes to the process group, so npm's own children die with it. */
 route('POST', /^\/api\/v1\/terminal\/runs\/([\w-]+)\/signal$/, { permission: 'terminal:signal', mutating: true }, (ctx) => {
   try {
+    if (!terminalVisible(terminal.runRow(ctx.match[1])?.principal_id, ctx.principal)) return { code: 404, body: { error: 'run not found', code: 'not-found' } };
     const signal = String(ctx.body?.signal || 'SIGINT').toUpperCase();
     return { code: 200, body: terminal.signalRun(ctx.match[1], signal, { principal: ctx.principal }) };
   } catch (error) {
@@ -1527,6 +1566,7 @@ route('GET', /^\/api\/v1\/terminal\/scripts$/, { permission: 'terminal:read' }, 
     const sessionId = ctx.query.sessionId;
     if (!sessionId) return { code: 400, body: { error: 'sessionId is required' } };
     const session = terminal.getSession(sessionId);
+    if (!terminalVisible(terminal.sessionOwner(sessionId), ctx.principal)) return { code: 404, body: { error: 'session not found', code: 'not-found' } };
     return { code: 200, body: { cwd: session.cwd, project: session.project, ...terminal.listScripts(session.cwdPath) } };
   } catch (error) {
     return terminalFail(error);
@@ -2167,7 +2207,25 @@ async function handleRequest(req, res) {
       res.end(String(out.text));
       return;
     }
-    json(res, out.code ?? 200, out.body ?? {}, { 'x-mmm-request-id': rid, ...(out.headers || {}) });
+    /**
+     * A refused state change is a security event, so it is recorded like one.
+     *
+     * Permission and CSRF failures are audited above, but the interesting refusals happen *inside* the
+     * handlers: a gate that says "this draft is not approved", an ownership check answering 404, a policy
+     * that stops a destructive command. Those used to leave no trace at all — the audit log only ever
+     * contained the attempts that worked, which is the one thing an audit log must not do. Mutating
+     * routes only, so polling reads do not flood the table.
+     */
+    const status = out.code ?? 200;
+    if (routeMatch.meta.mutating && status >= 400 && principal) {
+      const body = out.body && typeof out.body === 'object' ? out.body : {};
+      audit(principal.id, principal.via, `${req.method} ${requestedPath}`, {
+        status,
+        reason: String(body.code || '').slice(0, 40) || undefined,
+        message: String(body.error || '').slice(0, 200) || undefined,
+      }, 'deny', 'refused');
+    }
+    json(res, status, out.body ?? {}, { 'x-mmm-request-id': rid, ...(out.headers || {}) });
   } catch (err) {
     audit(principal?.id || 'anonymous', principal?.via || 'api', `${req.method} ${requestedPath}`, {}, 'allow', 'error');
     json(res, 500, { error: 'internal error', requestId: rid, detail: process.env.MMM_DEBUG === '1' ? err.message : undefined });
@@ -2267,7 +2325,9 @@ export function createGateway() {
   setBrowserBroadcast(broadcast);
   setEvolutionBroadcast(broadcast);
   // Terminal status fan-out: the screen follows runs without polling every run separately.
-  terminal.onTerminalEvent((payload) => broadcast('terminal', payload));
+  // Each run event carries the session's owner, so another principal's command text and output never
+  // reach a socket that is only entitled to `terminal:read` in general.
+  terminal.onTerminalEvent((payload) => broadcast('terminal', { ...payload, owner: terminal.sessionOwner(payload.sessionId) }));
   // Every agent — seeded, imported or created yesterday — gets a self-improvement policy. The default
   // is level 1: inspect and recommend, never write.
   let evolutionPolicies = { agents: 0, created: 0 };

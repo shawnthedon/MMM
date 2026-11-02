@@ -290,3 +290,12 @@ function summarise(draft) {
   bits.push('It is a draft: nothing was created, and activation needs a human approval.');
   return bits.join(' ');
 }
+
+/**
+ * Routing-only owner lookup for live events. Deliberately *not* part of the serialised draft: the websocket
+ * needs to know whose socket may hear about a row, and nobody needs to learn it from a response body.
+ */
+export function ownerOf(id) {
+  const row = db.prepare('SELECT owner_id FROM agent_drafts WHERE id=?').get(String(id || ''));
+  return row?.owner_id || '';
+}
