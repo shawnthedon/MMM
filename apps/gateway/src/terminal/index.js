@@ -14,12 +14,12 @@
  * What it does not guarantee, and says so in `describeTerminalPolicy()`: network isolation, filesystem
  * isolation beyond the working directory, or CPU quotas. The containment is the gateway host.
  */
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { db, logEvent, audit } from '../db.js';
-import { buildEnv, checkCommand, describeTerminalPolicy } from './policy.js';
+import { buildEnv, checkCommand, describeTerminalPolicy, envKeyProblem } from './policy.js';
 import {
   describeRoots, ensureWorkspaceDirectory, listScripts, readProject, resolveInside, rootById, roots,
 } from './workspaces.js';
@@ -243,11 +243,21 @@ function sessionState(rootPath, workspace, resolved, env) {
   };
 }
 
+/**
+ * Session environment, admitted by name.
+ *
+ * A refused key is a `400` that names the key and the reason — never a silent drop, because a silently
+ * ignored `PATH` (or `npm_config_registry`) looks exactly like one that applied, and the next command's
+ * behaviour would be blamed on something else. The rules live in `policy.js` beside the flag rules they
+ * mirror: npm reads `npm_config_*` from the environment, so blocking `--registry` and accepting
+ * `npm_config_registry` was not a rule at all.
+ */
 function sanitiseEnv(env) {
   const out = {};
   for (const [key, value] of Object.entries(env || {})) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(key)) continue;
-    if (Object.keys(out).length >= 32) break;
+    const verdict = envKeyProblem(key);
+    if (!verdict.ok) fail('bad-request', verdict.reason);
+    if (Object.keys(out).length >= 32) fail('bad-request', 'a session accepts at most 32 environment variables');
     out[key] = String(value ?? '').slice(0, 4096);
   }
   return out;
@@ -345,7 +355,7 @@ function insertRun({ sessionId, principal, agentId, command, argv, cwd, destruct
  * Start a command in a session.
  * @returns {{ run: object, approval?: object }}
  */
-export function runCommand(sessionId, line, { principal, timeoutMs = null } = {}) {
+export function runCommand(sessionId, line, { principal, timeoutMs = null, agentId = '' } = {}) {
   const row = sessionRow(sessionId);
   if (!row) fail('not-found', 'session not found');
   if (row.status !== 'open') fail('conflict', 'this session is closed');
@@ -359,7 +369,7 @@ export function runCommand(sessionId, line, { principal, timeoutMs = null } = {}
   const verdict = checkCommand(line, { workspaceAbs: state.workspaceAbs });
   if (!verdict.ok) {
     // A refusal is still a record: it is what an operator needs to see when a command "did nothing".
-    const id = insertRun({ sessionId, principal, command: line, argv: [], cwd: state.cwdRel, destructive: false });
+    const id = insertRun({ sessionId, principal, agentId, command: line, argv: [], cwd: state.cwdRel, destructive: false });
     db.prepare('UPDATE terminal_runs SET status=?, ended_at=?, duration_ms=?, stderr_tail=? WHERE id=?')
       .run('refused', now(), 0, String(verdict.reason).slice(0, LIMITS.tailChars), id);
     audit(principal.id, principal.via, 'terminal.run', { sessionId, command: line, refused: verdict.reason }, 'deny', 'denied');
@@ -367,12 +377,12 @@ export function runCommand(sessionId, line, { principal, timeoutMs = null } = {}
   }
 
   if (verdict.destructive) {
-    return { run: requestApproval({ sessionId, principal, line, verdict, state }) };
+    return { run: requestApproval({ sessionId, principal, agentId, line, verdict, state }) };
   }
-  return { run: startProcess({ sessionId, principal, line, verdict, state, timeoutMs }) };
+  return { run: startProcess({ sessionId, principal, agentId, line, verdict, state, timeoutMs }) };
 }
 
-function requestApproval({ sessionId, principal, line, verdict, state }) {
+function requestApproval({ sessionId, principal, agentId = '', line, verdict, state }) {
   const approvalId = `ap-${Date.now().toString(36)}-${randomUUID().slice(0, 4)}`;
   db.prepare(`INSERT INTO approvals (id, action, target, risk, principal, evidence, status, created_at)
               VALUES (?,?,?,?,?,?,?,?)`)
@@ -380,7 +390,7 @@ function requestApproval({ sessionId, principal, line, verdict, state }) {
       verdict.risk === 'low' ? 'medium' : 'high', principal.name,
       `Destructive command in the terminal. ${verdict.reasons.join('; ')}. Working directory: ${state.cwdRel}.`,
       'pending', now());
-  const id = insertRun({ sessionId, principal, command: line, argv: verdict.argv, cwd: state.cwdRel, destructive: true, approvalId });
+  const id = insertRun({ sessionId, principal, agentId, command: line, argv: verdict.argv, cwd: state.cwdRel, destructive: true, approvalId });
   logEvent('approval', `Terminal command needs approval: ${line} (${principal.name})`, approvalId);
   audit(principal.id, principal.via, 'terminal.run', { sessionId, runId: id, command: line, approval: approvalId, reasons: verdict.reasons }, 'allow', 'pending-approval');
   emit({ type: 'terminal.run', runId: id, sessionId, status: 'awaiting_approval' });
@@ -432,9 +442,9 @@ export function startApprovedRun(approvalId, { principal } = {}) {
   return publicRun(runRow(row.id));
 }
 
-function startProcess({ sessionId, principal, line, verdict, state, existingRunId = null, timeoutMs = null, approver = null }) {
+function startProcess({ sessionId, principal, agentId = '', line, verdict, state, existingRunId = null, timeoutMs = null, approver = null }) {
   const runId = existingRunId || insertRun({
-    sessionId, principal, command: line, argv: verdict.argv, cwd: state.cwdRel, destructive: Boolean(verdict.destructive),
+    sessionId, principal, agentId, command: line, argv: verdict.argv, cwd: state.cwdRel, destructive: Boolean(verdict.destructive),
   });
 
   const home = join(state.rootPath, '.terminal-home');
@@ -677,7 +687,8 @@ export async function runForAgent({ agentId, command, workspaceId = null, cwd = 
   const agentPrincipal = { id: agentId, name: agentId, role: 'Operator', via: 'agent' };
   const session = createSession({ principal: agentPrincipal, workspaceId: workspace.id, cwd });
   try {
-    const started = runCommand(session.id, command, { principal: agentPrincipal, timeoutMs });
+    // The run is attributed to the agent that asked for it, not only to the session it ran in.
+    const started = runCommand(session.id, command, { principal: agentPrincipal, timeoutMs, agentId });
     if (started.refused) return { ok: false, refused: true, reason: started.reason, run: started.run };
     if (started.run.status === 'awaiting_approval') {
       return { ok: false, needsApproval: true, approvalId: started.run.approvalId, run: started.run };
@@ -728,12 +739,49 @@ export function describe() {
 
 /**
  * What the host actually has. Reported, never assumed: the screen shows these numbers or shows that
- * it could not get them.
+ * it could not get them — and "could not" now carries the reason.
+ *
+ * `npm` used to be read from `MMM_TERMINAL_NPM_VERSION`, which nothing sets, so the capability payload
+ * answered `null` about a tool that runs every day. It is probed once per gateway process (`npm --version`,
+ * four seconds at most, cached) because spawning per request would be worse than the honesty is worth. An
+ * operator can still pin it with the env var when the gateway's `npm` is not on `PATH`.
  */
+let npmProbe = null;
+
+export function npmVersion() {
+  if (npmProbe) return npmProbe;
+  const pinned = String(process.env.MMM_TERMINAL_NPM_VERSION || '').trim();
+  if (pinned) {
+    npmProbe = { npm: pinned, source: 'env' };
+    return npmProbe;
+  }
+  try {
+    const out = execFileSync('npm', ['--version'], {
+      timeout: 4000,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    }).trim();
+    npmProbe = /^\d+\.\d+\.\d+/.test(out)
+      ? { npm: out, source: 'probed' }
+      : { npm: null, source: 'unknown', reason: `npm --version printed ${JSON.stringify(out.slice(0, 40))}` };
+  } catch (error) {
+    npmProbe = {
+      npm: null,
+      source: 'unknown',
+      reason: `could not run npm --version (${error.code || error.message}) — set MMM_TERMINAL_NPM_VERSION if npm lives outside the gateway PATH`,
+    };
+  }
+  return npmProbe;
+}
+
 export function runtimeVersions() {
+  const npm = npmVersion();
   return {
     node: process.version,
-    npm: process.env.MMM_TERMINAL_NPM_VERSION || null,
+    npm: npm.npm,
+    npmSource: npm.source,
+    ...(npm.reason ? { npmReason: npm.reason } : {}),
     platform: process.platform,
     arch: process.arch,
   };

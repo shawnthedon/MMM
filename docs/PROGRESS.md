@@ -643,6 +643,43 @@ name.
   board or create an agent yet. Drafts, swarm plans, Agent Browser JSON and open-source voice are units 2–5
   and are not built; the panel does not imply otherwise.
 
+## 🖥️ 2026-11-02 — npm execution in the terminal: the three gaps the probe found (M36)
+
+The terminal request arrived with "report before implementing", so the previous step was a probe of the
+**running** gateway rather than a code read ([`terminal/NPM_EXECUTION_GAP.md`](terminal/NPM_EXECUTION_GAP.md)).
+It found that most of the request already shipped in M26 — real npm, live SSE output (29 ms / 431 ms / 831 ms,
+exit 837 ms), exact exit codes, SIGINT, per-session cwd with `bad-path` traversal, several sessions, scoped
+history, agent runs behind an Owner grant with a retry hint, `npm ci` parked for an approval the requester
+cannot grant, env values masked `••••` — and three things that were not true. This unit closes those three.
+
+- **G1, the serious one: the env route bypassed the flag denylist.** `--registry`, `--prefix` and
+  `--script-shell` were refused with the reason *"the registry is fixed by the deployment, not by a
+  command"* — while `npm_config_registry` (and `npm_config_prefix`, `NODE_OPTIONS`, `PATH`, `LD_PRELOAD`)
+  were accepted by `POST /sessions/:id/env`. The probe redirected the registry to `127.0.0.1:9` and the next
+  `npm view` hung against it. `policy.js` now owns `envKeyProblem()` beside the flag rules it mirrors, and
+  `sanitiseEnv` refuses with the key **and** the reason: `npm_config_*`, `NODE_OPTIONS`, `NODE_PATH`,
+  `NODE_EXTRA_CA_CERTS`, `PATH`, `PATHEXT`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*`, `BASH_ENV`, `ENV`,
+  `SHELL`, `COMSPEC`. A malformed name is a `400` too — a silently ignored variable looks exactly like one
+  that applied. Refusal happens before mutation, and `policy.refusedEnvKeys` lets the screen say what it will
+  not accept.
+- **G2: an agent's run was unattributed.** `/terminal/agent-runs` returned `agentId: ""` and
+  `terminal_runs.agent_id` stayed empty, so history, audit and the screen could not name the agent that asked
+  for the command. `runCommand` takes an `agentId` and writes it on every path (refused, awaiting-approval,
+  started); an approved destructive run keeps the id it was created with.
+- **G3: `runtime.npm` was `null`.** It came from `MMM_TERMINAL_NPM_VERSION`, which nothing sets. It is now
+  probed once per gateway process (`npm --version`, 4 s cap, cached) and reported with its source; when the
+  probe fails, `npm` stays `null` **with `npmReason`** rather than pretending to know. The screen prints
+  `node … · npm …` only when the gateway could read it.
+- Evidence: `npm run test:terminal` — **30 passed** (was 28): seven refused keys each naming key and reason, an
+  unchanged session environment afterwards, a malformed name refused, the capability payload naming npm (or
+  its reason), and an agent run carrying its `agentId`. The suite fails **3 of 30** on the pre-fix tree.
+  `npm run test:terminal:ui` — **12 passed**, now asserting the banner shows the npm version the gateway
+  reported. `npm test` and `npm run build` green. Design + limits:
+  [`terminal/NPM_EXECUTION.md`](terminal/NPM_EXECUTION.md).
+- Honest limits, unchanged and now stated in the payload: no PTY (TTY-only programs and interactive `npm
+  init` prompts do not work), process isolation rather than a container, no shell, and the env list is a
+  denylist of the knobs that reach outside the workspace — not a proof that no other variable matters.
+
 ## 🛡️ 2026-11-02 — Hardening: what an untrusted string may not do (M35, Copilot unit 6)
 
 The last unit of the Copilot upgrade, and the only one that does not add a feature. Units 1–5 were tested by

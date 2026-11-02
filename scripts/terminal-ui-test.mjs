@@ -135,7 +135,7 @@ function stubGateway(overrides = {}) {
     if (path === '/api/v1/terminal') {
       return json(200, {
         policy: { shell: false, executables: ['node', 'npm', 'npx'], isolation: 'process', notEnforced: ['network isolation'] },
-        runtime: { node: 'v22.0.0' },
+        runtime: { node: 'v22.0.0', npm: '10.9.8', npmSource: 'probed' },
         roots: [{ id: 'data-0', path: '/tmp/workspaces', isRepo: false }],
         workspaces: [{ id: 'ws-default', name: 'default' }],
       });
@@ -194,6 +194,7 @@ await check('a gateway session shows the working directory and the project’s r
   assert(chips.includes('build') && chips.includes('dev'), `script chips come from package.json (got ${chips.join(',')})`);
   eq(q('[data-term-state]').dataset.termState, 'ready', 'the status chip says ready');
   assert(/node v22\.0\.0/.test(text(q('#term-screen'))), 'the banner reports the host runtime it was told about');
+  assert(/npm 10\.9\.8/.test(text(q('#term-screen'))), 'and the npm it actually runs, when the gateway could read it');
 });
 
 await check('a typed command is POSTed, streamed back, and shows its exit code', async () => {

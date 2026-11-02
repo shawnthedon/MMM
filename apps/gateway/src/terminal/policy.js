@@ -43,6 +43,42 @@ const DESTRUCTIVE_NPM = Object.freeze([
   { re: /^link$/, label: 'link writes into the global prefix' },
 ]);
 
+/**
+ * Environment variables a session may **not** set.
+ *
+ * The flag rules above say `--registry`, `--prefix` and `--script-shell` are refused because they reach
+ * outside the workspace. npm reads the same settings from `npm_config_*` in the environment, so without
+ * this list the rule was decorative: a session could set `npm_config_registry` and install from any host.
+ * The rest of the list is the same idea for code loading — `NODE_OPTIONS` is a `--require` on every run,
+ * `LD_PRELOAD` is a native one, and `PATH` decides which `npm` is even being run.
+ */
+const REFUSED_ENV = Object.freeze([
+  { re: /^npm_config_/i, reason: 'npm reads npm_config_* from the environment, which would bypass the --registry / --prefix / --script-shell rules' },
+  { re: /^node_options$/i, reason: 'NODE_OPTIONS would inject flags (for example --require) into every later command in the session' },
+  { re: /^node_path$/i, reason: 'NODE_PATH would resolve modules from outside the workspace' },
+  { re: /^node_extra_ca_certs$/i, reason: 'trusting an extra CA would let a proxy intercept the registry' },
+  { re: /^(path|pathext)$/i, reason: 'PATH decides which node/npm binary runs, so it cannot be a session variable' },
+  { re: /^(ld_preload|ld_library_path|dyld_insert_libraries|dyld_library_path)$/i, reason: 'native loader variables inject code into the process' },
+  { re: /^(bash_env|env|shell|comspec)$/i, reason: 'shell hooks would run commands the terminal did not approve' },
+]);
+
+/** `{ ok: true }` or `{ ok: false, reason }` for one environment variable name. */
+export function envKeyProblem(key) {
+  const name = String(key ?? '');
+  if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name)) {
+    return { ok: false, reason: `${JSON.stringify(name.slice(0, 64))} is not a valid environment variable name` };
+  }
+  for (const rule of REFUSED_ENV) if (rule.re.test(name)) return { ok: false, reason: `${name} is refused: ${rule.reason}` };
+  return { ok: true };
+}
+
+/** The list, for the capability payload — the screen can say what it will not accept. */
+export const REFUSED_ENV_KEYS = Object.freeze([
+  'npm_config_*', 'NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS', 'PATH', 'PATHEXT',
+  'LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES', 'DYLD_LIBRARY_PATH',
+  'BASH_ENV', 'ENV', 'SHELL', 'COMSPEC',
+]);
+
 const MAX_ARGV = 64;
 const MAX_ARG = 1024;
 
@@ -228,8 +264,10 @@ export function describeTerminalPolicy() {
       'shell syntax: pipes, redirects, chaining, substitution',
       'executables other than node, npm and npx',
       'npm global installs and any --prefix / --registry / --proxy / --cache retargeting',
+      'the same retargeting through session environment variables (npm_config_*, NODE_OPTIONS, PATH, …)',
       'paths outside the workspace',
     ],
+    refusedEnvKeys: [...REFUSED_ENV_KEYS],
     needsApproval: [
       'npm ci', 'npm uninstall', 'npm publish / unpublish / deprecate', 'npm audit fix',
       'npm install --force', 'npm exec', 'npm link',
