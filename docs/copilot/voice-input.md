@@ -181,4 +181,4 @@ controls and no page errors.
 - **No streaming transcription.** A clip is uploaded whole and answered whole; there is no partial
   transcript, so there is no "speak and watch it appear" on the local path.
 - **Not built**: TTS through the gateway (Voice Studio's local TTS host adapter is browser-side and stays
-  that way), and the hardening pass (unit 6).
+  that way). The hardening pass (unit 6) landed afterwards — [`hardening.md`](hardening.md).

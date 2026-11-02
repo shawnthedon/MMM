@@ -145,5 +145,5 @@ card fitting 320 px with 44 px buttons and no page errors.
 - **Plan drafts are not shared.** Like agent drafts, a second person meets the plan on the Approvals
   screen, not in their own Copilot.
 - **Built after this unit**: Agent Browser JSON from conversation (unit 4,
-  [`browser-scripts.md`](browser-scripts.md)). **Not built yet**: open-source voice (unit 5), hardening
-  (unit 6). The Copilot discusses those and cannot produce them.
+  [`browser-scripts.md`](browser-scripts.md)), open-source voice (unit 5, [`voice-input.md`](voice-input.md))
+  and the hardening pass (unit 6, [`hardening.md`](hardening.md)).

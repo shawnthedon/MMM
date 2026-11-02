@@ -41,6 +41,26 @@ const fail = (code, message, extra = {}) => {
   throw Object.assign(new Error(message), { code, ...extra });
 };
 
+/**
+ * A screen name is a *token*, and this is the only thing between a client and the system prompt.
+ *
+ * The panel sends a key from a fixed list ("home", "agents"), but the gateway cannot assume its client is
+ * the panel: `route` arrives as client-controlled text and used to be concatenated into the system message
+ * inside a quoted annotation. With a newline and forty characters, a `curl` request could close the quote
+ * and write instructions into the highest-trust position in the prompt — the part that carries the honesty
+ * rules. RBAC is unaffected (it is code, never prompt text), but "never claim an action happened" is
+ * exactly what that injection would undermine.
+ *
+ * So the field is whitelisted to what a screen name can actually be, and anything else is dropped rather
+ * than escaped: a legitimate screen name always passes, and a client sending punctuation has already told
+ * us it is not the panel.
+ */
+const SCREEN_ROUTE = /^[a-z0-9][a-z0-9-]{0,23}$/;
+export function screenRoute(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  return SCREEN_ROUTE.test(raw) ? raw : '';
+}
+
 const clean = (value, max) =>
   String(value ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ').trim().slice(0, max);
 
@@ -305,7 +325,8 @@ export async function send({ principalId, via = 'api', text, clientId = '', rout
     fail('no-model', `${model.reason}. Nothing was sent to a provider.`, { runtime: runtimeStatus() });
   }
 
-  const context = route ? `\n\n[The person is currently looking at the "${route}" screen.]` : '';
+  const screen = screenRoute(route);
+  const context = screen ? `\n\n[The person is currently looking at the "${screen}" screen.]` : '';
   // History excluding the turn just stored, then that turn exactly once — so a stored message can never
   // appear twice in the prompt.
   const messages = [

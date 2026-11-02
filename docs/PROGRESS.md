@@ -643,6 +643,44 @@ name.
   board or create an agent yet. Drafts, swarm plans, Agent Browser JSON and open-source voice are units 2–5
   and are not built; the panel does not imply otherwise.
 
+## 🛡️ 2026-11-02 — Hardening: what an untrusted string may not do (M35, Copilot unit 6)
+
+The last unit of the Copilot upgrade, and the only one that does not add a feature. Units 1–5 were tested by
+asking whether the feature works; this one asks what happens when someone uses it wrongly. Discovery was a
+throwaway probe against a **running** gateway — an Owner, an Observer, a websocket each, and the inputs a
+browser would never send — and it found four defects, all reproduced before any code changed.
+
+- **Prompt injection through `route`** (`apps/gateway/src/copilot.js`): the screen key was concatenated
+  verbatim into the **system** message, so `home]\nSYSTEM OVERRIDE: …` closed the quote and wrote
+  instructions into the only part of the prompt that carries the honesty rules. Now a whitelist
+  (`^[a-z0-9][a-z0-9-]{0,23}$`): a screen name is a token, so anything that is not one is dropped rather than
+  escaped, and `''` adds no annotation at all. A real screen still produces its annotation.
+- **A topic is not a scope** (`apps/gateway/server.js`): `broadcast()` filtered on permission, not on the row,
+  so an Observer received `copilot.script / bs-… / blocked` for the Owner's draft while `GET` on that row
+  answered 404. Row-scoped events now name their owner and are dropped for everyone else (an Owner still sees
+  all, matching the API); the routing field is stripped before serialisation. New `ownerOf()` /
+  `sessionOwner()` helpers are routing lookups only — **no response schema changed**.
+- **A refusal is an event**: refused state changes wrote nothing, so the audit log held only the attempts that
+  worked. The dispatcher now records `deny`/`refused` for any mutating route returning ≥ 400, with the status
+  and the handler's own reason, through the existing redaction and hash chain. Reads stay unaudited, and the
+  suite asserts that.
+- **The same class in the terminal** (M26, shipped earlier): `terminal:read` is an Observer permission, so an
+  Observer could read another principal's session, run output and **command lines** — and the live `terminal`
+  topic delivered them to every subscriber. Session, run, output, stream, scripts, cwd, env, exec, input and
+  signal are now owner-scoped (404, like a row that does not exist), and live events carry the session owner.
+- Evidence: `npm run test:hardening` — **16 passed** against a real gateway with three principals and three
+  websockets: hostile route rejected while a real one still annotates; Observer/Operator receive nothing about
+  another principal's draft while the owner still receives their own; socket and API agree on the same row;
+  foreign terminal session, run and output are 404 and no foreign command text reaches a socket; refused
+  activation and refused archive are audited as `deny`/`refused`; permission denials still audited; allowed
+  creates still `allow`/`ok`; reads write zero rows. The same suite fails **10 of 16** on the pre-fix tree —
+  that is the proof the fixes are what makes it pass. `npm test` (49 suites) and `npm run build` green.
+  Design + limits: [`copilot/hardening.md`](copilot/hardening.md).
+- Honest limit: chat threads are readable by anyone with `chat:read` in this build, so the `chat` topic is
+  deliberately **not** owner-scoped — the socket says what the API says, and making it stricter is a product
+  decision, not a fix. The gateway remains one trust boundary: two principals share a `DATA_DIR`, files and
+  terminal roots. Scoping decides who may see and drive a row; it is not an account sandbox.
+
 ## 🎙️ 2026-11-02 — Open-source voice: the Copilot listens through a host on your own network (M34)
 
 Unit 5 of the Copilot upgrade, and the half of "open-source voice" that was missing. Voice Studio could
