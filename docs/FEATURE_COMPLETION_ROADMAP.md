@@ -1910,6 +1910,7 @@ One session ≈ one sitting. Each is independently shippable.
 | 14 | ~~**Copilot agent drafts**~~ ✅ M31 | `packages/shared/agentDraft.js` + `012_agent_drafts.sql` + `agentDrafts.js`: a conversation writes a canonical draft, the validator decides its state, submitting creates a real approvals row, activation needs a different principal's approval, and the builder saves back to the same draft | `test:drafts` 21 (real gateway + real provider) · `test:drafts:ui` 11 · `test:drafts:browser` 10 in real Chromium at 320 px · a model's `state: "active"` is ignored, and activation is refused before the gate |
 | 15 | ~~**Copilot swarm-plan drafts**~~ ✅ M32 | `packages/shared/swarmPlanDraft.js` + `013_swarm_plan_drafts.sql` + `swarmPlanDrafts.js`: a conversation drafts a swarm *plan* (no new plan schema — the validator mirrors `createSwarm` case by case), same state model, same gate, and saving goes through `createSwarm` so `executed` is 0 | `test:plans` 24 (real gateway + real provider, incl. five refusals compared against `POST /swarms`) · `test:plans:ui` 10 · `test:plans:browser` 10 in real Chromium · saving stores one planned swarm with zero progress and zero spend |
 | 16 | ~~**Copilot browser scripts (Agent Browser JSON)**~~ ✅ M33 | `packages/shared/browserScript.js` + `014_browser_script_drafts.sql` + `browserScriptDrafts.js`: a conversation drafts a browser script over the *existing* Agent Browser actions (no new action, field or selector dialect), the validator mirrors what `policy`/`createTask`/the driver refuse, the preview is generated from the steps so prose cannot soften it, and activation — `browser:run` plus an approval this principal did not decide — queues exactly one real `browser_tasks` row through `runner.createTask` | `test:scripts` 25 (real gateway + real provider + scripted driver, incl. `file:`/`javascript:`/unknown-action refused identically by draft and executor) · `test:scripts:ui` 10 · `test:scripts:browser` 9 in real Chromium at 320 px · a blocked script cannot even be submitted |
+| 17 | ~~**Copilot voice input (open-source STT)**~~ ✅ M34 | `packages/shared/voiceEngines.js` + `015_voice_endpoints.sql` + `apps/gateway/src/voice.js`: speech hosts are gateway rows (loopback by default) speaking either whisper.cpp's `POST /inference` or the OpenAI-shaped `POST /v1/audio/transcriptions`; the Copilot's chain is local host → browser recogniser → typing with a **separate consent per destination**, and a failure never re-routes a recording to the vendor. Licences verified from upstream, not remembered | `test:voice-stt` 16 (real gateway + real loopback host, incl. the transcript appearing in **no** table) · `test:voice-input:ui` 10 · `test:voice-input:browser` 5 in real Chromium with a real MediaRecorder and a fake microphone |
 
 After session 12 the app has no simulated *data* left; what remains (skills execution, MCP, training,
 local AI) is genuinely `blocked`/`unconfigured` and labelled as such — which is a finished state, not
@@ -1917,10 +1918,14 @@ an unfinished one.
 
 Sessions 13–17 are the Copilot upgrade (`MMM-Copilot-Design-Spec-2026-11-01.md`): conversation, agent
 drafts, swarm-plan (workflow) drafts, Agent Browser JSON, and open-source voice. They are ordered so each
-one is verifiable alone: 13, 14, 15 and 16 are shipped and proven, 17 is next. The Copilot can now produce
-an agent definition, a swarm plan and a browser script, each gated on an approval a different principal
-made — and the script is the one whose approval *runs* it, which is why a script with no engine behind it
-cannot be submitted at all. Open-source voice (17) is not built, and the system brief says exactly that.
+one is verifiable alone: 13–17 are shipped and proven. The Copilot can produce an agent definition, a swarm
+plan and a browser script — each gated on an approval a different principal made, and the script is the one
+whose approval *runs* it, which is why a script with no engine behind it cannot be submitted at all. Voice
+input now has a local path (17): a speech host on the operator's own network, or the browser's recogniser, or
+typing — chosen from facts, with a separate consent per destination.
+
+What is left of the Copilot upgrade is the hardening pass (unit 6): the end-to-end audit of every path
+above, rather than a new capability.
 
 ---
 

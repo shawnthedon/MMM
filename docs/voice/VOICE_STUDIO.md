@@ -32,17 +32,23 @@ capability, voice intents, per-reply 🔊, composer mic), `package.json` (`test:
 
 ## 2. Model catalogue (all honesty levels shown in the UI)
 
+Licence verification and its method: [`OPEN_SOURCE_VOICE.md`](OPEN_SOURCE_VOICE.md).
+
 | Model | Roles | Licence | Install | Verification |
 | --- | --- | --- | --- | --- |
 | Device speech engine (`browser-speech`) | tts, stt* | OS-provided | built-in | **runtime-probe** (measured at runtime) |
 | Qwen2.5-Omni 3B/7B | conversational, tts, stt, streaming, multimodal | Apache-2.0 (advertised, re-check per artifact) | not installed | advertised |
-| Piper | tts | MIT (advertised) | not installed | contract-only |
+| Kokoro | tts | **Apache-2.0 — verified from upstream 2026-11-02** | needs a wrapper | contract-only |
+| Piper | tts | **MIT — verified from upstream 2026-11-02** | needs a wrapper (it ships a CLI) | contract-only |
 | OpenVoice V2 | tts, clone | MIT (advertised) | not installed | advertised |
 | NeuTTS-Air | tts, clone | Apache-2.0 (advertised; other NeuTTS variants differ) | not installed | advertised |
-| whisper.cpp | stt | MIT (advertised) | not installed | contract-only |
+| whisper.cpp | stt | **MIT — verified from upstream 2026-11-02** | run `whisper-server` and add it under Diagnostics → Speech hosts | **integrated** (gateway route, [unit 5](../copilot/voice-input.md)) |
+| faster-whisper | stt | **MIT — verified from upstream 2026-11-02** | needs an OpenAI-compatible wrapper, then add it as an `openai`-mode host | **integrated** when wrapped |
 
-\* The device engine advertises recognition, but Voice Studio does not expose it: Chromium's
-recogniser uploads audio to a network service, which would violate the no-silent-upload rule.
+\* The device engine advertises recognition. Voice Studio does not expose it (this screen is about
+synthesis); the **Copilot** does, behind a per-browser consent and only when no local speech host is
+configured — Chromium's recogniser uploads audio to a network service, so it is never the silent default.
+A local host replaces it entirely: see [`../copilot/voice-input.md`](../copilot/voice-input.md).
 
 Selecting a model is only possible when `availabilityFor()` says it is usable. Today that is the
 device engine only; every other tile is disabled with the reason printed underneath.

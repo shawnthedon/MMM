@@ -111,7 +111,7 @@ export function streamUrl(path) {
 }
 
 /** Raw request helper: no retries, no hidden fallbacks. */
-async function request(path, { method = 'GET', body, headers = {}, timeoutMs = 8000, signal } = {}) {
+async function request(path, { method = 'GET', body, raw, contentType = '', headers = {}, timeoutMs = 8000, signal } = {}) {
   if (!isApiMode()) {
     throw new ApiError('No gateway configured — the app is running on local demo data.', { status: 0, code: 'no-gateway' });
   }
@@ -127,7 +127,10 @@ async function request(path, { method = 'GET', body, headers = {}, timeoutMs = 8
   const finalSignal = controller.signal;
 
   const h = { Accept: 'application/json', ...headers };
-  if (body !== undefined) h['Content-Type'] = 'application/json';
+  // `raw` is for the one route that carries a recording: a Blob goes up as-is, with its own type. JSON
+  // would base64-inflate the clip by a third and a string body would decode it as text.
+  if (raw !== undefined) h['Content-Type'] = contentType || raw?.type || 'application/octet-stream';
+  else if (body !== undefined) h['Content-Type'] = 'application/json';
   if (method !== 'GET' && csrfToken) h[CSRF_HEADER] = csrfToken;
 
   const origin = config.url === '/' ? '' : config.url;
@@ -137,7 +140,7 @@ async function request(path, { method = 'GET', body, headers = {}, timeoutMs = 8
       method,
       credentials: 'include',
       headers: h,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: raw !== undefined ? raw : body === undefined ? undefined : JSON.stringify(body),
       signal: finalSignal,
       cache: 'no-store',
     });
@@ -273,6 +276,21 @@ export const api = {
   scriptSubmit: (id) => request(`/api/v1/copilot/scripts/${encodeURIComponent(id)}/submit`, { method: 'POST', body: {} }),
   scriptRun: (id) => request(`/api/v1/copilot/scripts/${encodeURIComponent(id)}/activate`, { method: 'POST', body: {}, timeoutMs: 45000 }),
   scriptArchive: (id) => request(`/api/v1/copilot/scripts/${encodeURIComponent(id)}/archive`, { method: 'POST', body: {} }),
+  // Local speech hosts. The browser never learns a host's address: it posts a clip here and the gateway
+  // forwards it wherever the operator configured — which is why this needs no URL from the client.
+  voiceCapabilities: () => request('/api/v1/voice'),
+  voiceEndpoints: (kind = '') => request(`/api/v1/voice/endpoints${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`),
+  voiceAddEndpoint: (body) => request('/api/v1/voice/endpoints', { method: 'POST', body }),
+  voiceUpdateEndpoint: (id, body) => request(`/api/v1/voice/endpoints/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
+  voiceDeleteEndpoint: (id) => request(`/api/v1/voice/endpoints/${encodeURIComponent(id)}`, { method: 'DELETE', body: {} }),
+  voiceCheckEndpoint: (id) => request(`/api/v1/voice/endpoints/${encodeURIComponent(id)}/check`, { method: 'POST', body: {} }),
+  voiceTranscribe: (blob, { endpointId = '', language = '', signal, timeoutMs = 45000 } = {}) => {
+    const query = new URLSearchParams();
+    if (endpointId) query.set('endpointId', endpointId);
+    if (language) query.set('language', language);
+    const suffix = query.toString() ? `?${query}` : '';
+    return request(`/api/v1/voice/transcribe${suffix}`, { method: 'POST', raw: blob, signal, timeoutMs });
+  },
 
   providers: () => request('/api/v1/providers'),
   provider: (id) => request(`/api/v1/providers/${encodeURIComponent(id)}`),

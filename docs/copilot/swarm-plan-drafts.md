@@ -6,7 +6,7 @@
 | Unit | 3 of 6 — **workflow / swarm-plan drafts** (unit 2, agent drafts: [`agent-drafts.md`](agent-drafts.md)) |
 | Files | `packages/shared/swarmPlanDraft.js`, `apps/gateway/migrations/013_swarm_plan_drafts.sql`, `apps/gateway/src/swarmPlanDrafts.js`, `apps/gateway/server.js`, `src/copilot/plans.js`, `src/copilot/panel.js`, `src/copilot.css`, `src/api.js`, `packages/shared/api-routes.json` |
 | Evidence | `npm run test:plans` (**24 passed**, real gateway + real loopback provider) · `npm run test:plans:ui` (**10 passed**) · `npm run test:plans:browser` (**10 passed** in real Chromium at a phone viewport) · `npm run test:drafts` 21 · `npm test` · `npm run build` |
-| Status | **PASS for the plan-draft scope.** Nothing in this unit schedules, starts or advances a plan. Unit 4 (Agent Browser JSON) landed afterwards — [`browser-scripts.md`](browser-scripts.md); voice is unit 5 and is not built. |
+| Status | **PASS for the plan-draft scope.** Nothing in this unit schedules, starts or advances a plan. Units 4 (Agent Browser JSON, [`browser-scripts.md`](browser-scripts.md)) and 5 (voice, [`voice-input.md`](voice-input.md)) landed afterwards. |
 
 ---
 

@@ -6,6 +6,8 @@
 import { getState, setState, esc, icon, fmtTime } from './core.js';
 import { views } from './views1.js';
 import { openSheet, closeAllSheets, toast, on } from './shell.js';
+import { api, isApiMode } from './api.js';
+import { can, isAuthenticated } from './auth.js';
 import { VOICE_MODELS, ROLES, ADAPTERS, filterModels, availabilityFor } from './voice/registry.js';
 import { createBrowserSpeechAdapter, createLocalSpeechAdapter, createCloningAdapter, validateLocalEndpoint } from './voice/adapters.js';
 import { defaultProfiles, sanitiseProfiles, createClonedProfile, findProfile, PROFILE_STATUS } from './voice/profiles.js';
@@ -19,6 +21,36 @@ let studio = null;
 let lastSnapshot = null;
 let saveTimer = null;
 let editorFocused = false;
+
+/* ---------- speech hosts on the gateway (unit 5) ----------
+ * The Operator half of local voice input: without this card the only way to point the gateway at a
+ * whisper.cpp host would be curl, and a feature reachable only by curl is not a feature. Everything the
+ * card shows comes from the gateway — including the health status, which distinguishes "answered but has
+ * no /health" from "unreachable".
+ */
+let hosts = { endpoints: [], capabilities: null, error: '', loading: false, loadedAt: 0 };
+const hostsAvailable = () => isApiMode() && isAuthenticated() && can('voice:read');
+
+async function loadHosts() {
+  if (!hostsAvailable()) {
+    hosts = { ...hosts, endpoints: [], capabilities: null, error: '', loadedAt: Date.now() };
+    return hosts;
+  }
+  hosts.loading = true;
+  try {
+    const [list, caps] = await Promise.all([api.voiceEndpoints(), api.voiceCapabilities()]);
+    hosts = {
+      endpoints: Array.isArray(list.body?.endpoints) ? list.body.endpoints : [],
+      capabilities: caps.body || null,
+      error: '',
+      loading: false,
+      loadedAt: Date.now(),
+    };
+  } catch (error) {
+    hosts = { ...hosts, endpoints: [], capabilities: null, loading: false, error: error?.message || 'speech hosts could not be read', loadedAt: Date.now() };
+  }
+  return hosts;
+}
 
 const voiceSettings = () => ({ ...DEFAULT_STUDIO_SETTINGS, ...(getState().settings.voice || {}) });
 
@@ -300,6 +332,54 @@ function voicesHTML() {
     </div>`;
 }
 
+function hostsHTML() {
+  const canConfigure = can('voice:configure');
+  const hostOf = (url) => { try { return new URL(url).host; } catch { return url; } };
+  const tone = (status) => (status === 'available' ? 'ok' : status === 'unreachable' || status === 'error' || status === 'timeout' ? 'bad' : status ? 'warn' : '');
+  const label = (status) => ({
+    available: 'reachable',
+    'no-health-endpoint': 'no health route',
+    unreachable: 'unreachable',
+    timeout: 'timed out',
+    error: 'error',
+  }[status] || 'not checked yet');
+  return `
+    <div class="section-title">Speech hosts on the gateway</div>
+    <div class="card">
+      ${!hostsAvailable()
+        ? `<div class="banner warn vs-inline-banner">${icon('shield', 15)}<div><strong>This screen is not connected to a gateway.</strong> A speech host lives on the gateway, so its status cannot be read from demo data.</div></div>`
+        : hosts.error
+          ? `<div class="banner bad vs-inline-banner" role="alert">${icon('shield', 15)}<div><strong>Speech hosts could not be read.</strong> ${esc(hosts.error)}</div></div>`
+          : hosts.endpoints.length
+            ? hosts.endpoints.map((endpoint) => `
+              <div class="vs-host" data-voice-host="${esc(endpoint.id)}">
+                <div class="row between">
+                  <strong class="small">${esc(endpoint.label || endpoint.engine || endpoint.id)}</strong>
+                  ${chipFor(tone(endpoint.lastStatus), label(endpoint.lastStatus))}
+                </div>
+                <div class="tiny muted">${esc(endpoint.kind.toUpperCase())} · ${esc(endpoint.mode || endpoint.engine || 'default')} · ${esc(hostOf(endpoint.url))}${endpoint.remote ? ' · remote' : ' · local'} · ${endpoint.enabled ? 'enabled' : 'disabled'}</div>
+                ${endpoint.lastDetail ? `<div class="tiny muted">${esc(endpoint.lastDetail)}</div>` : ''}
+                <div class="row wrap" style="gap:8px;margin-top:8px">
+                  <button class="btn sm" data-act="voice-host-check" data-id="${esc(endpoint.id)}">Check now</button>
+                  ${canConfigure ? `<button class="btn sm" data-act="voice-host-remove" data-id="${esc(endpoint.id)}">Remove</button>` : ''}
+                </div>
+              </div>`).join('')
+            : `<div class="banner warn vs-inline-banner">${icon('shield', 15)}<div><strong>No speech host is configured.</strong> Speech input falls back to the browser’s network service, or to typing. Run whisper.cpp (<span class="mono">whisper-server --host 127.0.0.1 --port 8080</span>) and add it below to keep audio on your network.</div></div>`}
+      ${hostsAvailable() ? `<div class="tiny muted" style="margin-top:10px">Only a loopback host is accepted unless this deployment enables remote hosts. Audio sent here is transcribed and not stored.</div>` : ''}
+      ${canConfigure ? `
+      <div class="vs-host-add">
+        <div class="row wrap" style="gap:8px">
+          <label class="tiny muted grow">Host url<input class="input" id="vs-host-url" type="url" inputmode="url" placeholder="http://127.0.0.1:8080" autocomplete="off"></label>
+          <label class="tiny muted">Contract<select class="input" id="vs-host-mode"><option value="whisper.cpp">whisper.cpp (/inference)</option><option value="openai">OpenAI-shaped (/v1/audio/transcriptions)</option></select></label>
+        </div>
+        <div class="row wrap" style="gap:8px;margin-top:8px">
+          <label class="tiny muted grow">Label<input class="input" id="vs-host-label" placeholder="Local whisper" maxlength="80" autocomplete="off"></label>
+          <button class="btn primary sm" data-act="voice-host-add">${icon('plus', 15)} Add host</button>
+        </div>
+      </div>` : `<div class="tiny muted" style="margin-top:10px">Adding a host is an owner act — it decides where a recording may be sent.</div>`}
+    </div>`;
+}
+
 function diagnosticsHTML() {
   const settings = voiceSettings();
   const statuses = Object.entries(adapterStatus);
@@ -318,7 +398,7 @@ function diagnosticsHTML() {
       ${row('Adapter', ADAPTERS[VOICE_MODELS.find((m) => m.id === settings.modelId)?.adapter]?.label || 'device')}
       ${row('Execution location', settings.modelId === 'browser-speech' ? 'on-device' : 'local host')}
       ${row('Cloud fallback', 'none exists', 'ok')}
-      ${row('Speech recognition', 'not implemented', 'bad')}
+      ${row('Speech recognition', hosts.capabilities?.localStt ? 'local host configured' : 'browser service / typing', hosts.capabilities?.localStt ? 'ok' : 'warn')}
       ${row('Queue state', lastSnapshot ? `${lastSnapshot.status} · ${lastSnapshot.queued} queued · ${lastSnapshot.spokenChunks} spoken` : 'idle')}
       ${lastSnapshot?.error ? `<div class="local-notes bad" style="margin-top:8px">${esc(lastSnapshot.error.message)}</div>` : ''}
     </div>
@@ -326,7 +406,8 @@ function diagnosticsHTML() {
     <div class="card">
       <div class="tiny muted">Voices that report <span class="mono">localService</span> keep working with the network off. Network-backed voices fail with an explicit error; there is no silent cloud fallback and no hosted provider configured.</div>
       <div class="row wrap" style="gap:8px;margin-top:10px"><button class="btn sm" data-act="voice-check">${icon('search', 15)} Re-measure</button><button class="btn sm" data-act="voice-probe-local">Test local host</button></div>
-    </div>`;
+    </div>
+    ${hostsHTML()}`;
 }
 
 const row = (label, value, tone = '') => `
@@ -360,6 +441,11 @@ views.voice = {
     ensureStudio();
     if (!Object.keys(adapterStatus).length) {
       await refreshAvailability();
+      rerenderSafely();
+    }
+    // Hosts are gateway state, not browser state: read them once per visit rather than on every repaint.
+    if (!hosts.loadedAt && hostsAvailable()) {
+      await loadHosts();
       rerenderSafely();
     }
     wireEditor();
@@ -567,6 +653,49 @@ on('voice-endpoint-save', () => {
   ensureStudio({ force: true });
   toast(value ? 'Local endpoint saved' : 'Local endpoint cleared', 'ok');
   refreshAvailability().then(rerenderSafely);
+});
+
+on('voice-host-add', async () => {
+  if (!can('voice:configure')) { toast('Only an owner can add a speech host', 'bad'); return; }
+  const url = document.getElementById('vs-host-url')?.value?.trim() || '';
+  const mode = document.getElementById('vs-host-mode')?.value || 'whisper.cpp';
+  const label = document.getElementById('vs-host-label')?.value?.trim() || '';
+  if (!url) { toast('A host url is needed — for example http://127.0.0.1:8080', 'bad'); return; }
+  try {
+    const out = await api.voiceAddEndpoint({ kind: 'stt', engine: mode === 'openai' ? 'faster-whisper-server' : 'whisper.cpp', mode, url, label });
+    toast('Speech host added — check it to see what it answers', 'ok');
+    await loadHosts();
+    const created = out.body?.endpoint;
+    if (created) await api.voiceCheckEndpoint(created.id).then(loadHosts).catch(() => {});
+  } catch (error) {
+    toast(error?.message || 'The host was refused', 'bad');
+    return;
+  }
+  rerenderSafely();
+});
+
+on('voice-host-check', async (el, ds) => {
+  try {
+    const out = await api.voiceCheckEndpoint(ds.id);
+    const endpoint = out.body?.endpoint;
+    toast(endpoint ? `${endpoint.lastStatus}: ${endpoint.lastDetail}` : 'Checked', endpoint?.lastStatus === 'available' ? 'ok' : 'warn');
+  } catch (error) {
+    toast(error?.message || 'The check failed', 'bad');
+  }
+  await loadHosts();
+  rerenderSafely();
+});
+
+on('voice-host-remove', async (el, ds) => {
+  if (!can('voice:configure')) { toast('Only an owner can remove a speech host', 'bad'); return; }
+  try {
+    await api.voiceDeleteEndpoint(ds.id);
+    toast('Speech host removed', 'ok');
+  } catch (error) {
+    toast(error?.message || 'The host could not be removed', 'bad');
+  }
+  await loadHosts();
+  rerenderSafely();
 });
 
 on('voice-probe-local', async () => {

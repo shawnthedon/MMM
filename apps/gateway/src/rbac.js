@@ -28,6 +28,11 @@ export const PERMISSIONS = Object.freeze({
   'terminal:read': 'Observer',
   'model:read': 'Observer',
   'copilot:read': 'Observer',
+  // Speech: reading what hosts are configured is read-only; changing one is an owner act, because an
+  // endpoint decides where a recording is sent. Transcribing is operating, like any other run.
+  'voice:read': 'Observer',
+  'voice:transcribe': 'Operator',
+  'voice:configure': 'Owner',
   // review surface
   'approval:request': 'Observer',
   'approval:decide': 'Reviewer',
@@ -63,9 +68,9 @@ export const PERMISSIONS = Object.freeze({
   'dev:seed': 'Owner',
 });
 
-const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read', 'evolution:read', 'chat:read', 'terminal:read', 'model:read', 'copilot:read'];
+const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read', 'evolution:read', 'chat:read', 'terminal:read', 'model:read', 'copilot:read', 'voice:read'];
 const REVIEW = ['audit:read', 'audit:verify', 'evolution:review', 'evolution:approve'];
-const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run', 'evolution:run', 'chat:write', 'terminal:run', 'terminal:signal', 'model:call', 'copilot:write'];
+const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run', 'evolution:run', 'chat:write', 'terminal:run', 'terminal:signal', 'model:call', 'copilot:write', 'voice:transcribe'];
 
 /** Explicit role → permission sets (the authoritative check). */
 export const ROLE_PERMISSIONS = Object.freeze({

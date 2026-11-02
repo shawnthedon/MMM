@@ -82,7 +82,14 @@
       "SCRIPT_UPDATE": "PATCH /api/v1/copilot/scripts/:id  body:{script}",
       "SCRIPT_SUBMIT": "POST /api/v1/copilot/scripts/:id/submit",
       "SCRIPT_RUN": "POST /api/v1/copilot/scripts/:id/activate  (browser:run, allowed approval)",
-      "SCRIPT_ARCHIVE": "POST /api/v1/copilot/scripts/:id/archive"
+      "SCRIPT_ARCHIVE": "POST /api/v1/copilot/scripts/:id/archive",
+      "VOICE": "GET /api/v1/voice",
+      "VOICE_ENDPOINTS": "GET /api/v1/voice/endpoints",
+      "VOICE_ENDPOINT_ADD": "POST /api/v1/voice/endpoints  (voice:configure) body:{kind,engine,url,mode?,language?,model?,label?}",
+      "VOICE_ENDPOINT_UPDATE": "PATCH /api/v1/voice/endpoints/:id  (voice:configure)",
+      "VOICE_ENDPOINT_DELETE": "DELETE /api/v1/voice/endpoints/:id  (voice:configure)",
+      "VOICE_ENDPOINT_CHECK": "POST /api/v1/voice/endpoints/:id/check",
+      "VOICE_TRANSCRIBE": "POST /api/v1/voice/transcribe  (voice:transcribe) body:<audio bytes> content-type:audio/*"
     }
   },
   "planned": [
