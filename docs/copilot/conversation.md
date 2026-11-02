@@ -124,15 +124,17 @@ real loopback OpenAI-compatible provider, and performs the loop a person perform
 ## 8. Honest limits
 
 - **No streaming.** A turn resolves when the whole reply arrives; Stop cancels the request.
-- **A live conversation does not yet produce artifacts.** Agent creation still goes through the
-  deterministic action cards and the Agents screen; the model can *discuss* an agent but cannot create one.
-  That is unit 2, and the system brief says so rather than letting the model imply otherwise.
+- **A live conversation produces drafts, never live objects.** Unit 2 (agent drafts), unit 3 (swarm-plan
+  drafts) and unit 4 (browser scripts) landed after this one; each is a validated row behind a real gate,
+  and the system brief says so rather than letting the model imply otherwise.
 - **A live conversation is model-only.** When the model is what answers, the old deterministic action
   cards are not offered on that turn, because two answers to one message is not a conversation.
 - **No streaming and no tool calls.** Multi-turn context only, plus one artefact: **agent drafts** (unit 2,
   [`agent-drafts.md`](agent-drafts.md)). A draft is validated on the gateway and needs another principal's
-  approval before it can become an idle definition. Swarm-plan drafts, Agent Browser JSON and open-source
-  voice are units 3–5 and are not built; the panel does not imply otherwise.
+  approval before it can become an idle definition. Units 3 and 4 landed afterwards — swarm-plan drafts
+  ([`swarm-plan-drafts.md`](swarm-plan-drafts.md)) and Agent Browser JSON from a sentence
+  ([`browser-scripts.md`](browser-scripts.md)), which runs only through the real approval gate. Open-source
+  voice (unit 5) is not built; the panel does not imply otherwise.
 - **Cost is an estimate** from a price table, never an invoice.
 - **The `llm` capability now reads the runtime.** It says `available` only when the gateway reports a
   provider with a sealed key, `not configured` when the gateway exists without one, and `unverified` in

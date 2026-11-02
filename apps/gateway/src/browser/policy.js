@@ -74,9 +74,34 @@ export const ACTIONS = Object.freeze([
  * (purchase, payment, submission, account change). `idempotent` says whether repeating it is safe;
  * the runner refuses to retry when it cannot prove the action did not already land.
  */
+/**
+ * A browser the agent drives may only speak http(s).
+ *
+ * `file://` would let a plan read the gateway host's disk and `javascript:`/`data:` would let it run
+ * script in a page context — neither is a capability this agent is allowed to have, and both are one
+ * model reply away if the URL is not checked. This is a rule of the executor, not of any one caller, so
+ * a draft, the screen's form and the raw API all inherit it.
+ */
+export const ALLOWED_URL_SCHEMES = Object.freeze(['http:', 'https:']);
+
+export function urlProblem(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'no url given';
+  let parsed;
+  try { parsed = new URL(raw); } catch { return `“${raw.slice(0, 60)}” is not a url`; }
+  if (!ALLOWED_URL_SCHEMES.includes(parsed.protocol)) {
+    return `“${parsed.protocol}” pages are not allowed — the agent only opens http and https`;
+  }
+  return '';
+}
+
 export function normaliseStep(step, index) {
   const action = String(step?.action || '').toLowerCase();
   if (!ACTIONS.includes(action)) throw new Error(`unknown step action: ${step?.action}`);
+  if (action === 'goto') {
+    const problem = urlProblem(step.url);
+    if (problem) throw new Error(`goto step ${index + 1}: ${problem}`);
+  }
   return {
     id: String(step.id || `s${index + 1}`),
     action,

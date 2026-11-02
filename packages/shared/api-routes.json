@@ -75,7 +75,14 @@
       "PLAN_UPDATE": "PATCH /api/v1/copilot/plans/:id  body:{plan}",
       "PLAN_SUBMIT": "POST /api/v1/copilot/plans/:id/submit",
       "PLAN_SAVE": "POST /api/v1/copilot/plans/:id/activate  (swarm:write)",
-      "PLAN_ARCHIVE": "POST /api/v1/copilot/plans/:id/archive"
+      "PLAN_ARCHIVE": "POST /api/v1/copilot/plans/:id/archive",
+      "SCRIPTS": "GET /api/v1/copilot/scripts",
+      "SCRIPT_ONE": "GET /api/v1/copilot/scripts/:id",
+      "SCRIPT_CREATE": "POST /api/v1/copilot/scripts  body:{text} | {script}",
+      "SCRIPT_UPDATE": "PATCH /api/v1/copilot/scripts/:id  body:{script}",
+      "SCRIPT_SUBMIT": "POST /api/v1/copilot/scripts/:id/submit",
+      "SCRIPT_RUN": "POST /api/v1/copilot/scripts/:id/activate  (browser:run, allowed approval)",
+      "SCRIPT_ARCHIVE": "POST /api/v1/copilot/scripts/:id/archive"
     }
   },
   "planned": [

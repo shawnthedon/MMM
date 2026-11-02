@@ -139,4 +139,6 @@ errors.
   Approvals screen, which is where the decision was always meant to happen.
 - **Saving from the builder creates a new draft.** The panel's card PATCHes the draft it came from; the
   Agent Designer's Save is the existing designer path, and it is not wired to an existing draft id yet.
-- **Not built yet**: swarm-plan drafts (unit 3), Agent Browser JSON (unit 4), open-source voice (unit 5).
+- **Built after this unit**: swarm-plan drafts (unit 3, [`swarm-plan-drafts.md`](swarm-plan-drafts.md)),
+  Agent Browser JSON (unit 4, [`browser-scripts.md`](browser-scripts.md)). **Not built yet**: open-source
+  voice (unit 5).

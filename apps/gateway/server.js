@@ -24,6 +24,7 @@ import * as models from './src/models.js';
 import * as copilot from './src/copilot.js';
 import * as agentDrafts from './src/agentDrafts.js';
 import * as swarmPlanDrafts from './src/swarmPlanDrafts.js';
+import * as browserScriptDrafts from './src/browserScriptDrafts.js';
 import * as chat from './src/chat.js';
 import * as terminal from './src/terminal/index.js';
 import * as auth from './src/auth.js';
@@ -1076,6 +1077,118 @@ route('POST', /^\/api\/v1\/copilot\/plans\/([\w-]+)\/archive$/, { permission: 'c
   try {
     const draft = swarmPlanDrafts.archive(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via });
     broadcast('copilot', { type: 'copilot.plan', entity: draft.id, state: draft.state });
+    return { code: 200, body: { draft } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+/* ---- Browser-script drafts: the first artefact whose activation *executes* ----
+ * A script is the body `POST /browser/tasks` accepts, so there is no new schema. Two differences from the
+ * other drafts, both in code rather than in prose:
+ *
+ *   • a script with no available engine is `blocked` and cannot be submitted (see browserScript.js);
+ *   • saving is `browser:run` — the permission the runner itself needs — plus an allowed approval this
+ *     principal did not decide, and the task is born through `browserRunner.createTask`.
+ *
+ * Page content is data. Nothing on a page can add a step, change an action or grant a permission, because
+ * the only writer of a step list is the validator and the only reader is the runner.
+ */
+route('GET', /^\/api\/v1\/copilot\/scripts$/, { permission: 'copilot:read' }, async (ctx) => {
+  try {
+    return { code: 200, body: { drafts: await browserScriptDrafts.list({ principalId: ctx.principal.id, role: ctx.principal.role }) } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/copilot\/scripts\/([\w-]+)$/, { permission: 'copilot:read' }, async (ctx) => {
+  try {
+    return { code: 200, body: { draft: await browserScriptDrafts.get(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role }) } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+/** A script draft from a description (`text`) or from a script object (`script`, which calls no model). */
+route('POST', /^\/api\/v1\/copilot\/scripts$/, { permission: 'copilot:write', mutating: true }, async (ctx) => {
+  try {
+    // The limit guards what costs money: asking a model to write a script. A script object from the
+    // screen's form or the API calls no provider.
+    if (!ctx.body?.script) {
+      const limit = auth.rateLimit(`copilot:script:${ctx.principal.id}`, { limit: 10, windowMs: 60 * 1000 });
+      if (!limit.allowed) return { code: 429, body: { error: 'too many script drafts in a minute; wait a moment' }, headers: { 'Retry-After': String(limit.retryAfter) } };
+    }
+    if (ctx.body?.script) {
+      const draft = await browserScriptDrafts.create({ principalId: ctx.principal.id, via: ctx.principal.via, script: ctx.body.script });
+      broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: draft.state });
+      return { code: 201, body: { draft } };
+    }
+    const out = await browserScriptDrafts.fromConversation({
+      principalId: ctx.principal.id, via: ctx.principal.via, text: ctx.body?.text, route: ctx.body?.route || '',
+    });
+    broadcast('copilot', { type: 'copilot.script', entity: out.draft.id, state: out.draft.state });
+    return { code: 201, body: out };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('PATCH', /^\/api\/v1\/copilot\/scripts\/([\w-]+)$/, { permission: 'copilot:write', mutating: true }, async (ctx) => {
+  try {
+    const draft = await browserScriptDrafts.update(ctx.match[1], {
+      principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, script: ctx.body?.script,
+    });
+    broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: draft.state });
+    return { code: 200, body: { draft } };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/copilot\/scripts\/([\w-]+)\/submit$/, { permission: 'copilot:write', mutating: true }, async (ctx) => {
+  try {
+    const out = await browserScriptDrafts.submit(ctx.match[1], {
+      principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via, name: ctx.principal.name,
+    });
+    broadcast('approvals', { type: 'approval.created', entity: out.approval?.id || null });
+    broadcast('copilot', { type: 'copilot.script', entity: out.id, state: out.state });
+    return { code: 200, body: out };
+  } catch (error) {
+    return draftFail(error);
+  }
+});
+
+/**
+ * Running an approved script. Three conditions, all in code: `browser:run`, an allowed approval this
+ * principal did not decide, and a script that still validates *with an engine available right now*.
+ */
+route('POST', /^\/api\/v1\/copilot\/scripts\/([\w-]+)\/activate$/, { permission: 'browser:run', mutating: true }, async (ctx) => {
+  try {
+    const check = await browserScriptDrafts.activationCheck(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role });
+    if (check.approval.decider_id && check.approval.decider_id === ctx.principal.id) {
+      return { code: 403, body: { error: 'the approval for this script was decided by you, and running it as the same principal is refused', code: 'forbidden' } };
+    }
+    const task = await browserScriptDrafts.queueTask(check.body, ctx.principal.id);
+    browserScriptDrafts.markActive(ctx.match[1], { taskId: task.id, principalId: ctx.principal.id, via: ctx.principal.via });
+    // Read the row back through the normal path, so the response is the same shape as every other read
+    // of a draft (including its live task snapshot) rather than a second, narrower one.
+    const draft = await browserScriptDrafts.get(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role });
+    broadcast('browser', { type: 'task.created', taskId: task.id });
+    broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: 'active' });
+    return { code: 201, body: { draft, task } };
+  } catch (error) {
+    if (error.code === 'no-engine') {
+      return { code: 409, body: { error: error.message, code: 'no-engine', hint: 'No browser engine is available on the gateway host — see GET /api/v1/browser/capabilities' } };
+    }
+    return draftFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/copilot\/scripts\/([\w-]+)\/archive$/, { permission: 'copilot:write', mutating: true }, async (ctx) => {
+  try {
+    const draft = await browserScriptDrafts.archive(ctx.match[1], { principalId: ctx.principal.id, role: ctx.principal.role, via: ctx.principal.via });
+    broadcast('copilot', { type: 'copilot.script', entity: draft.id, state: draft.state });
     return { code: 200, body: { draft } };
   } catch (error) {
     return draftFail(error);

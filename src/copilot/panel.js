@@ -17,6 +17,7 @@ import { sfx } from '../sound.js';
 import * as convo from './conversation.js';
 import * as drafts from './drafts.js';
 import * as plans from './plans.js';
+import * as scripts from './scripts.js';
 
 const session = {
   open: false,
@@ -715,6 +716,79 @@ function draftCardHTML(card) {
   </div>`;
 }
 
+/* ---------- browser-script drafts ----------
+ * The one card whose approval runs something. So it leads with the plain-language preview the *gateway*
+ * derived from the steps — never the model's own account of them — and it reports the task's real state
+ * once a run exists, including when that state is a failure.
+ */
+const TASK_TONE = {
+  queued: 'info', running: 'info', recovering: 'warn', waiting_for_user: 'warn', paused: 'warn',
+  completed: 'ok', failed: 'bad', blocked: 'bad', cancelled: 'info', timed_out: 'bad',
+};
+
+function scriptCardHTML(card) {
+  const d = card.draft || {};
+  const script = d.script || {};
+  const findings = Array.isArray(d.findings) ? d.findings : [];
+  const preview = Array.isArray(d.preview) ? d.preview : [];
+  const sevTone = { error: 'bad', setup: 'warn', warning: 'warn', info: 'info', blocked: 'bad' };
+  const actions = typeof card.actions === 'function' ? card.actions() : card.actions || [];
+  const task = d.task;
+  return `<div class="cp-card cp-script cp-draft" data-script-id="${esc(d.id || '')}" data-script-state="${esc(d.state || '')}">
+    <div class="cp-card-head">
+      <span class="cp-card-title">${esc(script.objective ? script.objective.slice(0, 60) : 'Untitled script')}</span>
+      <span class="cp-badge ${DRAFT_TONE[d.state] || 'info'}" data-script-label>${esc(d.stateLabel || d.state || 'draft')}</span>
+    </div>
+    <div class="cp-card-body">
+      ${script.entryUrl ? `<div class="tiny muted cp-script-url">${esc(script.entryUrl)}</div>` : ''}
+      ${
+        preview.length
+          ? `<div class="cp-section">What it would do</div>
+             <ol class="cp-script-steps">${preview
+               .slice(0, 10)
+               .map((p) => `<li class="cp-script-step${p.sensitive ? ' sensitive' : ''}">${esc(p.sentence)}${
+                 p.sensitive ? ' <span class="cp-badge warn">commits you</span>' : ''
+               }</li>`)
+               .join('')}</ol>
+             ${preview.length > 10 ? `<div class="tiny muted">…and ${preview.length - 10} more step(s)</div>` : ''}`
+          : ''
+      }
+      ${
+        task
+          ? `<div class="cp-script-task tiny">
+               <span class="cp-badge ${TASK_TONE[task.status] || 'info'}" data-task-status>${esc(task.status)}</span>
+               <span class="muted">step ${esc(String(task.stepIndex))}/${esc(String(task.totalSteps))}${
+                 task.evidenceCount ? ` · ${esc(String(task.evidenceCount))} evidence record(s)` : ''
+               }${task.simulated ? ' · simulated engine — not a real browser' : ''}</span>
+               ${task.outcome ? `<div class="muted">Outcome: ${esc(task.outcome)}</div>` : ''}
+               ${task.blocker ? `<div class="muted">Blocker: ${esc(task.blocker)}</div>` : ''}
+             </div>`
+          : ''
+      }
+      ${
+        findings.length
+          ? `<div class="cp-section">What the validator says</div>${findings
+              .slice(0, 6)
+              .map((f) => `<div class="cp-draft-finding"><span class="cp-badge ${sevTone[f.severity] || 'info'}">${esc(f.severity)}</span>
+                <div class="grow"><div class="small">${esc(f.title)}</div><div class="tiny muted">${esc(f.detail || '')}</div></div></div>`)
+              .join('')}`
+          : ''
+      }
+      <div class="cp-draft-note tiny muted">Approving this script runs it: a real browser task on the gateway, once,
+        and nothing before that. The steps above are generated from the script, not from anything a page said.</div>
+      ${card.error ? `<div class="cp-notice bad" role="alert">${icon('shield', 15)}<div>${esc(card.error)}</div></div>` : ''}
+      ${card.note ? `<div class="cp-notice info" role="status">${icon('info', 15)}<div>${esc(card.note)}</div></div>` : ''}
+      ${
+        actions.length
+          ? `<div class="cp-draft-actions">${actions
+              .map((a) => `<button class="cp-chip ${a.tone === 'primary' ? 'ok' : ''}" data-cp="${esc(a.act)}" data-script="${esc(d.id || '')}">${esc(a.label)}</button>`)
+              .join('')}</div>`
+          : `<div class="tiny muted">No action is available to your role in this state.</div>`
+      }
+    </div>
+  </div>`;
+}
+
 /* ---------- swarm-plan drafts ----------
  * A workflow is a swarm plan, so the card shows what saving it would store — an objective, a node order,
  * a cap — and the same two facts as an agent card: the state it is really in, and that nothing runs.
@@ -777,6 +851,19 @@ function planCardHTML(card) {
  * into a definition, and a question ("how do agents work?") must stay a question.
  */
 /**
+ * The sentence that asks the browser to go and look. Checked before the other two: "open the pricing page
+ * and tell me the Pro price" contains no draft word at all, and "build an agent that checks a page" must
+ * still be an agent — so this pattern requires a browsing verb *and* a site or page to act on.
+ */
+function wantsScript(text) {
+  const lc = String(text || '').toLowerCase();
+  if (/\b(how do|what is|what are|why|explain|tell me about|should i|can i|does)\b/.test(lc)) return false;
+  const browseVerb = /\b(open|visit|go to|navigate|browse|scrape|check|read|click|fill|log ?in|sign ?in|search|look up|find on)\b/.test(lc);
+  const aPlace = /(https?:\/\/\S+|\b[a-z0-9-]+\.(com|org|net|io|dev|app|test|local)\b|\b(web)?site\b|\bweb ?page\b|\bpricing page\b|\bhomepage\b|\bdashboard\b)/.test(lc);
+  return browseVerb && aPlace;
+}
+
+/**
  * The sentence that asks for a workflow. A workflow in this build *is* a swarm plan, so this is the
  * sibling of `wantsDraft`: checked first, because "build a plan for the research team" contains no
  * word that would make it an agent, but "create a swarm of agents" contains both and must not silently
@@ -808,6 +895,7 @@ function cardHTML(card, msg) {
     case 'activity': return activityCardHTML(card);
     case 'draft': return draftCardHTML(card);
     case 'plan': return planCardHTML(card);
+    case 'script': return scriptCardHTML(card);
     default: return `<div class="cp-card"><div class="cp-card-body">${md(card.text || '')}</div></div>`;
   }
 }
@@ -1047,6 +1135,10 @@ async function sendLive(raw) {
   pushMessage({ id: localId, role: 'user', text: raw, mode: session.mode, live: true });
   setDraft('');
   paint();
+  if (wantsScript(raw)) {
+    await sendScriptTurn(raw, localId);
+    return;
+  }
   if (wantsPlan(raw)) {
     await sendPlanTurn(raw, localId);
     return;
@@ -1139,6 +1231,40 @@ async function sendDraftTurn(raw, localId) {
   paint();
 }
 
+/** The actions offered for a script draft — the row says what is possible, the role says what is offered. */
+const scriptActions = (script) => (script ? scripts.actionsFor(script) : []);
+
+/**
+ * A turn that asks the browser to go and look. The gateway turns the sentence into a script *draft* — an
+ * approval away from running — and the panel renders the preview the gateway derived, never its own.
+ */
+async function sendScriptTurn(raw, localId) {
+  const out = await scripts.createFromText(raw, { route: session.route });
+  session.pending = false;
+  if (out.userMessage) {
+    const idx = session.history.findIndex((m) => m.id === localId);
+    if (idx >= 0) session.history[idx] = { ...convo.toPanelMessage(out.userMessage), mode: session.mode };
+  }
+  if (out.draft) {
+    pushMessage({
+      role: 'copilot', text: out.reply?.text || '', mode: session.mode, live: true,
+      usage: out.reply?.payload || { draftId: out.draft.id, draftKind: 'browser-script' },
+      card: { type: 'script', draft: out.draft, actions: () => scriptActions(out.draft) },
+    });
+  } else if (out.reply?.text) {
+    pushMessage({ role: 'copilot', text: out.reply.text, mode: session.mode, live: true });
+  } else {
+    session.lastError = out.error || 'the script draft failed';
+    pushMessage({
+      role: 'copilot',
+      text: out.reason === 'no-model' ? out.error : `That script did not go through: ${out.error}`,
+      mode: session.mode, live: true, failed: true,
+    });
+    if (out.reason === 'no-model') await convo.load({ silent: true });
+  }
+  paint();
+}
+
 /** The actions offered for a plan draft — the row says what is possible, the role says what is offered. */
 const planActions = (plan) => (plan ? plans.actionsFor(plan) : []);
 
@@ -1174,7 +1300,6 @@ async function sendPlanTurn(raw, localId) {
   paint();
 }
 
-/** The actions offered for a plan draft — the row says what is possible, the role says what is offered. */
 /** The actions the panel offers for a draft. Derived from the row, never from optimistic state. */
 function draftActions(draft) {
   if (!draft) return [];
@@ -1205,8 +1330,8 @@ async function attachDraftCards() {
       for (const msg of session.history) {
         const id = msg.usage?.draftId;
         if (!id || msg.card?.type === 'draft') continue;
-        // A plan draft is a different row in a different table; its card is rebuilt below.
-        if (msg.usage?.draftKind === 'swarm-plan') continue;
+        // A plan or a browser script is a different row in a different table; their cards are rebuilt below.
+        if (msg.usage?.draftKind === 'swarm-plan' || msg.usage?.draftKind === 'browser-script') continue;
         const draft = byId.get(id);
         if (!draft) continue;
         msg.card = { type: 'draft', draft, actions: () => draftActions(draft) };
@@ -1225,6 +1350,23 @@ async function attachDraftCards() {
         const plan = byId.get(id);
         if (!plan) continue;
         msg.card = { type: 'plan', draft: plan, actions: () => planActions(plan) };
+        changed = true;
+      }
+    }
+  }
+  if (scripts.available()) {
+    const out = await scripts.load();
+    if (out.ok) {
+      const byId = new Map((out.scripts || []).map((s) => [s.id, s]));
+      for (const msg of session.history) {
+        if (msg.usage?.draftKind !== 'browser-script') continue;
+        const id = msg.usage?.draftId;
+        if (!id || msg.card?.type === 'script') continue;
+        const script = byId.get(id);
+        if (!script) continue;
+        // Re-read the row so the card carries the task's live state after a reload, not the state it had
+        // when the turn was written.
+        msg.card = { type: 'script', draft: script, actions: () => scriptActions(script) };
         changed = true;
       }
     }
@@ -1252,6 +1394,57 @@ function replacePlanCard(id, draft, extra = {}) {
   if (!msg || !draft) return;
   msg.card = { ...msg.card, draft, actions: () => planActions(draft), ...extra };
   paint();
+}
+
+function scriptMessage(id) {
+  return session.history.find((m) => m.card?.type === 'script' && m.card.draft?.id === id) || null;
+}
+
+function replaceScriptCard(id, draft, extra = {}) {
+  const msg = scriptMessage(id);
+  if (!msg || !draft) return;
+  msg.card = { ...msg.card, draft, actions: () => scriptActions(draft), ...extra };
+  paint();
+}
+
+/**
+ * The acts a script card can perform. `script-run` is the only one in the whole panel that starts a real
+ * browser task, so its refusal is shown verbatim: if the gateway says the gate is not open, the card says
+ * exactly that rather than a friendlier sentence that implies it might have worked.
+ */
+async function runScriptAction(act, id) {
+  if (!id) return;
+  const current = scriptMessage(id)?.card.draft || null;
+  if (act === 'script-submit') {
+    const out = await scripts.submit(id);
+    if (!out.ok) return replaceScriptCard(id, out.draft || current, { error: out.error });
+    toast('Submitted — a Reviewer who is not you must allow it before anything can run', 'ok');
+    return replaceScriptCard(id, out.draft, { error: '', note: 'Waiting for a decision on the Approvals screen. Nothing runs until the gate is open.' });
+  }
+  if (act === 'script-run') {
+    const out = await scripts.run(id);
+    if (!out.ok) return replaceScriptCard(id, out.draft || current, { error: out.error });
+    toast(`Queued as ${out.task?.id || 'a task'} — the engine reports what it actually does`, 'ok');
+    return replaceScriptCard(id, out.draft, {
+      error: '',
+      note: `Running as ${out.task?.id}. The status above is the gateway's, read live from the task — not a prediction.`,
+    });
+  }
+  if (act === 'script-archive') {
+    const out = await scripts.archive(id);
+    if (!out.ok) return replaceScriptCard(id, current, { error: out.error });
+    return replaceScriptCard(id, out.draft, { error: '', note: 'Archived — the row is kept and still readable.' });
+  }
+  if (act === 'script-open-approvals') {
+    closeCopilot();
+    toast('This script is decided on the Approvals screen. A Reviewer who is not you must allow it.', 'info');
+    try { shellActions.navigate?.('agents'); } catch { /* the shell owns routing */ }
+    return;
+  }
+  if (act === 'script-open-task' && current?.taskId) {
+    closeCopilot();
+    try { shellActions.navigate?.(`browser/${current.taskId}`); } catch { /* the shell owns routing */ }
+  }
 }
 
 /**
@@ -1652,6 +1845,13 @@ function onClick(e) {
     case 'draft-open-approvals':
     case 'draft-open-agent':
       runDraftAction(act, t.dataset.draft);
+      break;
+    case 'script-submit':
+    case 'script-run':
+    case 'script-archive':
+    case 'script-open-approvals':
+    case 'script-open-task':
+      runScriptAction(act, t.dataset.script);
       break;
     case 'plan-submit':
     case 'plan-save':

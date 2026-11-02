@@ -666,3 +666,21 @@ button.cp-chip:active { background: var(--elevated); }
 .cp-plan-meta span { white-space: nowrap; }
 .cp-plan-nodes { margin-top: 6px; line-height: 1.5; overflow-wrap: anywhere; }
 .cp-plan-node { color: var(--text-2, inherit); }
+
+/* ---------- browser-script drafts ----------
+ * A script is the one card whose approval runs something, so its preview reads as an ordered list of
+ * sentences — markup, not an image of the page — and the step that commits the user (a click, a submit, a
+ * sign-in) carries a tint so it cannot be skimmed past.
+ */
+.cp-script { border: 1px solid var(--line-2); }
+.cp-script[data-script-state='invalid'] { border-color: color-mix(in srgb, var(--accent-bad, var(--danger)) 45%, var(--line-2)); }
+.cp-script[data-script-state='blocked'] { border-color: color-mix(in srgb, var(--accent-bad, var(--danger)) 35%, var(--line-2)); }
+.cp-script[data-script-state='awaiting-approval'] { border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--line-2)); }
+.cp-script[data-script-state='active'] { border-color: color-mix(in srgb, var(--accent-ok) 45%, var(--line-2)); }
+.cp-script-url { overflow-wrap: anywhere; margin-top: 2px; }
+.cp-script-steps { margin: 4px 0 0; padding-left: 18px; line-height: 1.55; overflow-wrap: anywhere; }
+.cp-script-step { margin: 0 0 2px; }
+.cp-script-step.sensitive { background: color-mix(in srgb, var(--accent-warn, var(--warn)) 5%, transparent); border-radius: 6px; padding: 1px 4px; }
+.cp-script-task { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; }
+.cp-script-task > .muted { overflow-wrap: anywhere; }
+.cp-script .cp-chip { min-height: 44px; }
