@@ -643,6 +643,61 @@ name.
   board or create an agent yet. Drafts, swarm plans, Agent Browser JSON and open-source voice are units 2–5
   and are not built; the panel does not imply otherwise.
 
+## 🎙️ 2026-11-02 — Open-source voice: the Copilot listens through a host on your own network (M34)
+
+Unit 5 of the Copilot upgrade, and the half of "open-source voice" that was missing. Voice Studio could
+already *speak* through a local host; speech **input** had exactly one path — the browser's
+`SpeechRecognition`, which is network-backed in every shipping browser. So the Copilot could either upload
+audio to a vendor or not listen at all.
+
+- **Speech hosts live on the gateway** (`015_voice_endpoints.sql`, `apps/gateway/src/voice.js`): an
+  endpoint is a loopback row by default, validated for scheme, credentials, query strings and — the common
+  mistake — a URL that already carries the request path. It is on the gateway because an HTTPS PWA cannot
+  POST a clip to a plain-http LAN host, because a capability needs a permission and an audit trail, and
+  because the browser should never learn the host's address.
+- **Two contracts, exactly as they exist** (`packages/shared/voiceEngines.js`): whisper.cpp's own
+  `POST /inference` (multipart `file`, `response_format`; **no** `language` field, because that server does
+  not document one) and the OpenAI-shaped `POST /v1/audio/transcriptions` (which does). `/health` is
+  optional — a 404 is `no-health-endpoint`, not a failure.
+- **Nothing spoken is stored.** No audio column, no transcript column, no history table; a transcription is
+  returned and dropped, and the audit row holds bytes, engine, elapsed time and outcome — never words. Both
+  the gateway suite and the real-browser suite walk every table in the database looking for the transcript.
+- **Three transports, chosen from facts** (`src/copilot/voiceInput.js`): local host → browser recogniser →
+  typing, with a **separate consent** per destination (`localSttConsent` vs `networkRecognitionConsent`).
+  A failure never falls sideways: if the local host fails, the panel reports it and typing works; the
+  recording is **not** re-sent to the vendor recogniser, which is what the consent screen exists to stop.
+- **Real capture** (`src/voice/capture.js`): secure context and container probed before the mic is offered,
+  permission errors named (`permission-denied`, `no-microphone`, `microphone-busy`, `insecure-context`),
+  tracks released on stop, cancel, error and the two-minute cap, and a **discard** control that exists only
+  while recording and uploads nothing. A local transcript lands in the composer **unsent** — a whole-clip
+  transcript arrives with no interim feedback, so reading it is the check.
+- **The gateway grew one honest primitive**: the transcribe route is the only one that accepts a binary
+  body (`bodyLimit` raised for it alone, declared `content-length` checked first, 413 before the host is
+  contacted, 415 for a non-audio type).
+- **Licences verified, not remembered** ([`voice/OPEN_SOURCE_VOICE.md`](voice/OPEN_SOURCE_VOICE.md)):
+  SPDX ids read from `api.github.com/repos/<owner>/<repo>/license` on 2026-11-02 — whisper.cpp MIT,
+  faster-whisper MIT, Piper MIT, Kokoro Apache-2.0 — with the method written down so it can be repeated.
+  (whisper.cpp now lives at `ggml-org/whisper.cpp`; the old `ggerganov` path 301s.)
+- **The operator surface** is Voice Studio → Diagnostics → Speech hosts: list with health status, `Check
+  now`, `Remove`, add form. Adding requires the new `voice:configure` permission (Owner), because an
+  endpoint decides where a recording may be sent; `voice:transcribe` is Operator; `voice:read` is Observer.
+- Evidence: `npm run test:voice-stt` — **16 passed** (no host → 409 and nothing sent; owner-only
+  configuration; five kinds of bad URL refused with actionable wording; an engine that ships no server
+  refused with "run a compatible host"; multipart to `/inference` without an invented `language`; a prefixed
+  mount keeps its prefix; **the transcript appears in no table**; host 500 → 502, no `text` → 502, prose →
+  502, silent clip → `empty: true`; 413/415 before the host is contacted; 504/502 for a slow/dead host;
+  disabled endpoint never chosen; 20/min then 429; health `available` → `no-health-endpoint` →
+  `unreachable`, persisted). `npm run test:voice-input:ui` — **10 passed**. `npm run test:voice-input:browser`
+  — **5 passed** in real Chromium with `--use-fake-device-for-media-stream`: the Owner adds a host from the
+  screen and sees it `reachable`, the Copilot records two seconds with a real `MediaRecorder`, posts >1 kB
+  of real WebM to the host, and leaves the transcript in the composer with nothing sent. `npm test`
+  (48 suites) and `npm run build` green. Design + limits:
+  [`copilot/voice-input.md`](copilot/voice-input.md).
+- Honest limit: **no speech host ships with MMM** — everything above is a contract, and with no host
+  configured the panel says so and falls back. A transcript is a guess until a person reads it, which is why
+  the local path does not auto-send. There is no streaming transcription, and licence verification is
+  per-repository, not per-weight-file. The hardening pass is unit 6.
+
 ## 🌐 2026-11-02 — The Copilot writes a browser script, and approving it *is* the run (M33)
 
 Unit 4 of the Copilot upgrade. Units 2 and 3 end at a stored row; this one ends at a real `browser_tasks`

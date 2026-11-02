@@ -124,6 +124,9 @@ export function seed() {
         // Speech *recognition* runs in a network service in every shipping browser; it stays off
         // until the user allows it explicitly in Advanced Copilot or here.
         networkRecognitionConsent: false,
+        // Local speech hosts (unit 5) are a separate destination from the browser's service, so they are a
+        // separate consent: allowing one must never quietly allow the other.
+        localSttConsent: false,
         profiles: [
           { id: 'device-default', name: 'Device voice', kind: 'device', engine: 'browser-speech', voiceRef: '', consent: null, status: 'active', createdAt: null, note: 'Uses whichever voice the operating system selects.' },
           { id: 'my-cloned-voice', name: 'My cloned voice', kind: 'cloned', engine: '', voiceRef: '', consent: null, status: 'needs-engine', createdAt: null, note: 'Requires a configured local cloning engine and a recorded consent decision.' },

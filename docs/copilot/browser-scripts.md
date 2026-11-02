@@ -6,7 +6,7 @@
 | Unit | 4 of 6 — **Agent Browser JSON** (3: swarm-plan drafts, [`swarm-plan-drafts.md`](swarm-plan-drafts.md); 5: voice) |
 | Files | `packages/shared/browserScript.js`, `apps/gateway/migrations/014_browser_script_drafts.sql`, `apps/gateway/src/browserScriptDrafts.js`, `apps/gateway/src/browser/{policy,runner}.js`, `apps/gateway/server.js`, `src/copilot/scripts.js`, `src/copilot/panel.js`, `src/copilot.css`, `src/api.js`, `packages/shared/api-routes.json` |
 | Evidence | `npm run test:scripts` (**25 passed**, real gateway + real loopback provider + the simulated engine) · `npm run test:scripts:ui` (**10 passed**) · `npm run test:scripts:browser` (**9 passed** in real Chromium at a phone viewport) · `npm run test:browser` 22 · `npm test` · `npm run build` |
-| Status | **PASS for the browser-JSON scope.** A script runs through the Agent Browser that already exists — no second executor, no new actions, no new schema. Open-source voice is unit 5 and is not built. |
+| Status | **PASS for the browser-JSON scope.** A script runs through the Agent Browser that already exists — no second executor, no new actions, no new schema. Unit 5 (open-source voice) landed afterwards — [`voice-input.md`](voice-input.md). |
 
 ---
 
@@ -152,5 +152,5 @@ the runner with its criteria carried through, status `queued`, and the card show
   *simulated engine — not a real browser*.
 - **The script vocabulary is the existing one.** This unit adds no action, no field and no selector dialect:
   it validates `goto`, `extract`, `click`, `type` and the criteria the Agent Browser already observes.
-- **Not built**: open-source voice (unit 5) and the hardening pass (unit 6). The selection/handoff behaviour
+- **Built after this unit**: open-source voice (unit 5, [`voice-input.md`](voice-input.md)). **Not built**: the hardening pass (unit 6). The selection/handoff behaviour
   is the same as unit 2's.

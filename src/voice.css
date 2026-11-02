@@ -88,3 +88,19 @@
 .vs-foot svg { flex: none; margin-top: 2px; }
 .vs-consent { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; line-height: 1.5; }
 .vs-consent input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--accent-hover); }
+
+/* ---------- speech hosts on the gateway (unit 5) ----------
+ * A host row is a capability with a status, so it reads like the diagnostics rows above it. The add form
+ * is a form, not a row of chips: a url is typed, and a 44 px target on a phone matters more here than
+ * anywhere else in this screen.
+ */
+.vs-host { border-top: 1px solid var(--line-2); padding: 10px 0; }
+.vs-host:first-of-type { border-top: 0; }
+.vs-host .tiny { overflow-wrap: anywhere; }
+.vs-host-add { display: grid; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-2); }
+.vs-host-add label { display: grid; gap: 4px; min-width: 0; }
+.vs-host-add .input { min-height: 44px; }
+.vs-host-add .btn { min-height: 44px; }
+@media (min-width: 620px) {
+  .vs-host-add .row { flex-wrap: nowrap; }
+}

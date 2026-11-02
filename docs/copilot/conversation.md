@@ -100,8 +100,10 @@ panel from claiming either a conversation it does not have, or ignorance it does
 ## 6. The system brief
 
 The prompt states the build's limits as facts, not as suggestions: no agent runtime executes anything, no
-workflow engine exists, draft creation is not built yet, and — in capitals, because models like to be
-helpful — it must never claim to have performed an action it has not performed. Permissions are enforced
+workflow engine exists, a draft is a draft until a different principal approves it, and — in capitals,
+because models like to be helpful — it must never claim to have performed an action it has not performed.
+Since unit 4 it also says that approving a browser script *is* the run, and since unit 5 that whether a
+local speech host exists is a deployment fact the model must not assume. Permissions are enforced
 by RBAC in `server.js`, never by this text: the brief exists to shape tone, not to hold a lock.
 
 ## 7. What the browser proved
@@ -132,9 +134,9 @@ real loopback OpenAI-compatible provider, and performs the loop a person perform
 - **No streaming and no tool calls.** Multi-turn context only, plus one artefact: **agent drafts** (unit 2,
   [`agent-drafts.md`](agent-drafts.md)). A draft is validated on the gateway and needs another principal's
   approval before it can become an idle definition. Units 3 and 4 landed afterwards — swarm-plan drafts
-  ([`swarm-plan-drafts.md`](swarm-plan-drafts.md)) and Agent Browser JSON from a sentence
-  ([`browser-scripts.md`](browser-scripts.md)), which runs only through the real approval gate. Open-source
-  voice (unit 5) is not built; the panel does not imply otherwise.
+  ([`swarm-plan-drafts.md`](swarm-plan-drafts.md)), Agent Browser JSON from a sentence
+  ([`browser-scripts.md`](browser-scripts.md)) — which runs only through the real approval gate — and local
+  voice input ([`voice-input.md`](voice-input.md)).
 - **Cost is an estimate** from a price table, never an invoice.
 - **The `llm` capability now reads the runtime.** It says `available` only when the gateway reports a
   provider with a sealed key, `not configured` when the gateway exists without one, and `unverified` in

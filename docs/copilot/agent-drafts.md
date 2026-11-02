@@ -140,5 +140,5 @@ errors.
 - **Saving from the builder creates a new draft.** The panel's card PATCHes the draft it came from; the
   Agent Designer's Save is the existing designer path, and it is not wired to an existing draft id yet.
 - **Built after this unit**: swarm-plan drafts (unit 3, [`swarm-plan-drafts.md`](swarm-plan-drafts.md)),
-  Agent Browser JSON (unit 4, [`browser-scripts.md`](browser-scripts.md)). **Not built yet**: open-source
-  voice (unit 5).
+  Agent Browser JSON (unit 4, [`browser-scripts.md`](browser-scripts.md)) and open-source voice (unit 5,
+  [`voice-input.md`](voice-input.md)). **Not built yet**: the hardening pass (unit 6).

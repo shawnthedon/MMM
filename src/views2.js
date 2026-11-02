@@ -1258,6 +1258,7 @@ views.settings = {
         <div class="kv"><span class="k">Chunking</span><span class="tiny muted">${esc(st.voice?.strategy || 'sentence')}</span></div>
         <div class="kv"><span class="k">Voice</span><span class="tiny muted">${esc((st.voice?.profiles || []).find((p) => p.id === st.voice?.selectedProfileId)?.name || 'device default')}</span></div>
         <div class="kv"><span class="k">Voice input (network speech service)</span><span class="switch ${st.voice?.networkRecognitionConsent ? 'on' : ''}" data-act="toggle-voice-consent" role="switch" aria-checked="${st.voice?.networkRecognitionConsent ? 'true' : 'false'}"></span></div>
+        <div class="kv"><span class="k">Voice input (speech host on this gateway)</span><span class="switch ${st.voice?.localSttConsent ? 'on' : ''}" data-act="toggle-voice-local-consent" role="switch" aria-checked="${st.voice?.localSttConsent ? 'true' : 'false'}"></span></div>
         <div class="tiny muted" style="margin-top:6px">Speech input sends audio to your browser's speech service. It is off until you allow it; speaking replies uses the on-device engine instead.</div>
         <button class="btn sm" style="margin-top:10px" data-act="nav" data-to="voice">${icon('mic', 15)} Open Voice Studio</button>
       </div>
@@ -1369,8 +1370,15 @@ on('toggle-voice-consent', () => {
   setState((s) => {
     s.settings.voice = { ...(s.settings.voice || {}), networkRecognitionConsent: !s.settings.voice?.networkRecognitionConsent };
   }, 'voice-consent');
-  toast(getState().settings.voice?.networkRecognitionConsent ? 'Voice input allowed' : 'Voice input disabled', 'ok');
-  import('./main.js').then((m) => m.rerender());
+  toast(getState().settings.voice?.networkRecognitionConsent ? 'Voice input allowed (browser speech service)' : 'Voice input disabled', 'ok');
+});
+on('toggle-voice-local-consent', () => {
+  setState((s) => {
+    s.settings.voice = { ...(s.settings.voice || {}), localSttConsent: !s.settings.voice?.localSttConsent };
+  }, 'voice-local-consent');
+  toast(getState().settings.voice?.localSttConsent
+    ? 'Local voice input allowed — audio stays on your network'
+    : 'Local voice input disabled', 'ok');
 });
 on('set-motion', (el, ds) => {
   if (!['system', 'full', 'reduced'].includes(ds.v)) return;

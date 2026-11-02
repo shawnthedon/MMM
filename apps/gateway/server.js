@@ -25,6 +25,7 @@ import * as copilot from './src/copilot.js';
 import * as agentDrafts from './src/agentDrafts.js';
 import * as swarmPlanDrafts from './src/swarmPlanDrafts.js';
 import * as browserScriptDrafts from './src/browserScriptDrafts.js';
+import * as voice from './src/voice.js';
 import * as chat from './src/chat.js';
 import * as terminal from './src/terminal/index.js';
 import * as auth from './src/auth.js';
@@ -96,16 +97,45 @@ function fail(res, code, error, extra = {}) {
  * bytes the provider signed. Routes that accept provider payloads (form-encoded webhooks) opt into
  * `allowRaw`, otherwise a non-JSON body is still a 400.
  */
-function readBody(req, { allowRaw = false } = {}) {
+function readBody(req, { allowRaw = false, limit = BODY_LIMIT, binary = false } = {}) {
+  // A binary route (audio upload) collects Buffers, not a string: decoding a webm clip as UTF-8 would
+  // corrupt it silently, and a corrupted recording reaches the speech host as noise rather than speech.
+  if (binary) {
+    return new Promise((resolve) => {
+      const declared = Number(req.headers?.['content-length'] || 0);
+      if (declared && declared > limit) {
+        resolve({ ok: false, status: 413, error: `body exceeds ${limit} bytes` });
+        return;
+      }
+      const chunks = [];
+      let total = 0;
+      let tooLarge = false;
+      req.on('data', (chunk) => {
+        if (tooLarge) return;
+        total += chunk.length;
+        if (total > limit) {
+          tooLarge = true;
+          resolve({ ok: false, status: 413, error: `body exceeds ${limit} bytes` });
+          return;
+        }
+        chunks.push(chunk);
+      });
+      req.on('end', () => {
+        if (tooLarge) return;
+        resolve({ ok: true, body: {}, raw: '', bytes: Buffer.concat(chunks) });
+      });
+      req.on('error', () => resolve({ ok: false, status: 400, error: 'request stream error' }));
+    });
+  }
   return new Promise((resolve) => {
     let raw = '';
     let tooLarge = false;
     req.on('data', (chunk) => {
       if (tooLarge) return;
       raw += chunk;
-      if (raw.length > BODY_LIMIT) {
+      if (raw.length > limit) {
         tooLarge = true;
-        resolve({ ok: false, status: 413, error: `body exceeds ${BODY_LIMIT} bytes` });
+        resolve({ ok: false, status: 413, error: `body exceeds ${limit} bytes` });
       }
     });
     req.on('end', () => {
@@ -151,6 +181,7 @@ function subscriptionFilter(topic, principal) {
   if (topic === 'terminal') return can(principal, 'terminal:read');
   if (topic === 'models') return can(principal, 'model:read');
   if (topic === 'copilot') return can(principal, 'copilot:read');
+  if (topic === 'voice') return can(principal, 'voice:read');
   if (topic === 'audit') return can(principal, 'audit:read');
   return can(principal, 'read');
 }
@@ -1195,6 +1226,99 @@ route('POST', /^\/api\/v1\/copilot\/scripts\/([\w-]+)\/archive$/, { permission: 
   }
 });
 
+/* ---- Voice: local speech hosts (unit 5 — see src/voice.js) ----
+ * An endpoint is a capability: the browser never learns its address, the audio never touches our disk,
+ * and configuring one is an owner act. Transcribing is its own permission because it is the only route
+ * that carries a recording.
+ */
+const voiceFail = (error) => {
+  const code = error?.code || 'error';
+  const status = code === 'not-found' ? 404
+    : code === 'no-endpoint' ? 409
+      : code === 'conflict' ? 409
+        : code === 'audio-refused' ? 415
+          : code === 'timeout' ? 504
+            : code === 'unreachable' ? 502
+              : code === 'host-error' ? 502
+                : code === 'bad-response' ? 502
+                  : 400;
+  return {
+    code: status,
+    body: { error: error.message, code, ...(error.hint ? { hint: error.hint } : {}), ...(error.status ? { hostStatus: error.status } : {}) },
+  };
+};
+
+route('GET', /^\/api\/v1\/voice$/, { permission: 'voice:read' }, () => ({ code: 200, body: voice.capabilities() }));
+
+route('GET', /^\/api\/v1\/voice\/endpoints$/, { permission: 'voice:read' }, (ctx) => ({
+  code: 200,
+  body: { endpoints: voice.listEndpoints({ kind: ctx.query.kind || null }) },
+}));
+
+route('POST', /^\/api\/v1\/voice\/endpoints$/, { permission: 'voice:configure', mutating: true }, (ctx) => {
+  try {
+    const endpoint = voice.createEndpoint(ctx.body || {}, ctx.principal);
+    broadcast('voice', { type: 'voice.endpoint', id: endpoint.id, status: 'created' });
+    return { code: 201, body: { endpoint, capabilities: voice.capabilities() } };
+  } catch (error) {
+    return voiceFail(error);
+  }
+});
+
+route('PATCH', /^\/api\/v1\/voice\/endpoints\/([\w-]+)$/, { permission: 'voice:configure', mutating: true }, (ctx) => {
+  try {
+    return { code: 200, body: { endpoint: voice.updateEndpoint(ctx.match[1], ctx.body || {}, ctx.principal) } };
+  } catch (error) {
+    return voiceFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/voice\/endpoints\/([\w-]+)$/, { permission: 'voice:configure', mutating: true }, (ctx) => {
+  try {
+    return { code: 200, body: voice.deleteEndpoint(ctx.match[1], ctx.principal) };
+  } catch (error) {
+    return voiceFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/voice\/endpoints\/([\w-]+)\/check$/, { permission: 'voice:read', mutating: true }, async (ctx) => {
+  try {
+    return { code: 200, body: { endpoint: await voice.checkEndpoint(ctx.match[1], ctx.principal) } };
+  } catch (error) {
+    return voiceFail(error);
+  }
+});
+
+/**
+ * The one route that carries a recording. The body is the audio itself (`content-type: audio/*`), not a
+ * JSON envelope: base64 would inflate a clip by a third for no benefit, and a string body decoded as
+ * UTF-8 would corrupt it. `bodyLimit` is raised for this route alone, and the audio is never written
+ * anywhere — it is forwarded and dropped.
+ */
+route('POST', /^\/api\/v1\/voice\/transcribe$/, {
+  permission: 'voice:transcribe',
+  mutating: true,
+  binary: true,
+  bodyLimit: voice.VOICE_LIMITS.audioBytes,
+}, async (ctx) => {
+  const limit = auth.rateLimit(`voice:transcribe:${ctx.principal.id}`, { limit: 20, windowMs: 60 * 1000 });
+  if (!limit.allowed) {
+    return { code: 429, body: { error: 'too many transcriptions in a minute; wait a moment' }, headers: { 'Retry-After': String(limit.retryAfter) } };
+  }
+  try {
+    const out = await voice.transcribe({
+      audio: ctx.bytes || Buffer.alloc(0),
+      mimeType: ctx.req.headers['content-type'] || '',
+      endpointId: ctx.query.endpointId || null,
+      language: ctx.query.language || '',
+      principal: ctx.principal,
+    });
+    return { code: 200, body: out };
+  } catch (error) {
+    return voiceFail(error);
+  }
+});
+
 /* ---- Terminal: real processes on the gateway host (see src/terminal/index.js) ----
  * The browser cannot execute anything, so execution lives here. Every route is permissioned, every
  * run is audited, and the destructive set stops at an approval gate rather than a warning.
@@ -1977,11 +2101,17 @@ async function handleRequest(req, res) {
 
   let body = {};
   let rawBody = '';
+  let bytes = null;
   if (['POST', 'PATCH', 'PUT'].includes(req.method)) {
-    const parsed = await readBody(req, { allowRaw: routeMatch.meta.rawBody === true });
+    const parsed = await readBody(req, {
+      allowRaw: routeMatch.meta.rawBody === true,
+      limit: routeMatch.meta.bodyLimit || BODY_LIMIT,
+      binary: routeMatch.meta.binary === true,
+    });
     if (!parsed.ok) return fail(res, parsed.status, parsed.error, { 'x-mmm-request-id': rid });
     body = parsed.body;
     rawBody = parsed.raw || '';
+    bytes = parsed.bytes || null;
   }
 
   const isPublic = routeMatch.meta.public === true;
@@ -2023,7 +2153,7 @@ async function handleRequest(req, res) {
 
   try {
     const out = (await routeMatch.handler({
-      req, res, match, query, body, rawBody, principal, requestId: rid,
+      req, res, match, query, body, rawBody, bytes, principal, requestId: rid,
     })) || { code: 200, body: {} };
     // A streaming route owns the response: it has already written headers and will keep writing.
     if (out && out.handled === true) return;

@@ -18,6 +18,8 @@ import * as convo from './conversation.js';
 import * as drafts from './drafts.js';
 import * as plans from './plans.js';
 import * as scripts from './scripts.js';
+import * as voiceInput from './voiceInput.js';
+import { captureSupport, startCapture } from '../voice/capture.js';
 
 const session = {
   open: false,
@@ -30,6 +32,8 @@ const session = {
   minimized: false,
   advanced: false,
   listening: false,
+  recording: null,
+  voiceCaps: null,
   voiceStatus: '',
   lastSent: '',
   // 'live' (a model answers) vs 'local' (the built-in engine answers); `gatewayState` says why.
@@ -111,7 +115,11 @@ function findMessage(id) {
 
 /* ---------- panel skeleton ---------- */
 function panelHTML() {
-  const voiceSupported = Boolean(recognitionCtor());
+  const voiceSupport = voicePath();
+  const voiceSupported = voiceSupport.transport !== 'text';
+  const micLabel = voiceSupport.transport === 'local-stt'
+    ? 'Record a clip for the speech host on your gateway'
+    : 'Speak to Copilot';
   return `
     <div class="cp-scrim" data-cp="dismiss" aria-hidden="true"></div>
     <section class="cp-panel" role="dialog" aria-modal="true" aria-label="Advanced Copilot" tabindex="-1"
@@ -148,7 +156,7 @@ function panelHTML() {
         </div>
         <div class="cp-voice-row">
           <button class="cp-mic" data-cp="voice" data-holo="mic" aria-pressed="false"
-                  aria-label="${voiceSupported ? 'Speak to Copilot' : 'Voice capture is unavailable in this browser'}">
+                  aria-label="${voiceSupported ? micLabel : 'Voice capture is unavailable in this browser'}">
             <span class="cp-mic-halo" aria-hidden="true"></span>
             <span class="cp-mic-ico" aria-hidden="true">${icon('mic', 20)}</span>
             <span class="cp-mic-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
@@ -166,7 +174,7 @@ function panelHTML() {
         <form class="cp-composer" id="cp-form" novalidate>
           <textarea class="cp-input" id="copilot-input" rows="1" maxlength="2000"
                     aria-label="Message Copilot" placeholder="Ask about this screen…"></textarea>
-          <button class="cp-voice" type="button" data-cp="voice" aria-label="${voiceSupported ? 'Speak to Copilot' : 'Voice capture is unavailable in this browser'}">${icon('mic', 18)}</button>
+          <button class="cp-voice" type="button" data-cp="voice" aria-label="${voiceSupported ? micLabel : 'Voice capture is unavailable in this browser'}">${icon('mic', 18)}</button>
           <button class="cp-send" type="submit" aria-label="Send message">${icon('send', 18)}</button>
         </form>
       </div>
@@ -174,9 +182,11 @@ function panelHTML() {
 }
 
 /* ---------- voice capture ----------
- * Speech *input* has one honest caveat: every browser recogniser sends audio to a network service.
- * So it is opt-in per browser, stated before it is used, refused offline, and never pretended when
- * the API is missing. Text-to-speech (Voice Studio) is separate and always on-device.
+ * Three transports, in the order the deployment earns them (see voiceInput.js): a speech host on the
+ * operator's own gateway, then the browser recogniser (which is network-backed in every shipping
+ * browser), then typing — always available, never gated. Each one states what happens to the audio
+ * before it is used, and a failure in the local path is *reported* rather than re-routed to the network
+ * one: re-sending a recording somewhere else is the exact thing the consent screen exists to prevent.
  */
 function recognitionCtor() {
   try {
@@ -186,25 +196,38 @@ function recognitionCtor() {
   }
 }
 
-const voiceConsent = () => {
+const voiceConsent = (kind = 'network') => {
   try {
-    return getState()?.settings?.voice?.networkRecognitionConsent === true;
+    const settings = getState()?.settings?.voice || {};
+    return kind === 'local'
+      ? settings.localSttConsent === true
+      : settings.networkRecognitionConsent === true;
   } catch {
     return false;
   }
 };
 
+/** The transport this device can actually use right now, with the sentence that explains it. */
+function voicePath() {
+  return voiceInput.resolvePath({
+    capabilities: session.voiceCaps,
+    support: captureSupport(globalThis),
+    online: !(typeof navigator !== 'undefined' && navigator.onLine === false),
+  });
+}
+
 function voiceStatusText() {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return 'Offline: voice capture needs a connection, so type instead.';
+  if (session.recording) return `Recording — ${Math.round((session.recording.elapsedMs || 0) / 1000)}s. Tap the mic to stop.`;
+  const path = voicePath();
+  if (path.transport === 'local-stt') {
+    return voiceConsent('local')
+      ? 'Ready — tap the mic and speak. Audio goes to the speech host on your gateway and stays on your network.'
+      : 'Tap the mic to record a clip for your gateway’s speech host. It stays on your network, and nothing is sent until you allow it.';
   }
-  if (!recognitionCtor()) {
-    return 'Voice capture is unavailable here — this browser has no speech recogniser. Type, or open Voice Studio to hear replies.';
+  if (path.transport === 'browser-recognition') {
+    return path.reason;
   }
-  if (!voiceConsent()) {
-    return 'Voice input uses your browser’s speech service, which sends audio to the network. Tap the mic to review and allow it.';
-  }
-  return 'Ready — tap the mic and speak. Audio goes to your browser’s speech service.';
+  return path.reason || 'Voice input is unavailable here — type instead.';
 }
 
 function paintVoiceStatus() {
@@ -212,23 +235,39 @@ function paintVoiceStatus() {
   if (el) el.textContent = session.voiceStatus || voiceStatusText();
   const mic = panel?.querySelector('.cp-mic');
   if (mic) {
-    mic.dataset.state = session.listening ? 'listening' : 'idle';
-    mic.setAttribute('aria-pressed', String(session.listening));
+    const active = session.listening || Boolean(session.recording);
+    mic.dataset.state = active ? 'listening' : 'idle';
+    mic.setAttribute('aria-pressed', String(active));
+  }
+  // A recording has to be discardable without uploading it, so the discard control appears with it and
+  // nowhere else — a permanent "cancel" next to a mic that is idle is a control that cannot do anything.
+  const dock = panel?.querySelector('#cp-voice-dock');
+  const cancel = dock?.querySelector('[data-cp="voice-cancel"]');
+  if (session.recording && !cancel && dock) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'btn sm cp-record-cancel';
+    chip.dataset.cp = 'voice-cancel';
+    chip.textContent = 'Discard recording';
+    dock.querySelector('.cp-voice-row')?.appendChild(chip);
+  } else if (!session.recording && cancel) {
+    cancel.remove();
   }
 }
 
-function showVoiceConsent() {
+function showVoiceConsent(kind = 'network') {
   const dock = panel?.querySelector('#cp-voice-dock');
   if (!dock || dock.querySelector('.cp-consent')) return;
+  const copy = voiceInput.CONSENT_COPY[kind] || voiceInput.CONSENT_COPY.network;
   const card = document.createElement('div');
   card.className = 'cp-consent';
+  card.dataset.consent = kind;
   card.innerHTML = `
-    <div class="cp-consent-title">${icon('shield', 15)} Allow voice input?</div>
-    <p>Your browser's speech service receives the audio. Nothing else is sent, and nothing is stored
-       here beyond this choice. Turn it off again from Settings → Voice &amp; speech.</p>
+    <div class="cp-consent-title">${icon('shield', 15)} ${esc(copy.title)}</div>
+    <p>${esc(copy.body)} Turn it off again from Settings → Voice &amp; speech.</p>
     <div class="row" style="gap:8px">
       <button class="btn sm grow" data-cp="voice-consent-deny">Not now</button>
-      <button class="btn sm grow primary" data-cp="voice-consent-allow">Allow voice input</button>
+      <button class="btn sm grow primary" data-cp="voice-consent-allow">${esc(copy.allow)}</button>
     </div>`;
   dock.appendChild(card);
   toastIn(card);
@@ -236,6 +275,109 @@ function showVoiceConsent() {
 
 function clearVoiceConsent() {
   panel?.querySelector('.cp-consent')?.remove();
+}
+
+/**
+ * The mic's front door. Chooses a transport from facts, asks for the consent that transport needs, and only
+ * then opens a microphone. When no path exists it says which one is missing and stops — a dead mic button
+ * that reports nothing is worse than no mic button.
+ */
+function startVoiceInput() {
+  const path = voicePath();
+  if (path.transport === 'text') {
+    session.voiceStatus = path.reason;
+    paintVoiceStatus();
+    sfx.warn();
+    return;
+  }
+  if (path.requiresConsent && !voiceConsent(path.requiresConsent)) {
+    showVoiceConsent(path.requiresConsent);
+    return;
+  }
+  if (path.transport === 'local-stt') {
+    startRecording();
+    return;
+  }
+  startListening();
+}
+
+/**
+ * Record one clip for the gateway's speech host. The transcript lands in the composer and is **not sent**:
+ * a whole-clip transcript arrives without any interim feedback, so the person reading it is the check. The
+ * browser-recogniser path keeps its own behaviour (a final transcript sends immediately) because there the
+ * person has watched the words appear as they spoke.
+ */
+async function startRecording() {
+  session.voiceStatus = 'Opening the microphone…';
+  paintVoiceStatus();
+  let handle;
+  try {
+    handle = await startCapture({
+      maxMs: 120000,
+      onTick: (elapsed) => {
+        if (session.recording) {
+          session.recording.elapsedMs = elapsed;
+          paintVoiceStatus();
+        }
+      },
+    });
+  } catch (error) {
+    session.voiceStatus = `${error?.message || 'The microphone could not be opened.'} Typing still works.`;
+    paintVoiceStatus();
+    sfx.bad();
+    return;
+  }
+  const recording = { handle, elapsedMs: 0, startedAt: Date.now() };
+  session.recording = recording;
+  session.voiceStatus = 'Recording — tap the mic to stop.';
+  paintVoiceStatus();
+  sfx.listen(true);
+
+  handle.done
+    .then(async (clip) => {
+      if (session.recording !== recording) return; // cancelled while recording
+      session.recording = null;
+      sfx.listen(false);
+      session.voiceStatus = `Transcribing ${Math.max(1, Math.round(clip.durationMs / 1000))} s of audio…`;
+      paintVoiceStatus();
+      const out = await voiceInput.transcribe(clip.blob, { language: getState()?.settings?.voice?.lang || '' });
+      session.voiceStatus = voiceInput.transcriptNote(out);
+      if (out.ok && !out.empty) {
+        showAdvanced(true);
+        const input = panel?.querySelector('#copilot-input');
+        if (input) {
+          input.value = out.text;
+          input.focus?.({ preventScroll: true });
+        }
+      }
+      paintVoiceStatus();
+      if (!out.ok) sfx.bad();
+    })
+    .catch((error) => {
+      if (session.recording === recording) session.recording = null;
+      session.voiceStatus = error?.code === 'cancelled'
+        ? 'Recording discarded — nothing was sent.'
+        : `${error?.message || 'The recording failed.'} Type instead.`;
+      paintVoiceStatus();
+      if (error?.code !== 'cancelled') sfx.bad();
+    });
+}
+
+function stopRecording() {
+  if (!session.recording) return;
+  session.voiceStatus = 'Finishing the recording…';
+  paintVoiceStatus();
+  session.recording.handle.stop();
+}
+
+function cancelRecording() {
+  const recording = session.recording;
+  if (!recording) return;
+  session.recording = null;
+  sfx.listen(false);
+  recording.handle.cancel();
+  session.voiceStatus = 'Recording discarded — nothing was sent.';
+  paintVoiceStatus();
 }
 
 function stopListening(reason = '') {
@@ -1668,6 +1810,14 @@ export function openCopilot({ mode, message } = {}) {
   });
   paint();
   probeGateway().catch(() => {});
+  // Ask the gateway what speech it can do before the mic is offered, so the button never promises a path
+  // this deployment does not have.
+  voiceInput.loadCapabilities()
+    .then((out) => {
+      session.voiceCaps = out.capabilities;
+      if (session.open) paintVoiceStatus();
+    })
+    .catch(() => {});
   if (convo.available()) {
     convo.load()
       .then((out) => {
@@ -1812,15 +1962,23 @@ function onClick(e) {
       break;
     case 'voice':
       if (session.listening) stopListening('Voice capture stopped.');
-      else startListening();
+      else if (session.recording) stopRecording();
+      else startVoiceInput();
+      break;
+    case 'voice-cancel':
+      cancelRecording();
       break;
     case 'voice-consent-allow': {
+      const kind = panel?.querySelector('.cp-consent')?.dataset.consent === 'local' ? 'local' : 'network';
       setState((state) => {
-        state.settings.voice = { ...(state.settings.voice || {}), networkRecognitionConsent: true };
+        state.settings.voice = {
+          ...(state.settings.voice || {}),
+          ...(kind === 'local' ? { localSttConsent: true } : { networkRecognitionConsent: true }),
+        };
       }, 'voice-consent');
       clearVoiceConsent();
-      toast('Voice input allowed for this browser', 'ok');
-      startListening();
+      toast(kind === 'local' ? 'Local voice input allowed — audio stays on your network' : 'Voice input allowed for this browser', 'ok');
+      startVoiceInput();
       break;
     }
     case 'voice-consent-deny':
