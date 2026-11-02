@@ -610,7 +610,11 @@ function injectBanner() {
   }
   const runtime = term.capability?.runtime || {};
   const session = sessionApi();
-  pushLine('dim', `gateway host · node ${runtime.node || 'unknown'} · ${session?.cwdPath || 'workspace'} · no shell`);
+  // The toolchain it can actually name. A version the gateway could not read is left out rather than
+  // printed as "unknown" beside a working npm; the capability payload carries the reason.
+  const toolchain = [`node ${runtime.node || 'unknown'}`];
+  if (runtime.npm) toolchain.push(`npm ${runtime.npm}`);
+  pushLine('dim', `gateway host · ${toolchain.join(' · ')} · ${session?.cwdPath || 'workspace'} · no shell`);
   if (term.project?.scripts?.length) {
     pushLine('dim', `scripts: ${term.project.scripts.map((s) => `npm run ${s}`).join(' · ')}`);
   }

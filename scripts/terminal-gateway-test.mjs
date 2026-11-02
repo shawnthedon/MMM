@@ -524,6 +524,51 @@ await check('environment variables are accepted by name and never echoed back', 
   assert(echo.stdoutTail.includes('••••'), 'the mask is visible, not a silent deletion');
 });
 
+await check('the environment route cannot re-open the holes the flag rules close', async () => {
+  // Each of these is a documented rule when it arrives as a flag. npm reads the same settings from the
+  // environment, so the session route has to refuse them too — silently ignoring them would be worse,
+  // because the next command's behaviour would look like something else.
+  const before = (await owner.request(`/api/v1/terminal/sessions/${session.id}`)).body.session.envKeys;
+  const cases = [
+    ['npm_config_registry', 'registry'],
+    ['npm_config_prefix', 'prefix'],
+    ['NPM_CONFIG_SCRIPT_SHELL', 'script-shell'],
+    ['NODE_OPTIONS', 'NODE_OPTIONS'],
+    ['PATH', 'PATH'],
+    ['LD_PRELOAD', 'loader'],
+    ['BASH_ENV', 'shell'],
+  ];
+  for (const [key, word] of cases) {
+    const res = await owner.request(`/api/v1/terminal/sessions/${session.id}/env`, {
+      method: 'POST', csrf: true, body: { env: { [key]: 'x' } },
+    });
+    eq(res.status, 400, `${key} must be refused (got ${res.status} ${res.text})`);
+    assert(res.body.error.includes(key), `the refusal names the key (got “${res.body.error}”)`);
+    assert(new RegExp(word, 'i').test(res.body.error), `and says why (got “${res.body.error}”)`);
+  }
+  const after = (await owner.request(`/api/v1/terminal/sessions/${session.id}`)).body.session.envKeys;
+  eq(JSON.stringify(after), JSON.stringify(before), 'a refused variable changes nothing about the session');
+
+  const malformed = await owner.request(`/api/v1/terminal/sessions/${session.id}/env`, {
+    method: 'POST', csrf: true, body: { env: { '1BAD': 'x' } },
+  });
+  eq(malformed.status, 400, 'a name that is not a variable name is refused, not dropped');
+});
+
+await check('the capability payload can name the npm it runs, or says why not', async () => {
+  const res = await owner.request('/api/v1/terminal');
+  eq(res.status, 200, 'describe');
+  const { runtime } = res.body;
+  assert(runtime.node, 'node is reported');
+  if (runtime.npm === null) {
+    assert(runtime.npmReason, 'a null npm version must carry the reason it is null');
+  } else {
+    assert(/^\d+\.\d+\.\d+/.test(runtime.npm), `npm version reads like a version (got ${JSON.stringify(runtime.npm)})`);
+    assert(['probed', 'env'].includes(runtime.npmSource), 'and the source says how it was learned');
+  }
+  assert(res.body.policy.refusedEnvKeys.includes('npm_config_*'), 'the policy lists what it will not accept');
+});
+
 await check('the gateway environment is not inherited', async () => {
   const out = await run(session.id, 'node -e "console.log([\'MMM_BOOTSTRAP_PASSWORD\',\'DATA_DIR\',\'MMM_TERMINAL\'].map(k=>k+\'=\'+(process.env[k]===undefined?\'absent\':\'set\')).join(\' \'))"');
   assert(out.stdoutTail.includes('MMM_BOOTSTRAP_PASSWORD=absent'), `secrets must not reach a child (got “${out.stdoutTail}”)`);
@@ -555,6 +600,8 @@ await check('AT-11 an authorised agent can run a command and read the result', a
   eq(run1.body.ok, true, 'the agent run succeeded');
   eq(run1.body.exitCode, 0, 'with the exit code');
   assert(run1.body.stdout.includes(process.version), 'and the stdout the agent needs');
+  // Attributed to the agent, not just to the session: history and audit must be able to say who asked.
+  eq(run1.body.run.agentId, 'ag-researcher', 'the run row names the agent that asked for it');
 
   // A failing command comes back as a failure the agent can act on, with a retry hint.
   const run2 = await owner.request('/api/v1/terminal/agent-runs', {

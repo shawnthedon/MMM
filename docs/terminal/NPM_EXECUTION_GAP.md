@@ -5,7 +5,7 @@
 | Request | Real npm/node execution in the terminal screen: real processes, live stdout/stderr, exit codes, Ctrl+C, cwd persistence, multiple sessions, history, agent-driven npm with retry, **no mandatory cloud dependency**, isolation / traversal blocking / secret protection / approval for destructive commands / exec limits / recorded history |
 | Method | Two throwaway probes against a **running gateway** on a temp `DATA_DIR`, real `npm` against the real registry, an Owner + a Reviewer principal. No production code was read first — the code was read only to explain what the probe observed. |
 | Verdict | **Most of this shipped in M26 and is verified below.** Three real gaps remain (one of them a genuine bypass of a rule the terminal claims to enforce). Implementation plan in §5. |
-| Status | **Report only.** No source change in this PR, per "report before implementing". |
+| Status | **Implemented** in M36 — the three gaps below are fixed and asserted; see [`NPM_EXECUTION.md`](NPM_EXECUTION.md) for the report after. |
 
 ---
 
