@@ -720,7 +720,8 @@ where a control plane either holds its rules or quietly drops them, most of the 
   `npm test` — **51 suites, 898 assertions, exit 0**; `npm run build` green.
 - Honest limits: **the raw routes still do not enforce the approval the registry declares** — only the
   dispatcher does, and tightening `DELETE /teams/:id` would change the Teams screen, so that is a Phase D
-  decision; **contracts cover ~30 of 143 operations** and the rest say so by name; the model still gets no
+  decision; **contracts cover 68 of 143 operations** (67 dispatchable for an Owner here) and the remaining
+  75 say so by name; the model still gets no
   tool results mid-turn (`degraded` has no live producer yet but its refusal path is tested); and the
   built-in demo engine still answers when no model is configured, labelled as such, against local state only.
   Design + limits: [`copilot/PHASE_C_DISPATCHER.md`](copilot/PHASE_C_DISPATCHER.md).

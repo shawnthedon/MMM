@@ -168,8 +168,10 @@ and a loopback model stub, over HTTP as Owner, Admin, Reviewer, Operator and Obs
 1. **The direct routes are still the direct routes.** `DELETE /api/v1/teams/:id` does not itself require the
    approval the registry says the *operation* needs; only the dispatcher enforces it. Tightening the raw
    handlers changes the Teams screen's flow and is a Phase D decision, not a silent edit here.
-2. **Contracts cover ~30 of 143 operations.** The rest are reported as not dispatchable, by name, with the
-   reason. Reads with no parameters are derived; multi-wildcard reads are not.
+2. **Contracts cover 68 of 143 operations** — 21 declared writes plus 47 derived reads — of which **67 are
+   dispatchable for an Owner on this deployment** (one is dispatch-blocked by state). The remaining 75 say
+   so by name: 70 mutations with no declared shape (principals, tokens, evolution, terminal, comms, drafts)
+   and 5 reads with more than one wildcard, which cannot be derived honestly.
 3. **No contract for secret-bearing routes** (provider keys, voice endpoints) — by design.
 4. **The model gets no tool results mid-turn.** It proposes once per turn; it cannot loop, and it cannot see
    the result until the person's next message (or the report call, which is gateway-driven).
