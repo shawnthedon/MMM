@@ -643,6 +643,35 @@ name.
   board or create an agent yet. Drafts, swarm plans, Agent Browser JSON and open-source voice are units 2–5
   and are not built; the panel does not imply otherwise.
 
+## 🗂️ 2026-11-03 — The capability registry: one answer to "what can Copilot do here?" (Phase B)
+
+Phase A ([`copilot/PHASE_A_INVENTORY.md`](copilot/PHASE_A_INVENTORY.md)) found three disagreeing answers to
+that question — a static client table with 9 of 10 statuses hard-coded, the orchestrator's advertised
+command list, and prose in the model's system prompt — none derived from what the server serves. This unit
+adds one server-side answer, and makes it impossible for it to drift quietly.
+
+- **`apps/gateway/src/capabilities.js`** declares **143 operations** (134 backed by routes, 9 with no
+  service at all) across 23 modules: permission, risk class, reversibility, confirmation rule, audit
+  expectation, timeout, idempotency and runtime requirements. Two endpoints: `GET /api/v1/capabilities` and
+  `GET /api/v1/capabilities/:id`, both behind `read`.
+- **Two axes, kept apart.** `state` is a deployment fact (can it work here, and what is missing); `allowed`
+  is the caller's authority (`rbac.can`). They are separate so a refusal never hides a capability and a
+  capability never outruns authority. The suite caught the first version conflating them.
+- **Hand-declared, machine-checked.** `coverage()` proves every declared route exists, every served route is
+  claimed once or explicitly excused, and that permissions and `mutating` flags match the table:
+  **156 = 151 claims + 5 excused**, zero drift. The declaration also refuses to load if an operation mixes
+  reads and writes, if a read declares a risk, or if a destructive operation skips its approval gate.
+- **Requirements are probes, not constants**: a sealed provider key, a Chromium engine, a local speech host
+  and per-agent evolution policies are read from the modules that own them, each time the catalogue is read.
+- Evidence: `npm run test:capabilities` — **21 passed**. It was also mutation-tested: dropping an excuse, a
+  typo in a route, a wrong permission and deleting a `no-service` declaration each turn it red. It asserts
+  that six operations the catalogue calls forbidden are refused `403` by the gateway. `npm test` — **50
+  suites, 862 assertions, exit 0**; `npm run build` green.
+- Honest limits: **there is no dispatcher** (this unit describes, it does not execute), **no UI reads it yet**
+  (`src/copilot/capabilities.js` is untouched), `unverified` is hand-set on the four comms operations that
+  have never met a live provider, and `degraded` is currently unused — it exists so a failing dependency has
+  an honest place to land. Design + limits: [`copilot/PHASE_B_CAPABILITY_REGISTRY.md`](copilot/PHASE_B_CAPABILITY_REGISTRY.md).
+
 ## 🖥️ 2026-11-02 — npm execution in the terminal: the three gaps the probe found (M36)
 
 The terminal request arrived with "report before implementing", so the previous step was a probe of the
