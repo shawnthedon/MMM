@@ -672,6 +672,59 @@ adds one server-side answer, and makes it impossible for it to drift quietly.
   have never met a live provider, and `degraded` is currently unused — it exists so a failing dependency has
   an honest place to land. Design + limits: [`copilot/PHASE_B_CAPABILITY_REGISTRY.md`](copilot/PHASE_B_CAPABILITY_REGISTRY.md).
 
+## ⚙️ 2026-11-03 — The dispatcher: Copilot that acts, and refuses out loud (Phase C)
+
+Phase B described 143 operations and executed none. Phase C adds the executor — and, because an executor is
+where a control plane either holds its rules or quietly drops them, most of the work is refusal paths.
+
+- **`apps/gateway/src/operationContracts.js`** — per-operation input contracts: route, path template, and the
+  exact fields that may reach the handler. Declared where a write needs a shape, derived for reads (0 or 1
+  capture group), and `null` — *not dispatchable* — for anything else. Unknown keys are **refused, not
+  dropped**, so `{ principal: 'owner' }` cannot look like it worked. Secret-bearing routes have no contract
+  on purpose.
+- **`apps/gateway/src/dispatcher.js`** — `describe()` / `execute()` / `catalogue()`. `execute()` checks, in
+  order: registered → service exists → state is `available` → the principal holds the permission → the
+  contract validates → confirmation, or an approval gate bound to `dispatch:<op>` **and its target**, decided
+  by someone else and spendable once → per-principal limit → the real handler, bounded by `timeoutMs` →
+  a structured result. Every attempt, executed or refused, writes one `dispatch.<op>` row on the existing
+  hash chain.
+- **Reuse, not a second system.** `invokeRoute()` finds the *same* route object the HTTP path uses, re-checks
+  that route's own `meta.permission`, and calls the same handler; opening an approval gate calls
+  `POST /api/v1/approvals` through the same seam, so the audit row, event and comms notice still happen.
+  Nothing is re-implemented; no second RBAC, no second approvals table.
+- **Seven states, as Phase B defined them.** Only `available` runs. `unconfigured`, `unverified`,
+  `degraded`, `blocked`, `demo` and `no-service` each stop an operation *by name*, with the probe's own
+  sentence. `degraded` is deliberately not runnable: unknown health is not "fine".
+- **Surface** — `GET /api/v1/dispatch` (what *this* principal may run, with fields and counts),
+  `POST /api/v1/dispatch`, and `POST /api/v1/copilot/actions/:messageId`. All three are listed in
+  `capabilities.UNEXPOSED` with a reason, so the Phase B drift check stays at zero.
+- **Copilot** — the system prompt now carries a brief generated per turn from the registry, with permission
+  and deployment state in **separate** groups (a model that merges them gives the wrong advice). A turn may
+  request exactly one operation with a trailing `<<<MMM-ACTION …>>>` marker; the gateway strips it, validates
+  it with `describe()` (never `execute()`), and stores the parameters **on the assistant message**. The
+  confirmation names only that message, so what was reviewed is what runs; proposals expire in 30 minutes and
+  are single-use. The report is a real metered `copilot-report` call — and when no model is configured, no
+  assistant turn is written at all; the dispatcher's result is returned as data with a note.
+- **Client** — `src/copilot/actions.js` + a panel `action` card: state, risk, target, fields, whether an
+  approval is needed, one button, and a result card built from the dispatcher's answer (HTTP status, trace
+  id, approval id). No optimistic "done" state exists in it.
+- **Migration** `016_dispatch.sql` adds `approvals.consumed_at` (a gate is spent once) and an index on
+  `(action, target, status)`.
+- Evidence: `npm run test:dispatch` — **36 passed** against a real gateway and a loopback model stub, over
+  HTTP as Owner, Admin, Reviewer, Operator and Observer: a real write with the row count to prove it; each
+  refusal (permission, registration, unconfigured, unverified, no-service) leaving the database untouched; a
+  denied gate unusable, an allowed gate spendable exactly once, a gate for another target refused; forged
+  `principal`/`role` claims ignored; the dispatcher refusing exactly what the route refuses; ≥15 audit rows
+  and a chain that still verifies; a Copilot proposal that executes nothing until confirmed, then reports the
+  service's own result; and a timeout/degraded/scubbing set that only a unit test can produce honestly.
+  `npm test` — **51 suites, 898 assertions, exit 0**; `npm run build` green.
+- Honest limits: **the raw routes still do not enforce the approval the registry declares** — only the
+  dispatcher does, and tightening `DELETE /teams/:id` would change the Teams screen, so that is a Phase D
+  decision; **contracts cover ~30 of 143 operations** and the rest say so by name; the model still gets no
+  tool results mid-turn (`degraded` has no live producer yet but its refusal path is tested); and the
+  built-in demo engine still answers when no model is configured, labelled as such, against local state only.
+  Design + limits: [`copilot/PHASE_C_DISPATCHER.md`](copilot/PHASE_C_DISPATCHER.md).
+
 ## 🖥️ 2026-11-02 — npm execution in the terminal: the three gaps the probe found (M36)
 
 The terminal request arrived with "report before implementing", so the previous step was a probe of the
