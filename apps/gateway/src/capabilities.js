@@ -1222,6 +1222,9 @@ export const UNEXPOSED = Object.freeze([
   { route: 'POST /api/v1/auth/password', reason: 'Session lifecycle: a password is typed by the person, never by Copilot.' },
   { route: 'GET /api/v1/auth/session', reason: 'Session lifecycle: the client reads its own session.' },
   { route: 'POST /api/v1/dev/seed', reason: 'Test helper that re-seeds the database. Not an operator capability.' },
+  { route: 'GET /api/v1/dispatch', reason: 'The dispatcher’s own view of the registry: it is how a capability is run, not one of them.' },
+  { route: 'POST /api/v1/dispatch', reason: 'The dispatcher’s entry point. Every operation it may run carries its own permission, checked inside the dispatcher.' },
+  { route: 'POST /api/v1/copilot/actions/*', reason: 'Confirms an action the Copilot prepared; it delegates to the dispatcher, which decides what may run.' },
 ]);
 
 /* =========================================================================================

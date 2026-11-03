@@ -248,6 +248,11 @@ export const api = {
   copilotSend: (body, opts = {}) => request('/api/v1/copilot/messages', { method: 'POST', body, timeoutMs: 90000, ...opts }),
   copilotClear: () => request('/api/v1/copilot', { method: 'DELETE' }),
   setCopilotModel: (body) => request('/api/v1/copilot/model', { method: 'PUT', body }),
+  // The dispatcher: the one way an operation runs. The client never claims a permission — the gateway
+  // reads it from the session and refuses by name when the role does not hold it.
+  dispatchCatalogue: () => request('/api/v1/dispatch'),
+  dispatch: (body, opts = {}) => request('/api/v1/dispatch', { method: 'POST', body, timeoutMs: 40000, ...opts }),
+  confirmCopilotAction: (messageId, body) => request(`/api/v1/copilot/actions/${encodeURIComponent(messageId)}`, { method: 'POST', body, timeoutMs: 60000 }),
 
   // Agent drafts: a definition that needs a person before it becomes an agent.
   draftList: () => request('/api/v1/copilot/drafts'),

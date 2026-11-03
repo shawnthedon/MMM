@@ -33,7 +33,7 @@ export const KNOWLEDGE = [
     body:
       'MMM is a mobile-first control plane for AI agent operations: agent profiles, teams, swarms, tasks, skills, MCP plugins, a model-routing catalogue, trust/governance, artifacts and an embedded Copilot.\n' +
       'It ships as an installable PWA (Vite build) and is designed to run against one self-hosted gateway process (Node HTTP + WebSocket) with SQLite storage and a filesystem artifact directory.\n' +
-      'Today the PWA renders seeded demo state from the browser; the gateway exists but the front end does not call it yet.',
+      'With a gateway configured (API mode) the app calls it for everything that matters: the session, the Copilot conversation, the capability catalogue and every dispatched operation. With no gateway configured it renders seeded state from the browser and labels it as demo — nothing it shows is an execution.',
     sources: [
       { label: 'README.md — product summary', ref: 'README.md' },
       { label: 'docs/DESIGN_SPEC.md §1 Executive Summary', ref: 'docs/DESIGN_SPEC.md' },
@@ -91,7 +91,7 @@ export const KNOWLEDGE = [
     sensitivity: 'public',
     body:
       'Ask — grounded explanations about the app, this screen, settings and behaviour.\n' +
-      'Operate — propose and run authorised app actions on the demo store (agents, tasks, swarms, approvals, theme, navigation).\n' +
+      'Operate — ask the gateway to perform an operation. The dispatcher checks the capability’s state, your permission and the parameters, the person confirms (or a second principal approves), and the result shown is the one the service returned.\n' +
       'Build — inspect agent/team/skill definitions and propose new agents from a reviewed template.\n' +
       'Knowledge — search the versioned, source-linked knowledge pack; shows verification status and freshness.\n' +
       'Training / Voice — no backend or verified engine exists, so these modes only report the blocker and run real local dataset checks.\n' +
@@ -152,7 +152,7 @@ export const KNOWLEDGE = [
     sensitivity: 'internal',
     body:
       'On first load the app seeds a fixture set (agents, swarms, tasks, approvals, files, events, provider catalogue). Nothing advances it: the 4.2 s simulation ticker was deleted in M27, so what you see is what is stored.\n' +
-      'Fixtures can be restored with `npm run seed -- --reset` (gateway) or by clearing the browser store. Nothing in the PWA is a live agent run today.\n' +
+      'Fixtures can be restored with `npm run seed -- --reset` (gateway) or by clearing the browser store. A dispatched operation is a real write on the gateway; there is still no agent runtime, so no agent “runs” in this build.\n' +
       'The Copilot panel labels this explicitly with a “Demo data” runtime chip and shows whether the gateway health endpoint answered.',
     sources: [
       { label: 'src/core.js — seed()', ref: 'src/core.js' },

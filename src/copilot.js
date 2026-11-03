@@ -37,3 +37,4 @@ export { searchKnowledge, getEntry, knowledgeStats, describeScreen, KNOWLEDGE, P
 export { loadMemory, memorySummary, listEpisodes, pushEpisode, clearMemory, exportMemory, redact } from './copilot/memory.js';
 export { getRuntime, probeGateway, runtimeLabel } from './copilot/runtime.js';
 export { capabilityList, getCapability, STATUS_LABEL } from './copilot/capabilities.js';
+export * as copilotActions from './copilot/actions.js';

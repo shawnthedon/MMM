@@ -109,7 +109,17 @@ export async function sendTurn({ text, route = '', clientId = '' } = {}) {
       if (out.body?.conversation?.id) state.conversationId = out.body.conversation.id;
       Object.assign(state, { at: Date.now(), busy: false, error: null });
       emit();
-      return { ok: true, user: out.body?.userMessage || null, reply: out.body?.reply || null, usage: out.body?.usage || null, duplicate: Boolean(out.body?.duplicate) };
+      return {
+        ok: true,
+        user: out.body?.userMessage || null,
+        reply: out.body?.reply || null,
+        usage: out.body?.usage || null,
+        duplicate: Boolean(out.body?.duplicate),
+        // A proposal is not an action: the gateway checked it against the registry and stored it, and the
+        // panel shows it with a confirmation the gateway will honour.
+        proposal: out.body?.proposal || null,
+        actions: out.body?.actions || null,
+      };
     })
     .catch((error) => {
       const cancelled = error instanceof ApiError && error.code === 'cancelled';

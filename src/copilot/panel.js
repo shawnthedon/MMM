@@ -15,6 +15,7 @@ import { STATUS_LABEL } from './capabilities.js';
 import { holoStageIn, copilotModeIn, copilotOut, fabPulse, motionEnabled, toastIn } from '../motion.js';
 import { sfx } from '../sound.js';
 import * as convo from './conversation.js';
+import * as actions from './actions.js';
 import * as drafts from './drafts.js';
 import * as plans from './plans.js';
 import * as scripts from './scripts.js';
@@ -656,6 +657,69 @@ function knowledgeCardHTML(card) {
   </div>`;
 }
 
+/**
+ * A proposal from the dispatcher. The card shows what the gateway said about the operation — its state, its
+ * risk, the fields it accepts, whether an approval is needed — and offers exactly one button. It never says
+ * "done": the result arrives as a separate card from the gateway's own answer.
+ */
+function actionCardHTML(card, msg) {
+  const invalid = card.validation && card.validation.ok === false;
+  const rows = [
+    ['Operation', card.operation],
+    ['State', card.stateLabel || card.state || '—'],
+    card.target ? ['Target', card.target] : null,
+    card.fields && card.fields.length ? ['Fields', card.fields.join(', ')] : null,
+  ].filter(Boolean);
+  const gate = card.approvalGate;
+  const result = card.result;
+  return `<div class="cp-card cp-proposal" data-risk="${esc(card.risk)}" data-action-card>
+    <div class="cp-card-head">
+      <span class="cp-card-title">${esc(card.title)}</span>
+      <span class="cp-badge ${card.risk === 'read-only' ? 'info' : 'warn'}">${esc(card.risk)}</span>
+    </div>
+    <div class="cp-card-body">${md(
+      card.reason ||
+        (card.executable
+          ? 'The gateway checked this operation against its registry. Nothing has run yet.'
+          : 'The gateway will not run this operation.')
+    )}</div>
+    <div class="cp-rows">
+      ${rows
+        .map(([k, v]) => `<div class="cp-row"><span class="k">${esc(k)}</span><span class="strong">${esc(v)}</span></div>`)
+        .join('')}
+    </div>
+    ${invalid ? `<div class="cp-warn">${esc(card.validation.message || 'The parameters did not validate on the gateway.')}</div>` : ''}
+    <div class="cp-meta-grid">
+      ${
+        card.effects && card.effects.requiresApproval
+          ? '<div><span class="k">Approval</span><span>A different principal must allow this before it runs.</span></div>'
+          : ''
+      }
+      ${
+        card.effects && card.effects.audit && card.effects.audit !== 'none'
+          ? '<div><span class="k">Audit</span><span>Recorded on the gateway’s hash-chained audit log.</span></div>'
+          : ''
+      }
+    </div>
+    ${
+      result
+        ? `<div class="cp-card-foot"><span class="cp-chip ghost">${result.executed ? 'Ran' : 'Not run'}${result.traceId ? ` · ${esc(result.traceId)}` : ''}</span></div>`
+        : gate
+          ? `<div class="cp-warn">Gate <strong>${esc(gate.id)}</strong> is open for <code>${esc(gate.target || card.target || card.operation)}</code>. It needs another principal’s decision; when they allow it, run it with that gate.</div>
+             <div class="cp-card-foot">
+               <button class="btn sm primary" data-cp="runaction" data-msg="${msg.id}" data-approval="${esc(gate.id)}">Run with approval</button>
+             </div>`
+          : card.runnable
+            ? `<div class="cp-card-foot">
+                 <button class="btn sm" data-cp="dismissaction" data-msg="${msg.id}">Dismiss</button>
+                 <button class="btn sm primary" data-cp="runaction" data-msg="${msg.id}">${esc(card.confirmLabel || 'Confirm & run')}</button>
+               </div>`
+            : `<div class="cp-card-foot"><span class="cp-badge warn">not runnable</span><span class="cp-note-inline">Nothing was executed.</span></div>`
+    }
+    <div class="cp-expiry">The parameters are the ones the gateway stored · the result comes from the service</div>
+  </div>`;
+}
+
 function proposalCardHTML(card, msg) {
   const expired = proposalExpired(card);
   const done = card.resolved;
@@ -1031,6 +1095,7 @@ function cardHTML(card, msg) {
     case 'answer': return answerCardHTML(card);
     case 'knowledge': return knowledgeCardHTML(card);
     case 'proposal': return proposalCardHTML(card, msg);
+    case 'action': return actionCardHTML(card, msg);
     case 'result': return resultCardHTML(card);
     case 'diagnostic': return diagnosticCardHTML(card);
     case 'capability': return capabilityCardHTML(card);
@@ -1301,6 +1366,11 @@ async function sendLive(raw) {
         if (idx >= 0) session.history[idx] = { ...convo.toPanelMessage(out.user), mode: session.mode };
       }
       pushMessage(msg);
+      // A proposal the gateway checked and stored. It is offered as a confirmation, never as a result.
+      if (out.proposal) {
+        const actionCard = actions.cardFor(out.proposal, { mode: session.mode });
+        if (actionCard) pushMessage({ role: 'copilot', text: '', card: actionCard, mode: session.mode, live: true });
+      }
     }
   } else if (out.cancelled) {
     pushMessage({ role: 'copilot', text: 'Stopped. The request was cancelled; nothing further was generated.', mode: session.mode, live: true });
@@ -1736,6 +1806,41 @@ function cancel(msgId) {
   paint();
 }
 
+/**
+ * Run a prepared action. The card holds the gateway's own message id; the parameters never leave the
+ * server, so this handler cannot change what will happen — only whether it happens now.
+ */
+async function runAction(msgId, approvalId = '') {
+  const msg = findMessage(msgId);
+  const card = msg?.card;
+  if (!card || card.type !== 'action' || card.result || card.busy) return;
+  if (!actions.available()) {
+    pushMessage({ role: 'copilot', text: 'No gateway is connected, so this cannot run.', mode: session.mode, failed: true });
+    paint();
+    return;
+  }
+  card.busy = true;
+  paint();
+  const out = await actions.run(card, { approvalId: approvalId || card.approvalGate?.id || null });
+  card.busy = false;
+  if (out.code === 'approval-required' && out.approval) {
+    card.approvalGate = out.approval;
+    pushMessage({ role: 'copilot', text: out.message, mode: session.mode, live: true });
+    paint();
+    return;
+  }
+  if (out.code === 'confirmation-required' && card.approvalGate) {
+    pushMessage({ role: 'copilot', text: out.message, mode: session.mode, live: true });
+    paint();
+    return;
+  }
+  card.result = out;
+  pushMessage({ role: 'copilot', text: '', card: actions.resultCard(card, out), mode: session.mode, live: true });
+  if (out.reply) pushMessage({ ...convo.toPanelMessage(out.reply), mode: session.mode });
+  paint();
+  import('../main.js').then((m) => m.rerender()).catch(() => {});
+}
+
 function toggleEdit(msgId) {
   const msg = findMessage(msgId);
   if (!msg?.card) return;
@@ -2096,6 +2201,18 @@ function onClick(e) {
     case 'confirm':
       confirm(msgId);
       break;
+    case 'runaction':
+      runAction(msgId, t.dataset.approval || '');
+      break;
+    case 'dismissaction': {
+      const m = findMessage(msgId);
+      if (m?.card) {
+        m.card.result = { executed: false, message: 'dismissed before running' };
+        pushMessage({ role: 'copilot', text: 'Dismissed. Nothing was executed.', mode: session.mode, live: true });
+        paint();
+      }
+      break;
+    }
     case 'cancel':
       cancel(msgId);
       break;

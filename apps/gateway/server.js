@@ -23,6 +23,7 @@ import * as swarms from './src/swarms.js';
 import * as models from './src/models.js';
 import * as copilot from './src/copilot.js';
 import * as capabilities from './src/capabilities.js';
+import { createDispatcher } from './src/dispatcher.js';
 import * as agentDrafts from './src/agentDrafts.js';
 import * as swarmPlanDrafts from './src/swarmPlanDrafts.js';
 import * as browserScriptDrafts from './src/browserScriptDrafts.js';
@@ -862,6 +863,7 @@ route('POST', /^\/api\/v1\/copilot\/messages$/, { permission: 'copilot:write', m
   try {
     const out = await copilot.send({
       principalId: ctx.principal.id,
+      principal: ctx.principal,
       via: ctx.principal.via,
       text: ctx.body?.text,
       clientId: ctx.body?.clientId,
@@ -871,6 +873,44 @@ route('POST', /^\/api\/v1\/copilot\/messages$/, { permission: 'copilot:write', m
       broadcast('copilot', { type: 'copilot.message', entity: out.reply.id, callId: out.reply.modelCallId, owner: ctx.principal.id });
     }
     return { code: 200, body: out };
+  } catch (error) {
+    return copilotFail(error);
+  }
+});
+
+/**
+ * Confirm one action the Copilot prepared. The parameters are read from the stored assistant turn — this
+ * request only names it and says yes — and the dispatcher re-checks state, permission and contract before
+ * anything runs. `approvalId` is passed through for operations that need a second person's decision.
+ */
+route('POST', /^\/api\/v1\/copilot\/actions\/([\w-]+)$/, { permission: 'copilot:write', mutating: true }, async (ctx) => {
+  const limit = auth.rateLimit(`copilot:action:${ctx.principal.id}`, { limit: 30, windowMs: 60 * 1000 });
+  if (!limit.allowed) return { code: 429, body: { error: 'too many confirmed actions; wait a moment' }, headers: { 'Retry-After': String(limit.retryAfter) } };
+  try {
+    const out = await copilot.executeAction({
+      principal: ctx.principal,
+      messageId: ctx.match[1],
+      confirm: ctx.body?.confirm === true,
+      approvalId: typeof ctx.body?.approvalId === 'string' ? ctx.body.approvalId : null,
+      via: ctx.principal.via,
+    });
+    if (out.result?.executed) {
+      broadcast('copilot', { type: 'copilot.action', entity: out.messageId, operation: out.operation, owner: ctx.principal.id });
+      broadcast('system', { type: 'dispatch.executed', entity: out.operation, traceId: out.result.traceId, owner: ctx.principal.id });
+    }
+    // The dispatcher's own result is the body, with the report attached — the panel shows the result
+    // even when no model was available to narrate it.
+    return {
+      code: dispatchOut(out.result).code,
+      body: {
+        ...out.result,
+        reply: out.reply,
+        reported: out.reported,
+        reportNote: out.reportNote,
+        messageId: out.messageId,
+        operation: out.operation,
+      },
+    };
   } catch (error) {
     return copilotFail(error);
   }
@@ -1930,6 +1970,89 @@ route('GET', /^\/api\/v1\/capabilities\/([\w.-]+)$/, { permission: 'read' }, asy
   return { code: 200, body: found };
 });
 
+/* ---------- the dispatcher: the one way an operation actually runs ----------
+ * `POST /api/v1/dispatch` is the only endpoint that turns a request into a service call, and it does not
+ * have a permission of its own: every operation it may run is checked against that operation's permission
+ * inside the dispatcher, server-side, from the session principal. The route's floor is `read` — the
+ * lowest permission any signed-in principal already holds — so a role that lacks `agent:write` reaches
+ * the dispatcher and is refused there, by name, instead of being told the endpoint does not exist.
+ */
+const DISPATCH_STATUS = {
+  'unknown-operation': 400,
+  'no-contract': 400,
+  'invalid-params': 400,
+  'invalid-approval': 400,
+  forbidden: 403,
+  'confirmation-required': 409,
+  'approval-required': 409,
+  'approval-not-allowed': 409,
+  'approval-consumed': 409,
+  unconfigured: 424,
+  unverified: 424,
+  degraded: 424,
+  blocked: 424,
+  'no-service': 424,
+  'rate-limited': 429,
+  'not-found': 404,
+  'route-mismatch': 409,
+  'no-route': 502,
+  'service-refused': 502,
+  'service-error': 502,
+  'dispatch-error': 502,
+  'approval-forbidden': 403,
+  'approval-unavailable': 424,
+  'dispatcher-error': 500,
+  timeout: 504,
+};
+
+const dispatchOut = (out) => ({
+  code: out.ok ? 200 : DISPATCH_STATUS[out.code] || 502,
+  body: out,
+});
+
+route('GET', /^\/api\/v1\/dispatch$/, { permission: 'read' }, async (ctx) => {
+  if (ctx.query.state || ctx.query.module || ctx.query.dispatchable) {
+    const all = await dispatch.catalogue(ctx.principal);
+    const want = ctx.query.dispatchable === 'true';
+    return {
+      code: 200,
+      body: {
+        ...all,
+        operations: all.operations.filter(
+          (o) =>
+            (!ctx.query.state || o.state === ctx.query.state) &&
+            (!ctx.query.module || o.module === ctx.query.module) &&
+            (!want || o.dispatchable)
+        ),
+      },
+    };
+  }
+  return { code: 200, body: await dispatch.catalogue(ctx.principal) };
+});
+
+route('POST', /^\/api\/v1\/dispatch$/, { permission: 'read', mutating: true }, async (ctx) => {
+  const limit = auth.rateLimit(`dispatch:${ctx.principal.id}`, { limit: 60, windowMs: 60 * 1000 });
+  if (!limit.allowed) {
+    return { code: 429, body: { error: 'too many dispatched operations; wait a moment', code: 'rate-limited' }, headers: { 'Retry-After': String(limit.retryAfter) } };
+  }
+  try {
+    const out = await dispatch.execute({
+      operationId: ctx.body?.operation,
+      params: ctx.body?.params === undefined ? {} : ctx.body.params,
+      principal: ctx.principal,
+      confirmed: ctx.body?.confirm === true,
+      approvalId: typeof ctx.body?.approvalId === 'string' && ctx.body.approvalId ? ctx.body.approvalId : null,
+      dryRun: ctx.body?.dryRun === true,
+      reason: typeof ctx.body?.reason === 'string' ? ctx.body.reason.slice(0, 200) : '',
+    });
+    if (out.executed) broadcast('system', { type: 'dispatch.executed', entity: out.operationId, traceId: out.traceId, owner: ctx.principal.id });
+    return dispatchOut(out);
+  } catch (error) {
+    // A dispatcher bug is a gateway bug: say so without leaking a stack or a secret.
+    return { code: 500, body: { error: 'the dispatcher failed before completing', code: 'dispatcher-error', traceId: null } };
+  }
+});
+
 /* =========================================================================================
  * Self-modification — the improvement cycle, its gates and its evidence
  * =======================================================================================*/
@@ -2253,6 +2376,150 @@ async function handleRequest(req, res) {
  * over here, and `GET /capabilities` reports any drift (a route nobody claimed, a permission that changed)
  * instead of hiding it. scripts/capabilities-gateway-test.mjs fails the build on drift. */
 capabilities.attachRoutes(routes);
+
+/* =========================================================================================
+ * Dispatcher wiring
+ *
+ * `invokeRoute` is the whole reason this is safe to call "one implementation": it finds the *same* route
+ * object the HTTP handler uses, re-checks that route's own permission against the session principal, and
+ * calls the same handler with the same context. Nothing is re-implemented, no service is reached twice,
+ * and the permission check that guards the endpoint also guards the dispatch.
+ * =======================================================================================*/
+
+/** A response object that refuses to be written to, so a streaming route can never be dispatched. */
+const NO_STREAM = {
+  headersSent: false,
+  writableEnded: false,
+  writeHead() {
+    throw Object.assign(new Error('a streaming route cannot be dispatched'), { code: 'not-dispatchable' });
+  },
+  setHeader() {},
+  getHeader() {
+    return undefined;
+  },
+  write() {
+    throw Object.assign(new Error('a streaming route cannot be dispatched'), { code: 'not-dispatchable' });
+  },
+  end() {},
+  flushHeaders() {},
+};
+
+function invokeRoute({ operation, method, path, body = {}, query = {}, principal, requestId }) {
+  const found = routes.find((r) => r.method === method && r.pattern.test(path));
+  if (!found) {
+    return { code: 404, body: { error: `no route serves ${method} ${path}`, code: 'no-route' } };
+  }
+  // The registry says which route implements the operation; a contract that points somewhere else is a
+  // declaration bug, and the dispatcher must not quietly run a different endpoint.
+  if (operation && !operation.routes.includes(capabilities.routeKey(method, found.pattern.source))) {
+    return { code: 409, body: { error: `${operation.id} is not served by ${method} ${path}`, code: 'route-mismatch' } };
+  }
+  if (found.meta.rawBody || found.meta.binary) {
+    return { code: 501, body: { error: `${method} ${path} takes a raw body and cannot be dispatched`, code: 'not-dispatchable' } };
+  }
+  if (found.meta.permission && !can(principal, found.meta.permission)) {
+    return {
+      code: 403,
+      body: { error: `role "${principal?.role}" lacks permission "${found.meta.permission}"`, code: 'forbidden' },
+    };
+  }
+  const match = path.match(found.pattern) || [];
+  return Promise.resolve(
+    found.handler({
+      req: { method, url: path, headers: {}, socket: {} },
+      res: NO_STREAM,
+      match,
+      query,
+      body,
+      rawBody: '',
+      bytes: null,
+      principal,
+      requestId,
+    })
+  );
+}
+
+/* =========================================================================================
+ * Dispatcher dependencies
+ * =======================================================================================*/
+
+/**
+ * A capability's state is a probe of the module that owns the fact, and five dispatches in a row should not
+ * ask the same three questions five times. The cache is one second long and keyed by principal, so a
+ * refusal is never stale by more than that, and nothing about the cache can widen a permission.
+ */
+const catalogueCache = new Map();
+const CATALOGUE_TTL_MS = 1000;
+
+async function stateFor(operationId, principal) {
+  const key = `${principal?.id || 'anonymous'}|${principal?.role || ''}|${Array.isArray(principal?.scopes) ? principal.scopes.join(',') : ''}`;
+  const hit = catalogueCache.get(key);
+  let byId = hit && Date.now() - hit.at < CATALOGUE_TTL_MS ? hit.byId : null;
+  if (!byId) {
+    const all = await capabilities.catalogue(principal);
+    byId = new Map(all.operations.map((o) => [o.id, o]));
+    catalogueCache.set(key, { at: Date.now(), byId });
+    if (catalogueCache.size > 200) {
+      for (const [k, v] of catalogueCache) if (Date.now() - v.at > CATALOGUE_TTL_MS) catalogueCache.delete(k);
+    }
+  }
+  const found = byId.get(operationId);
+  return found
+    ? { state: found.state, stateLabel: found.stateLabel, reason: found.reason, permission: found.permission, allowed: found.allowed }
+    : { state: 'no-service', stateLabel: 'No service', reason: `${operationId} is not in the registry.` };
+}
+
+/**
+ * The approvals adapter reuses the approvals table *and* the approvals route: opening a gate calls
+ * `POST /api/v1/approvals` through `invokeRoute`, so the same handler records the audit row, writes the
+ * event and fans out the notice. It does not insert a row of its own.
+ */
+const dispatchApprovals = {
+  find({ id, action, target, status } = {}) {
+    if (id) return db.prepare('SELECT * FROM approvals WHERE id=?').get(id) || null;
+    if (action) {
+      return (
+        db.prepare('SELECT * FROM approvals WHERE action=? AND target=? AND status=? AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1')
+          .get(action, target || '', status || 'pending') || null
+      );
+    }
+    return null;
+  },
+  async open({ action, target, risk, principal, evidence, requestedBy }) {
+    const out = await invokeRoute({
+      method: 'POST',
+      path: '/api/v1/approvals',
+      body: { action, target, risk, principal, evidence },
+      query: {},
+      principal: requestedBy,
+      requestId: 'dispatch-open-gate',
+    });
+    if (!out || Number(out.code) >= 400 || !out.body?.id) {
+      throw Object.assign(new Error(out?.body?.error || 'the approval gate could not be opened'), {
+        code: out?.code === 403 ? 'approval-forbidden' : 'approval-unavailable',
+      });
+    }
+    return out.body;
+  },
+  consume(id, principalId) {
+    const info = db
+      .prepare('UPDATE approvals SET consumed_at=? WHERE id=? AND consumed_at IS NULL')
+      .run(Date.now(), id);
+    return Number(info.changes) > 0;
+  },
+};
+
+const dispatch = createDispatcher({
+  operations: capabilities.OPERATIONS,
+  stateOf: stateFor,
+  invokeRoute,
+  approvals: dispatchApprovals,
+  audit,
+  logEvent,
+  rateLimit: auth.rateLimit,
+});
+copilot.setDispatcher(dispatch);
+
 
 /* =========================================================================================
  * Server lifecycle
