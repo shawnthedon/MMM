@@ -22,6 +22,7 @@ import * as teams from './src/teams.js';
 import * as swarms from './src/swarms.js';
 import * as models from './src/models.js';
 import * as copilot from './src/copilot.js';
+import * as capabilities from './src/capabilities.js';
 import * as agentDrafts from './src/agentDrafts.js';
 import * as swarmPlanDrafts from './src/swarmPlanDrafts.js';
 import * as browserScriptDrafts from './src/browserScriptDrafts.js';
@@ -1913,6 +1914,22 @@ route('GET', /^\/api\/v1\/audit$/, { permission: 'audit:read' }, (ctx) => {
   };
 });
 
+/* ---------- capability catalogue: the one answer to "what can Copilot do here?" ----------
+ * Every signed-in principal reads the same operations; what changes with the role is `allowed` and, for an
+ * operation this deployment cannot serve yet, a sentence saying what is missing. State is computed from the
+ * live route table and from real probes of the modules that own each fact, so it cannot drift silently.
+ */
+route('GET', /^\/api\/v1\/capabilities$/, { permission: 'read' }, async (ctx) => ({
+  code: 200,
+  body: await capabilities.catalogue(ctx.principal),
+}));
+
+route('GET', /^\/api\/v1\/capabilities\/([\w.-]+)$/, { permission: 'read' }, async (ctx) => {
+  const found = await capabilities.one(ctx.match[1], ctx.principal);
+  if (!found) return { code: 404, body: { error: `no capability “${ctx.match[1]}”`, hint: 'GET /api/v1/capabilities' } };
+  return { code: 200, body: found };
+});
+
 /* =========================================================================================
  * Self-modification — the improvement cycle, its gates and its evidence
  * =======================================================================================*/
@@ -2231,6 +2248,11 @@ async function handleRequest(req, res) {
     json(res, 500, { error: 'internal error', requestId: rid, detail: process.env.MMM_DEBUG === '1' ? err.message : undefined });
   }
 }
+
+/* The catalogue is hand-declared, so it is checked against the table it describes: hand the live route list
+ * over here, and `GET /capabilities` reports any drift (a route nobody claimed, a permission that changed)
+ * instead of hiding it. scripts/capabilities-gateway-test.mjs fails the build on drift. */
+capabilities.attachRoutes(routes);
 
 /* =========================================================================================
  * Server lifecycle
