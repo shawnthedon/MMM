@@ -27,7 +27,7 @@ export function seed({ reset = false } = {}) {
         (id,name,role,description,goal,framework,framework_config,model,fallback,status,trust,autonomy,success_rate,cost_today,runs,last_active,tools,skills,prompt,memory,created_by,team_id,team_position,responsibilities,approval_gates)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
         .run(a.id, a.name, a.role, a.description || '', a.goal || '', a.framework, '{}', a.model, a.fallback, 'idle', a.trust, a.autonomy,
-          0, 0, 0, Date.now(), JSON.stringify(a.tools), JSON.stringify(a.skills),
+          0, 0, 0, 0, JSON.stringify(a.tools), JSON.stringify(a.skills),
           a.prompt, '{}', 'seed', a.teamId ?? null, a.teamPosition ?? 0,
           JSON.stringify(a.responsibilities || []), JSON.stringify(a.approvalGates || {}));
     }
