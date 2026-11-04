@@ -750,6 +750,17 @@ export async function updateAgent(id, patch) {
   return row;
 }
 
+export async function runAgent(id, objective) {
+  const out = await api.runAgent(id, objective);
+  scheduleRefresh(150);
+  return out.body;
+}
+
+export async function getAgentRuns(id, limit = 20) {
+  const out = await api.agentRuns(id, limit);
+  return out.body.runs || [];
+}
+
 /* ---------- teams ----------
  * Membership is a column on the agent row, so a member change is an agent write. These helpers exist
  * so callers never build a second, client-side membership list.
