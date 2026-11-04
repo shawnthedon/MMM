@@ -1095,3 +1095,19 @@ re-run at activation so a draft edited after approval cannot slip through on a s
   cancellation exists, and the card says so. Setup findings do not block submission (the approval is
   about the definition; the provider key is a workspace fact). No streaming, no regeneration. Swarm-plan
   drafts, Agent Browser JSON and open-source voice are units 3–5 and are not built.
+
+### Follow-up the same day: the feature was shipped and invisible
+
+Two navigation defects, both fixed in `src/shell.js` and `src/files.js`:
+
+- the module tile labelled **Files** routed to `artifacts` (the prototype's sample screen), and `files` was
+  not in the grid at all — so the manager was reachable only by URL or from Settings, and tapping “Files”
+  showed seeded rows and a fabricated “248 MB used”. **Files now opens the file manager**, and the old
+  screen is relabelled “Sample artifacts” and moved out of the grid.
+- the no-gateway state was a single banner that hid the panel's shape. It now renders its three tabs and a
+  four-step explanation with a button to Account & Access — the screen is visible before a backend is, and
+  still draws no file it has not read.
+
+The UI suite gained the assertion that would have caught this: a tile labelled *Files* must exist, must
+point at `files`, and nothing else may claim that label. It also learned that `.sheet` elements accumulate,
+so reading the first one after a second sheet opens returns a closed menu — the helper now reads the last.
