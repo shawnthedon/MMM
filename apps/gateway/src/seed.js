@@ -10,7 +10,7 @@ export function seed({ reset = false } = {}) {
   if (reset) {
     // Identity and credential tables are deliberately excluded: re-seeding demo content must
     // never delete the workspace owner, active sessions, API tokens, or the lockout history.
-    const tables = ['audit_log', 'jobs', 'files', 'messages', 'threads', 'model_policies', 'providers',
+    const tables = ['audit_log', 'agent_runs', 'jobs', 'files', 'messages', 'threads', 'model_policies', 'providers',
       'plugins', 'skills', 'events', 'approvals', 'tasks', 'swarms', 'teams', 'agents'];
     db.transaction(() => { for (const t of tables) db.prepare(`DELETE FROM ${t}`).run(); })();
   }
@@ -26,9 +26,9 @@ export function seed({ reset = false } = {}) {
       db.prepare(`INSERT OR REPLACE INTO agents
         (id,name,role,description,goal,framework,framework_config,model,fallback,status,trust,autonomy,success_rate,cost_today,runs,last_active,tools,skills,prompt,memory,created_by,team_id,team_position,responsibilities,approval_gates)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-        .run(a.id, a.name, a.role, a.description || '', a.goal || '', a.framework, '{}', a.model, a.fallback, a.status, a.trust, a.autonomy,
-          a.successRate, a.costToday, a.runs, a.lastActive, JSON.stringify(a.tools), JSON.stringify(a.skills),
-          a.prompt, JSON.stringify(a.memory), 'seed', a.teamId ?? null, a.teamPosition ?? 0,
+        .run(a.id, a.name, a.role, a.description || '', a.goal || '', a.framework, '{}', a.model, a.fallback, 'idle', a.trust, a.autonomy,
+          0, 0, 0, Date.now(), JSON.stringify(a.tools), JSON.stringify(a.skills),
+          a.prompt, '{}', 'seed', a.teamId ?? null, a.teamPosition ?? 0,
           JSON.stringify(a.responsibilities || []), JSON.stringify(a.approvalGates || {}));
     }
     counts.agents = j('agents.json').length;
