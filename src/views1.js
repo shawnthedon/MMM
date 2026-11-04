@@ -7,7 +7,7 @@ import {
 import { openSheet, closeAllSheets, toast, confirmModal, on, actions } from './shell.js';
 import { sourceTagHTML, sourceBannerHTML } from './sourceui.js';
 import {
-  isLive, getStatus, createAgent, updateAgent, createTask, updateTask, deleteAgent,
+  isLive, getStatus, createAgent, updateAgent, createTask, updateTask, deleteAgent, runAgent,
   createSwarmPlan, updateSwarmPlan, setSwarmPlanStatus, deleteSwarmPlan, getSwarmsRuntime,
 } from './datastore.js';
 import { isApiMode } from './api.js';
@@ -1158,31 +1158,19 @@ on('new-task', () => taskCreateSheet());
 on('toggle-agent', async (el, ds) => {
   const a = getAgent(ds.id);
   if (!a) return;
-  const next = a.status === 'running' ? 'paused' : 'running';
-  if (isLive('agents')) {
-    if (permissionDenied('agent:write')) {
-      toast('Your role cannot change agent state on the gateway', 'bad');
-      return;
-    }
-    el?.setAttribute('disabled', 'disabled');
-    try {
-      const row = await updateAgent(ds.id, { status: next });
-      toast(`${row.name} is now ${row.status} on the gateway`, 'ok');
-    } catch (err) {
-      toast(`Gateway refused: ${esc(err.message)}`, 'bad');
-    }
-    import('./main.js').then((m) => m.rerender());
+  if (!isApiMode() || !isLive('agents')) {
+    toast('Connect and sign in to a live MMM gateway before running agents. Demo mode cannot execute agents.', 'bad');
     return;
   }
-  setState((s) => {
-    const x = s.agents.find((y) => y.id === ds.id);
-    if (x) {
-      x.status = next;
-      x.lastActive = now();
-      logEvent('agent', `${x.name} ${x.status}`);
-    }
-  }, 'toggle-agent');
-  toast('Agent state updated', 'ok');
+  if (permissionDenied('agent:write')) { toast('Your role cannot run agents', 'bad'); return; }
+  if (['queued','running'].includes(a.status)) { toast(`${a.name} already has an active run.`); return; }
+  el?.setAttribute('disabled', 'disabled');
+  try {
+    const result = await runAgent(a.id, a.goal || a.role || `Work as ${a.name} and provide a useful result.`);
+    toast(`${a.name}: run queued`, 'ok');
+  } catch (err) {
+    toast(`Run refused: ${esc(err.message)}`, 'bad');
+  }
   import('./main.js').then((m) => m.rerender());
 });
 
@@ -1192,33 +1180,22 @@ on('toggle-agent', async (el, ds) => {
 async function setAgentState(id, status, source) {
   const a = getAgent(id);
   if (!a) return;
-  if (status === a.status) {
-    toast(`${a.name} is already ${status}`, '');
+  if (status === 'paused') {
+    toast('Run cancellation is not wired yet. This agent has not been stopped.', 'bad');
     return;
   }
-  if (isLive('agents')) {
-    if (permissionDenied('agent:write')) {
-      toast('Your role cannot change agent state on the gateway', 'bad');
-      return;
-    }
-    try {
-      const row = await updateAgent(id, { status });
-      toast(`${row.name} is now ${row.status} on the gateway · ${source}`, 'ok');
-    } catch (err) {
-      toast(`Gateway refused: ${esc(err.message)}`, 'bad');
-    }
-    import('./main.js').then((m) => m.rerender());
+  if (!isApiMode() || !isLive('agents')) {
+    toast('Connect and sign in to a live MMM gateway before running agents.', 'bad');
     return;
   }
-  setState((st) => {
-    const row = st.agents.find((x) => x.id === id);
-    if (row) {
-      row.status = status;
-      row.lastActive = now();
-      logEvent('agent', `${row.name} ${status} · ${source}`);
-    }
-  }, `agent-${status}`);
-  toast(`${a.name} ${status === 'running' ? 'started' : 'stopped'}`, status === 'running' ? 'ok' : '');
+  if (permissionDenied('agent:write')) { toast('Your role cannot run agents', 'bad'); return; }
+  if (['queued','running'].includes(a.status)) { toast(`${a.name} already has an active run.`); return; }
+  try {
+    await runAgent(id, a.goal || a.role || `Work as ${a.name} and provide a useful result.`);
+    toast(`${a.name}: run queued · ${source}`, 'ok');
+  } catch (err) {
+    toast(`Run refused: ${esc(err.message)}`, 'bad');
+  }
   import('./main.js').then((m) => m.rerender());
 }
 
