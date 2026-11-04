@@ -288,7 +288,7 @@ await check('with no gateway the panel says there is no draft route rather than 
   await sleep(120);
   const st = panel.copilotState();
   eq(st.source, 'local', 'the built-in engine answers');
-  eq(st.gatewayState, 'demo', 'and there is no gateway');
+  eq(st.gatewayState, 'no-gateway', 'and there is no gateway');
   eq(card(), null, 'no draft card exists');
   await panel.closeCopilot();
 });

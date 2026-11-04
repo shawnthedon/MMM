@@ -173,7 +173,8 @@ await check('consequential action needs two confirmations and records evidence',
   await sleep(30);
   p = panelEl();
   if (!p.querySelector('.cp-result[data-status="ok"]')) throw new Error('no success result card');
-  if (!p.textContent.includes('Simulated runtime')) throw new Error('simulated runtime not disclosed');
+  // Provenance is stated from what ran, not from the risk label: this card wrote the demo store.
+  if (!/Demo store only/.test(p.textContent)) throw new Error('demo-store provenance not disclosed');
   const ep = copilot.listEpisodes(1)[0];
   if (!ep || ep.outcome !== 'ok') throw new Error('episodic evidence not recorded');
   if (!ep.evidence.length) throw new Error('episode has no evidence steps');
@@ -257,21 +258,23 @@ await check('escape closes the panel and memory redacts secrets', () => {
   if (!raw.includes('[redacted]')) throw new Error('redaction marker missing');
 });
 
-await check('legacy copilotSay action cards still execute', () => {
+await check('a legacy copilotSay action card can no longer claim an execution', () => {
   copilot.resetCopilotSession();
   copilot.openCopilot();
   let ran = false;
-  copilot.copilotSay('legacy card check', {
+  const returned = copilot.copilotSay('legacy card check', {
     title: 'LEGACY ACTION',
     risk: 'low',
     rows: [['Name', 'LegacyBot']],
     confirm: 'Run legacy',
     run: () => { ran = true; },
   });
-  const btn = panelEl().querySelector('[data-cp="confirm"]');
-  if (!btn) throw new Error('legacy confirm button not rendered');
-  btn.click();
-  if (!ran) throw new Error('legacy run() did not execute');
+  // The path that reported "executed" without asking a service is gone: no card, no button, no run().
+  if (returned !== null) throw new Error('copilotSay still returns an executable card');
+  if (panelEl().querySelector('[data-cp="confirm"]')) throw new Error('a confirm button was rendered for a legacy card');
+  if (ran) throw new Error('a legacy run() callback was executed');
+  const says = panelEl().textContent || '';
+  if (!/was not attached or run/.test(says)) throw new Error('the refusal was not stated in the transcript');
 });
 
 await check('gateway probe reports a truthful status', async () => {

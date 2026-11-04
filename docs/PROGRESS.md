@@ -726,6 +726,57 @@ where a control plane either holds its rules or quietly drops them, most of the 
   built-in demo engine still answers when no model is configured, labelled as such, against local state only.
   Design + limits: [`copilot/PHASE_C_DISPATCHER.md`](copilot/PHASE_C_DISPATCHER.md).
 
+## 🔍 2026-11-04 — The audit that says what Copilot actually does (initiative, unit 1)
+
+The Phase C report closed with an honest limit: *the raw routes still do not enforce the approval the
+registry declares*. This initiative starts by measuring that class of gap everywhere, before writing
+code — because a control plane that is mostly right is a control plane you cannot reason about.
+
+- **The audit** ([`copilot/COPILOT_FUNCTIONAL_AUDIT.md`](copilot/COPILOT_FUNCTIONAL_AUDIT.md)) is
+  read out of the running code, not out of previous reports: 143 operations, 68 with a contract, 75
+  without (66 route-backed, 9 `no-service`), 19 declared `approval`, and `npm test` at **898 PASS /
+  0 FAIL** as the baseline it must not fall below.
+- **The finding that matters most:** **18 of those 19 approval-declared operations are not gated at the
+  route** — `DELETE /api/v1/agents/:id` with `agent:write` deletes in one request, with no second person
+  and no single-use spend. And the discrepancy runs both ways: four routes (`copilot.drafts|plans|scripts
+  .activate`, `terminal.exec`) enforce a gate the registry declares as `none`, so `confirmation` is not
+  authoritative today in either direction. Tracked as D2a/D2b in the plan, with the design constraint
+  recorded up front: `approvals.principal` is a display *name* accepted from the request body, so a
+  route-level gate built on it would be satisfied by a name the requester typed.
+- **Two more fabricated successes, both removed in unit 2:** the legacy `copilotSay` action card called a
+  screen closure and then *reported* `executed`; and `runProposal` turned a handler that returned
+  `undefined` into `{ status: 'ok', summary: 'Action completed.' }`.
+- **`approvals.expires_at` and `policy_id` exist in the schema and are never read or written** — a gate
+  never expires. Recorded for unit 4 (P5) rather than patched in passing.
+
+## 🧾 2026-11-04 — No card may report a result it did not receive (initiative, unit 2 / D1)
+
+- **The legacy card is gone.** `copilotSay(text, card)` no longer builds an executable closure: the
+  second argument still reaches the function (callers keep working) and the reply says the card was not
+  attached or run, because that path reported success without asking any service. `scripts/smoke.mjs`
+  now asserts the opposite of what it used to assert — no button, no `run()`, and the refusal visible in
+  the transcript.
+- **A missing result is a failure.** `runProposal` no longer substitutes "Action completed." for a
+  handler that returns nothing; it reports `failed` with "no result, so nothing was confirmed".
+- **Provenance is what ran, not how risky it looked.** The result card used to set `simulated: card.risk
+  === 'consequential'`, so a real gateway write was labelled *"Simulated runtime — no gateway call"* and a
+  pure demo-store write was labelled nothing at all. Each handler now declares `provenance: 'gateway' |
+  'demo-store'`, and the card renders the matching sentence — or, for a success that names no origin,
+  "No service confirmed this."
+- **`demo` was three different facts.** With no gateway conversation, `gatewayState` was `'demo'` and the
+  notice was the empty string — the one state that most deployments start in had no explanation at all.
+  It is now `'no-gateway'`, with its own notice ("Answers come from the built-in knowledge engine, no
+  model is called…"), `'unready'` keeps meaning *a gateway with no provider key*, and the holographic
+  empty state no longer disappears just because a status notice is above it.
+- Evidence: `npm run test:honesty` — **16 passed** (4 new checks: no card reports an unverified success;
+  `runProposal` has no success fallback; provenance is not derived from risk; `no-gateway` is its own
+  state with its own notice — plus a behavioural check that an `undefined` handler result is reported
+  as unconfirmed). `npm run smoke` green, `npm run test:copilot:ui` 8 passed. Four UI suites asserted
+  `gatewayState === 'demo'` for "there is no gateway"; they now assert `'no-gateway'`, which is the same
+  claim with the right name. No assertion was removed or weakened.
+- Honest limits: this unit changes what the *panel* may claim. It does not add a route gate, a contract,
+  or an expiry — those are D2/D3/D4, and until they land the audit's P2 finding stands.
+
 ## 🖥️ 2026-11-02 — npm execution in the terminal: the three gaps the probe found (M36)
 
 The terminal request arrived with "report before implementing", so the previous step was a probe of the

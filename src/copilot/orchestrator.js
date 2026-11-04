@@ -446,6 +446,7 @@ function createAgentProposal(inputName, mode) {
             ],
             refs: [apiRef('POST /api/v1/agents'), { label: 'request id', ref: created.requestId || 'n/a', status: 'observed' }],
             verify: `GET /api/v1/agents and confirm ${agent.id} with status idle; run npm run audit:verify.`,
+            provenance: 'gateway',
           };
         } catch (err) {
           const denied = err instanceof ApiError && (err.forbidden || err.unauthenticated);
@@ -453,6 +454,7 @@ function createAgentProposal(inputName, mode) {
             status: denied ? 'blocked' : 'failed',
             summary: `Gateway rejected the request: ${err.message}${err.requestId ? ` (request ${err.requestId})` : ''}`,
             steps: [{ label: 'POST /api/v1/agents', state: denied ? 'blocked' : 'failed', detail: err.message }],
+            provenance: 'gateway',
           };
         }
       }
@@ -491,6 +493,7 @@ function createAgentProposal(inputName, mode) {
         ],
         refs: [REF_STATE('agent list after create')],
         verify: 'Open Agents and confirm the new card shows status idle.',
+        provenance: 'demo-store',
       };
     },
   });
@@ -562,6 +565,7 @@ function deploySwarmProposal(objective, mode) {
         ],
         refs: [REF_STATE('swarm list'), { label: 'src/core.js — swarm fixtures', ref: 'src/core.js', status: 'verified' }],
         verify: 'Open Teams & Swarms: the record is there, every node says planned, and the banner says not executed.',
+        provenance: 'demo-store',
       };
     },
   });
@@ -604,9 +608,10 @@ function createTaskProposal(title, mode) {
             ],
             refs: [apiRef('POST /api/v1/tasks')],
             verify: 'Open Tasks — the gateway list now contains this card.',
+            provenance: 'gateway',
           };
         } catch (err) {
-          return { status: err?.forbidden ? 'blocked' : 'failed', summary: `Gateway rejected the task: ${err.message}` };
+          return { status: err?.forbidden ? 'blocked' : 'failed', summary: `Gateway rejected the task: ${err.message}`, provenance: 'gateway' };
         }
       }
       const id = uid('tk');
@@ -619,6 +624,7 @@ function createTaskProposal(title, mode) {
         summary: `Task “${p.title.trim()}” added to the backlog.`,
         steps: [{ label: 'Create card', state: 'ok', detail: id }, { label: 'Assign', state: 'ok', detail: 'ag-researcher (demo)' }],
         verify: 'Open Tasks and confirm the card in the Todo column.',
+        provenance: 'demo-store',
       };
     },
   });
@@ -678,6 +684,7 @@ function approvalProposal(match, mode, decision = 'allow') {
             ],
             refs: [apiRef(`POST /api/v1/approvals/${p.id}/${p.decision}`)],
             verify: 'GET /api/v1/approvals and npm run audit:verify.',
+            provenance: 'gateway',
           };
         } catch (err) {
           const denied = err instanceof ApiError && err.forbidden;
@@ -687,6 +694,7 @@ function approvalProposal(match, mode, decision = 'allow') {
               ? `Gateway refused: ${err.message}. Separation of duties blocks approving your own request.`
               : `Gateway error: ${err.message}`,
             steps: [{ label: 'Decide gate', state: denied ? 'blocked' : 'failed', detail: err.message }],
+            provenance: 'gateway',
           };
         }
       }
@@ -712,6 +720,7 @@ function approvalProposal(match, mode, decision = 'allow') {
         ],
         refs: [REF_STATE('approval status')],
         verify: 'The bell badge count decreases and the event feed shows the decision.',
+        provenance: 'demo-store',
       };
     },
   });
@@ -1234,9 +1243,17 @@ export async function runProposal(card, { mode = 'operate' } = {}) {
   }
   let result;
   try {
-    result = (await card.execute(card.params)) || { status: 'ok', summary: 'Action completed.' };
+    result = await card.execute(card.params);
   } catch (err) {
     result = { status: 'failed', summary: `Execution error: ${String(err && err.message ? err.message : err)}` };
+  }
+  // A handler that returns nothing has confirmed nothing. Reporting that as "completed" was a way of
+  // claiming an action nobody performed, so the missing result is a failure with its own sentence.
+  if (!result || typeof result !== 'object' || typeof result.status !== 'string') {
+    result = {
+      status: 'failed',
+      summary: 'The action handler returned no result, so nothing was confirmed. Treat this as not executed.',
+    };
   }
   const outcome = result.status === 'ok' ? 'ok' : result.status === 'blocked' ? 'blocked' : 'failed';
   pushEpisode({
@@ -1248,6 +1265,11 @@ export async function runProposal(card, { mode = 'operate' } = {}) {
     evidence: (result.steps || []).filter((s) => s.state === 'ok').map((s) => s.label),
     refs: result.refs || [],
   });
+  // Provenance is what actually happened, not how risky the action looked: a handler that reached the
+  // gateway says `gateway`; one that only wrote this browser's demo store says `demo-store`. The card
+  // renders its "simulated / demo" banner from this field alone, so a real gateway write can never be
+  // labelled simulated and a demo write can never be labelled live.
+  const provenance = result.provenance === 'gateway' || result.provenance === 'demo-store' ? result.provenance : 'unconfirmed';
   return {
     text: result.summary,
     card: {
@@ -1258,7 +1280,7 @@ export async function runProposal(card, { mode = 'operate' } = {}) {
       steps: result.steps || [],
       refs: result.refs || [],
       verify: result.verify || '',
-      simulated: card.risk === 'consequential',
+      provenance,
     },
   };
 }

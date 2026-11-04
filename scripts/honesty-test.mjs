@@ -20,6 +20,7 @@ const views1 = code(read('src/views1.js'));
 const views2 = code(read('src/views2.js'));
 const core = code(read('src/core.js'));
 const orchestrator = code(read('src/copilot/orchestrator.js'));
+const panelSrc = code(read('src/copilot/panel.js'));
 const knowledge = code(read('src/copilot/knowledge.js'));
 
 const results = [];
@@ -122,7 +123,27 @@ await check('the copilot does not describe a ticker that no longer exists', () =
   assert(/executed: false/.test(orchestrator), 'it creates a plan');
 });
 
-/* ---------- 8. and it stays that way in the running app ---------- */
+/* ---------- 8. no result without a service response ---------- */
+await check('no Copilot card reports success it never verified', () => {
+  // The legacy screen-supplied card called a closure and then *said* "executed". It is gone.
+  assert(!/execute:\s*\(\)\s*=>\s*\{/.test(panelSrc), 'panel.js builds no executable closure card');
+  assert(!/actionCard\.run/.test(panelSrc), 'and never calls a screen-supplied run()');
+  // A handler that returns nothing is a failure, not "Action completed."
+  assert(!/\|\|\s*\{\s*status:\s*'ok'/.test(orchestrator), 'runProposal has no success fallback');
+  assert(/returned no result, so nothing was confirmed/.test(orchestrator), 'and says so in words');
+  // Provenance comes from what ran, never from the risk label.
+  assert(!/simulated:\s*card\.risk/.test(orchestrator), 'the result card does not derive origin from risk');
+  assert((orchestrator.match(/provenance: 'gateway'/g) || []).length >= 3, 'gateway handlers declare their provenance');
+  assert((orchestrator.match(/provenance: 'demo-store'/g) || []).length >= 4, 'demo-store handlers declare theirs');
+});
+
+await check('“no gateway” is its own state, and it is stated', () => {
+  assert(!/gatewayState\s*=\s*'demo'/.test(panelSrc), 'absence of a gateway is not called demo');
+  assert(/gatewayState\s*=\s*convo\.available\(\) \? st\.status : 'no-gateway'/.test(panelSrc), 'it is `no-gateway`');
+  assert(/data-cp-source="no-gateway"/.test(panelSrc), 'and the panel shows a notice for it');
+});
+
+/* ---------- 9. and it stays that way in the running app ---------- */
 const win = new Window({ url: 'http://localhost:5173/#/teams' });
 for (const k of ['document', 'navigator', 'location', 'localStorage', 'history', 'HTMLElement', 'Event',
   'CustomEvent', 'KeyboardEvent', 'MouseEvent', 'Node', 'requestAnimationFrame', 'cancelAnimationFrame']) {
@@ -185,6 +206,15 @@ await check('the models screen offers no control that pretends to enable a provi
   await sleep(120);
   eq(view().querySelectorAll('[data-act="toggle-provider"]').length, 0, 'no provider switch');
   assert(/not configured/.test(view().textContent), 'says not configured');
+});
+
+await check('a handler that returns nothing is reported as unconfirmed, not executed', async () => {
+  const orchestratorModule = await import('../src/copilot/orchestrator.js');
+  const out = await orchestratorModule.runProposal({ type: 'proposal', title: 'silent handler', risk: 'reversible', execute: async () => undefined });
+  eq(out.card.status, 'failed', 'a handler with no result is a failure');
+  eq(out.card.provenance, 'unconfirmed', 'and nothing claims to have confirmed it');
+  assert(/nothing was confirmed/i.test(out.card.summary), 'the summary says nothing was confirmed');
+  assert(!/\b(?:Action|Task|Agent|Swarm) (?:completed|created|executed)/.test(out.card.summary), 'and claims no completed action');
 });
 
 console.log(results.join('\n'));
