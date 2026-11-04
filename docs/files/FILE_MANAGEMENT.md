@@ -128,6 +128,12 @@ npm run dev              # terminal 2 — proxies /api to :8787
 Then open **Files** in the module grid. With no session yet you get the four-step panel; sign in and the
 tree appears. Three roots are created on the gateway's first boot; `MMM_FILES_ROOT` moves them.
 
+If the app does not know the gateway yet, either set `VITE_GATEWAY_URL=/` (same origin, proxied by Vite)
+before `npm run dev`, or use **Account & Access → Configure gateway** with `/`. Until this was fixed the
+env var did nothing: `envUrl()` read `import.meta?.env?.VITE_GATEWAY_URL`, and Vite only substitutes the
+plain `import.meta.env.VITE_GATEWAY_URL` — optional chaining suppressed the substitution, so the app always
+booted in demo mode and the file manager always showed its "needs a gateway" panel.
+
 ## 5. Evidence
 
 | Suite | Result |
