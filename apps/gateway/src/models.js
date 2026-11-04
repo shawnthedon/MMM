@@ -317,16 +317,21 @@ export async function callModel({ providerId, model, messages, purpose = '', max
   }));
   if (!clean.some((m) => m.content.trim())) refuse('bad-request', 'the message is empty');
 
+  const tokens = Math.min(Math.max(Number(maxTokens) || 512, 1), LIMITS.maxTokens);
   const budget = getBudget();
   const spent = spendToday();
+  // Estimate conservatively before sending: roughly four characters per input token, plus
+  // the full requested output allowance. This is a guardrail, not a provider billing quote.
+  const estimatedPromptTokens = Math.max(1, Math.ceil(clean.reduce((n, m) => n + m.content.length, 0) / 4));
+  const estimatedRequestCost = estimateCost(chosen, estimatedPromptTokens, tokens);
   if (budget.enforced) {
-    if (spent.usd >= budget.dailyUsd) {
-      refuse('budget-exceeded', `today’s model budget is spent (${spent.usd.toFixed(2)} of ${budget.dailyUsd.toFixed(2)} USD) — nothing was sent`);
+    if (estimatedRequestCost > budget.perCallUsd) {
+      refuse('budget-exceeded', `estimated call cost (${estimatedRequestCost.toFixed(6)} USD) exceeds the per-call cap (${budget.perCallUsd.toFixed(6)} USD) — nothing was sent`);
     }
-    if (budget.perCallUsd <= 0) refuse('budget-exceeded', 'the per-call cap is zero, so no call is allowed');
+    if (spent.usd + estimatedRequestCost > budget.dailyUsd) {
+      refuse('budget-exceeded', `estimated call cost would exceed today’s remaining budget (${spent.usd.toFixed(6)} spent + ${estimatedRequestCost.toFixed(6)} estimated of ${budget.dailyUsd.toFixed(6)} USD) — nothing was sent`);
+    }
   }
-
-  const tokens = Math.min(Math.max(Number(maxTokens) || 512, 1), LIMITS.maxTokens);
   const endpoint = checkEndpoint(`${row.endpoint}/chat/completions`);
   const ms = Math.min(Math.max(Number(timeoutMs) || LIMITS.defaultTimeoutMs, 1000), LIMITS.timeoutMs);
   const controller = new AbortController();
