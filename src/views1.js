@@ -1399,22 +1399,24 @@ on('task-move', async (el, ds) => {
   import('./main.js').then((m) => m.rerender());
 });
 
-on('task-run', (el, ds) => {
+on('task-run', async (el, ds) => {
   const t = getState().tasks.find((x) => x.id === ds.id);
-  // Dispatching a task to an agent has no gateway runtime: refuse rather than fake a run.
-  if (isLive('tasks')) {
-    toast('No gateway run endpoint — a task cannot be dispatched from here yet. Nothing was changed.', 'bad');
+  if (!t) return;
+  if (!isApiMode() || !isLive('agents')) {
+    toast('Connect and sign in to a live gateway before dispatching tasks.', 'bad');
     return;
   }
-  setState((s) => {
-    const x = s.tasks.find((y) => y.id === ds.id);
-    if (x) x.column = 'doing';
-    const ag = s.agents.find((a) => a.id === t?.assignee);
-    if (ag) ag.status = 'running';
-    logEvent('task', `Run started: ${t?.title}`);
-  }, 'task-run');
-  import('./shell.js').then((m) => m.closeAllSheets());
-  toast('Agent dispatched ▶', 'ok');
+  if (!t.assignee) { toast('Assign this task to an agent first. Nothing was dispatched.', 'bad'); return; }
+  if (permissionDenied('agent:write')) { toast('Your role cannot run agents.', 'bad'); return; }
+  el?.setAttribute('disabled', 'disabled');
+  try {
+    await runAgent(t.assignee, `Task: ${t.title}\\n\\n${t.desc || ''}\\n\\nComplete the task as far as possible and clearly state any limitations.`);
+    import('./shell.js').then((m) => m.closeAllSheets());
+    toast('Task dispatched to agent · run queued', 'ok');
+  } catch (error) {
+    toast(`Task dispatch refused: ${esc(error.message)}`, 'bad');
+    el?.removeAttribute('disabled');
+  }
   import('./main.js').then((m) => m.rerender());
 });
 
