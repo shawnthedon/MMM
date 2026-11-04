@@ -320,7 +320,7 @@ await check('with no gateway the panel says nothing is drafted rather than fakin
   await sleep(150);
   const st = panel.copilotState();
   eq(st.source, 'local', 'the built-in engine answers');
-  eq(st.gatewayState, 'demo', 'and there is no gateway');
+  eq(st.gatewayState, 'no-gateway', 'and there is no gateway');
   eq(card(), null, 'no plan card exists');
   await panel.closeCopilot();
 });

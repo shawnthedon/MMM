@@ -82,7 +82,7 @@ await check('without a gateway the panel is local mode and labels every answer',
   panel.resetCopilotSession();
   await openPanel();
   eq(panel.copilotState().source, 'local', 'the panel reports a local answer source');
-  eq(panel.copilotState().gatewayState, 'demo', 'and that there is no gateway');
+  eq(panel.copilotState().gatewayState, 'no-gateway', 'and that there is no gateway');
   eq(q('#cp-modes').dataset.live, 'false', 'mode tabs stay: they are the only honest way in');
   assert(q('#cp-modes [data-cp="mode"]'), 'the tabs are rendered');
   await say('what can you do?');

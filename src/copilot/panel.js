@@ -39,7 +39,7 @@ const session = {
   lastSent: '',
   // 'live' (a model answers) vs 'local' (the built-in engine answers); `gatewayState` says why.
   live: 'local',
-  gatewayState: 'demo',
+  gatewayState: 'no-gateway',
   lastError: '',
 };
 
@@ -491,14 +491,14 @@ function contextHTML() {
  * statement of what is answering. Whenever the built-in engine is what replies (no gateway, or a gateway
  * with no model) the tabs stay, because they are the only honest way to reach those answers.
  */
-const RUNTIME_TONE = { ready: 'ok', unready: 'warn', loading: 'info', error: 'bad', unavailable: 'warn', demo: 'info' };
+const RUNTIME_TONE = { ready: 'ok', unready: 'warn', loading: 'info', error: 'bad', unavailable: 'warn', 'no-gateway': 'info' };
 
 /** What is answering, in one line. Every chip is a fact from the server or a reason it is absent. */
 function runtimeChipsHTML() {
   const st = convo.getState();
   const rt = st.runtime;
   const status = session.gatewayState;
-  const label = status === 'ready' ? 'model' : status === 'loading' ? 'connecting' : status === 'error' ? 'unreachable' : 'no model';
+  const label = status === 'ready' ? 'model' : status === 'loading' ? 'connecting' : status === 'error' ? 'unreachable' : status === 'no-gateway' ? 'no gateway' : 'no model';
   const chips = [];
   chips.push(`<span class="cp-chip ${RUNTIME_TONE[status] || 'info'}" data-cp-runtime="${esc(status)}">${icon('spark', 13)}${esc(label)}</span>`);
   if (rt?.providerName) chips.push(`<span class="cp-chip ghost" title="The provider behind this conversation">${esc(rt.providerName)}${rt.model ? ` · ${esc(rt.model)}` : ''}</span>`);
@@ -521,8 +521,12 @@ function liveNoticeHTML() {
   const st = convo.getState();
   if (session.live === 'live') return '';
   const state = session.gatewayState;
-  if (state === 'demo') return '';
   const reason = st.runtime?.reason || st.error || '';
+  if (state === 'no-gateway') {
+    return `<div class="cp-notice info" role="status" data-cp-source="no-gateway">${icon('info', 15)}<div><strong>No gateway is connected.</strong>
+      Answers come from the built-in knowledge engine, no model is called, and nothing you type leaves this
+      browser. Actions that change state are unavailable until a gateway is configured.</div></div>`;
+  }
   if (state === 'loading') {
     return `<div class="cp-notice info" role="status">${icon('info', 15)}<div>Connecting to the gateway conversation…</div></div>`;
   }
@@ -774,6 +778,27 @@ function proposalCardHTML(card, msg) {
   </div>`;
 }
 
+/**
+ * Where the result came from, said by the field that records it rather than by how risky the action
+ * looked. A handler that reached the gateway says so; one that only wrote this browser's demo store
+ * says that; one that did not say gets the honest third answer. Nothing here is inferred from risk.
+ */
+function provenanceHTML(card) {
+  const provenance = card?.provenance;
+  const succeeded = card?.status === 'ok';
+  if (provenance === 'demo-store' && succeeded) {
+    return '<div class="cp-warn soft">Demo store only — this browser\'s fixtures changed. No gateway call, no model call, no spend.</div>';
+  }
+  if (provenance === 'gateway' && succeeded) {
+    return '<div class="cp-note-inline">Confirmed by the gateway, which answered the request this card reports.</div>';
+  }
+  // A success that names no origin is not a success yet: say so rather than let the badge stand alone.
+  if (succeeded && !provenance) {
+    return '<div class="cp-warn soft">No service confirmed this. Treat it as unconfirmed until you can verify it.</div>';
+  }
+  return '';
+}
+
 function resultCardHTML(card) {
   const icons = { ok: icon('check', 14), failed: icon('x', 14), blocked: icon('shield', 14), cancelled: icon('x', 14) };
   return `<div class="cp-card cp-result" data-status="${esc(card.status)}">
@@ -794,7 +819,7 @@ function resultCardHTML(card) {
         : ''
     }
     ${card.verify ? `<div class="cp-verify">${icon('check', 13)}<span><strong>How to verify:</strong> ${esc(card.verify)}</span></div>` : ''}
-    ${card.simulated ? `<div class="cp-warn soft">Simulated runtime — no gateway call, no model call, no spend.</div>` : ''}
+    ${provenanceHTML(card)}
     ${refsHTML(card.refs)}
   </div>`;
 }
@@ -1176,7 +1201,10 @@ function paintWork() {
   workEl.innerHTML = notice + (blank ? emptyStateHTML() : session.history.map(messageHTML).join('') + pendingHTML());
   const panelEl = panel;
   if (panelEl) {
-    panelEl.dataset.blank = String(blank && !session.pending && !notice);
+    // The holographic empty state belongs to an empty transcript. A status notice is chrome above it, not
+    // a message, so a panel that has said nothing is still blank — including when the notice says there is
+    // no gateway, which is otherwise the state most deployments start in.
+    panelEl.dataset.blank = String(blank && !session.pending);
     panelEl.querySelector('#copilot-work').setAttribute('aria-busy', String(session.pending));
   }
   if (!blank) workEl.scrollTop = workEl.scrollHeight;
@@ -1185,13 +1213,18 @@ function paintWork() {
 /**
  * Two questions, kept apart because they have different answers:
  *   source        — where the *reply* comes from (a model, or the built-in engine)
- *   gatewayState  — what the gateway says about models (ready / unready / unavailable / error / demo)
- * A gateway without a model is `unavailable` for conversation but perfectly usable for deterministic
+ *   gatewayState  — what the gateway says about models (ready / unready / unavailable / error) and
+ *                   `no-gateway` when there is no gateway conversation route to ask at all
+ * A gateway without a model is `unready` for conversation but perfectly usable for deterministic
  * answers, and pretending otherwise would remove the Copilot's actions from every older gateway.
+ * `unavailable` means the gateway has no Copilot conversation route at all.
  */
 function deriveSource() {
   const st = convo.getState();
-  const gatewayState = convo.available() ? st.status : 'demo';
+  // `no-gateway` is its own state: it means there is no gateway conversation to ask, which is a
+  // different fact from `unready` (a gateway with no provider key) and from fixture *data*. Calling all
+  // three "demo" was how a deterministic reply could be mistaken for a model one.
+  const gatewayState = convo.available() ? st.status : 'no-gateway';
   return { gatewayState, source: gatewayState === 'ready' ? 'live' : 'local' };
 }
 
@@ -2043,7 +2076,7 @@ export function resetCopilotSession() {
   session.voiceStatus = '';
   session.recognition = null;
   session.live = 'local';
-  session.gatewayState = 'demo';
+  session.gatewayState = 'no-gateway';
   session.lastError = '';
   convo.reset();
 }
@@ -2277,37 +2310,19 @@ function onKeydown(e) {
 
 /* ---------- legacy API (terminal, views, tests) ---------- */
 /**
- * Append a Copilot message and, optionally, a legacy action card
- * ({ title, risk, rows, confirm, run }). Kept for src/terminal.js and src/views2.js.
+ * Append a Copilot message. The second argument used to attach a screen-supplied action card whose
+ * `execute` called a closure and then *reported* `{ status: 'ok', summary: '… executed.' }` without
+ * asking any service what happened. A card that cannot show a service response must not show a result,
+ * so that branch is gone: the argument is still accepted (callers keep working) and the reply says
+ * plainly that nothing was run. Actions that really execute go through a gateway-verified proposal.
  */
-export function copilotSay(text, actionCard = null) {
-  let card = null;
-  if (actionCard) {
-    card = {
-      type: 'proposal',
-      title: actionCard.title || 'Action',
-      summary: 'Legacy action card from another screen. Review before running.',
-      risk: actionCard.risk === 'medium' || actionCard.risk === 'high' ? 'consequential' : 'reversible',
-      rows: actionCard.rows || [],
-      params: {},
-      editable: [],
-      effects: 'Runs the action handler supplied by the calling screen (demo store).',
-      permissions: 'Demo store write.',
-      rollback: 'Depends on the action; most are reversible local changes.',
-      confirm: actionCard.confirm || 'Confirm',
-      createdAt: now(),
-      expiresAt: now() + 5 * 60 * 1000,
-      armed: false,
-      legacy: true,
-      execute: () => {
-        actionCard.run?.();
-        return { status: 'ok', summary: `${actionCard.title || 'Action'} executed.`, steps: [{ label: actionCard.title || 'Action', state: 'ok' }] };
-      },
-    };
-  }
-  pushMessage({ role: 'copilot', text, card, mode: session.mode });
+export function copilotSay(text, legacyActionCard = null) {
+  const refused = legacyActionCard
+    ? '\n\n*A legacy action card was supplied by the calling screen and was not attached or run: that path reported success without a service response, so it has been removed. Anything that changes state has to come back from the gateway as a verified proposal.*'
+    : '';
+  pushMessage({ role: 'copilot', text: `${text ?? ''}${refused}`, card: null, mode: session.mode });
   if (session.open) paint();
-  return card;
+  return null;
 }
 
 if (typeof window !== 'undefined') {
