@@ -246,8 +246,8 @@ function agentDetail(id) {
           <h2 style="font-size:18px">${esc(a.name)}</h2>
           <div class="tiny muted">${esc(a.role)}</div>
         </div>
-        <button class="btn sm ${a.status === 'running' ? '' : 'primary'}" data-act="toggle-agent" data-id="${a.id}">
-          ${a.status === 'running' ? icon('pause', 14) + ' Pause' : icon('play', 14) + ' Run'}
+        <button class="btn sm ${['running','queued'].includes(a.status) ? '' : 'primary'}" data-act="toggle-agent" data-id="${a.id}" ${['running','queued'].includes(a.status) ? 'disabled' : ''}>
+          ${a.status === 'running' ? icon('loader-circle', 14) + ' Running' : a.status === 'queued' ? icon('clock', 14) + ' Queued' : icon('play', 14) + ' Run'}
         </button>
       </div>
       <div class="row wrap" style="margin-top:10px;gap:8px">
@@ -263,8 +263,8 @@ function agentDetail(id) {
         <span class="chip tiny" style="color:${trustColor(a.trust)}">◈ trust ${a.trust} · tier ${trustTier(a.trust).toUpperCase()}</span>
       </div>
       <div class="grid-3" style="margin-top:12px">
-        <div class="stat"><div class="k">Success</div><div class="v" style="font-size:17px">${Math.round(a.successRate * 100)}%</div></div>
-        <div class="stat"><div class="k">Runs</div><div class="v" style="font-size:17px">${a.runs}</div></div>
+        <div class="stat"><div class="k">Success</div><div class="v" style="font-size:17px"> ${a.runs > 0 ? Math.round(a.successRate * 100) + '%' : '—'}</div></div>
+        <div class="stat"><div class="k">Runs</div><div class="v" style="font-size:17px"> ${a.runs || '—'}</div></div>
         <div class="stat"><div class="k">Cost 24h</div><div class="v" style="font-size:17px">${fmtMoney(a.costToday)}</div></div>
       </div>
     </div>
@@ -282,6 +282,7 @@ function agentDetail(id) {
       <div class="tiny muted">Autonomy level, authorised scope, diffs, test evidence, reviews and approvals for this agent live on the Self-Improvement panel. The gateway enforces them.</div>
     </div>
 
+    ${(a.tools || []).length ? '<div class="banner warn" style="margin-top:10px">Tool execution is not connected yet. This run can reason and write, but cannot browse or call external tools.</div>' : ''}
     <div class="section-title">Tools & skills</div>
     <div class="card">
       <div class="row wrap">${a.tools.map((t) => `<span class="chip tiny">${esc(t)}</span>`).join('')}</div>
