@@ -20,15 +20,20 @@ const safeJson = (value, fallback) => {
 };
 
 export function providerForAgentModel(model) {
-  const providerId = providerForModel(model);
-  if (!providerId) return { providerId: '', provider: null, reason: `No provider mapping exists for model “${model}”. Choose a supported provider model in the agent settings.` };
-  try {
-    const provider = models.getProvider(providerId);
-    if (provider.status !== 'configured') return { providerId, provider, reason: `${provider.name} is not configured. Add its API key in Models before running this agent.` };
-    return { providerId, provider, reason: '' };
-  } catch {
-    return { providerId, provider: null, reason: `Provider ${providerId} is not present in the gateway catalogue.` };
+  const preferred = providerForModel(model);
+  const catalogue = models.listProviders().providers;
+  const configured = catalogue.filter((p) => p.status === 'configured');
+  const exact = configured.find((p) => p.defaultModel === model || p.models.includes(model));
+  const preferredRow = preferred ? catalogue.find((p) => p.id === preferred) : null;
+  const openrouter = configured.find((p) => p.id === 'pv-openrouter');
+  const chosen = preferredRow?.status === 'configured' ? preferredRow : exact || openrouter;
+  if (chosen) return { providerId: chosen.id, provider: chosen, reason: '' };
+  if (!preferredRow && !exact && !openrouter) {
+    return { providerId: preferred || '', provider: preferredRow, reason: preferred
+      ? `${preferred} is not configured. Add its API key in Models before running this agent.`
+      : `No configured provider matches model “${model}”. Configure its provider in Models first.` };
   }
+  return { providerId: preferred, provider: preferredRow, reason: `${preferredRow?.name || preferred || 'The required provider'} is not configured. Add its API key in Models before running this agent.` };
 }
 
 export function listAgentRuns(agentId, limit = 20) {
