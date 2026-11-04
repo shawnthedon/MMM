@@ -260,7 +260,8 @@ function openKey(row) {
  * =======================================================================================*/
 export function priceFor(model) {
   const name = String(model || '').toLowerCase();
-  const hit = Object.keys(PRICES).find((k) => k !== 'default' && name.includes(k));
+  // Prefer the most specific family first (e.g. gpt-4o-mini must not match gpt-4o).
+  const hit = Object.keys(PRICES).filter((k) => k !== 'default').sort((a, b) => b.length - a.length).find((k) => name.includes(k));
   const [input, output] = PRICES[hit || 'default'];
   return { inputPerMTok: input, outputPerMTok: output, basis: 'estimated' };
 }
@@ -354,9 +355,11 @@ export async function callModel({ providerId, model, messages, purpose = '', max
       ? `the provider did not answer within ${ms} ms — nothing was billed by us, and the ledger records the attempt`
       : `could not reach ${endpoint.host}: ${error.message}`);
   }
-  clearTimeout(timer);
   const latencyMs = Date.now() - startedAt;
 
+  // Keep the abort deadline active until the complete response body has been consumed.
+  // Fetch resolving headers is not the same as the provider finishing its response.
+  try {
   if (res.status >= 300 && res.status < 400) {
     record({ principal, via, providerId: row.id, model: chosen, purpose: label, status: 'error', errorCode: 'redirect', latencyMs });
     fail('bad-gateway', `the provider answered with a redirect (HTTP ${res.status}); redirects are not followed, so the key is not sent anywhere else`);
@@ -425,6 +428,9 @@ export async function callModel({ providerId, model, messages, purpose = '', max
     provider: publicProvider(providerRow(row.id)),
     budget: { ...getBudget(), spentTodayUsd: spendToday().usd },
   };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /* =========================================================================================
