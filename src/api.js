@@ -13,8 +13,13 @@ const CSRF_HEADER = 'x-mmm-csrf';
 
 function envUrl() {
   try {
-    return import.meta?.env?.VITE_GATEWAY_URL || '';
+    // Written as a direct member access on purpose: Vite substitutes `import.meta.env.VITE_GATEWAY_URL`
+    // textually at build time, and it does NOT substitute through optional chaining (`import.meta?.env`).
+    // The previous spelling therefore compiled to a runtime lookup that always returned '', so
+    // `VITE_GATEWAY_URL=/ npm run dev` was silently ignored and the app booted in demo mode.
+    return import.meta.env.VITE_GATEWAY_URL || '';
   } catch {
+    // Not under Vite (unit tests import this module in plain node): no build-time env, no configured URL.
     return '';
   }
 }
