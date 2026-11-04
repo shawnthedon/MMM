@@ -41,10 +41,6 @@ export function queueAgentRun({ agentId, principal, objective = '' } = {}) {
   if (!agent) throw Object.assign(new Error('agent not found'), { code: 'not-found' });
   const goal = String(objective || agent.goal || agent.role || '').trim().slice(0, 4000);
   if (!goal) throw Object.assign(new Error('Give the agent an objective before running it.'), { code: 'bad-request' });
-  const tools = safeJson(agent.tools, []);
-  if (Array.isArray(tools) && tools.length) {
-    throw Object.assign(new Error('This agent requests tools, but tool execution is not connected yet. Remove its tools or wait for the MCP runtime unit.'), { code: 'tools-unavailable' });
-  }
   const { providerId, reason } = providerForAgentModel(agent.model);
   if (reason) throw Object.assign(new Error(reason), { code: 'no-provider' });
   const id = `run-${randomUUID()}`;
