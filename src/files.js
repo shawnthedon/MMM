@@ -14,6 +14,7 @@ import { esc, icon, fmtTime } from './core.js';
 import { openSheet, on, closeAllSheets, toast } from './shell.js';
 import { views } from './views1.js';
 import { api, isApiMode, ApiError, gatewayUrl } from './api.js';
+import { isAuthenticated, getAuth } from './auth.js';
 import './files.css';
 
 const CHUNK = 256 * 1024;
@@ -418,32 +419,77 @@ function storageTab() {
 
 /* ---------- the view ---------- */
 
+/**
+ * What the panel shows when it cannot read a disk. Deliberately *not* an empty page: the screen, its tabs
+ * and its shape are the same as when it works, so a person can see what the feature is and exactly what is
+ * missing — and every step below is a thing they can do, not a slogan.
+ */
+function unconnectedHTML() {
+  const connected = isApiMode();
+  const auth = getAuth();
+  const step = (n, title, body, done = false) => `<li class="fm-step ${done ? 'done' : ''}">
+      <span class="fm-step-n">${done ? icon('check', 13) : n}</span>
+      <span class="grow"><span class="strong">${esc(title)}</span><span class="tiny muted">${esc(body)}</span></span>
+    </li>`;
+  return `<div class="fm-gate">
+    <div class="fm-gate-head">${icon(connected ? 'shield' : 'server', 20)}
+      <div><div class="strong">${connected ? 'Sign in to read the gateway’s disk' : 'File management needs a gateway'}</div>
+      <div class="tiny muted">${connected
+        ? `Connected to ${esc(gatewayUrl() === '/' ? 'this origin' : gatewayUrl())}, but not signed in (${esc(auth.status)}).`
+        : 'Files live on a gateway host. Nothing is shown here rather than a sample tree, because a tree this browser cannot read would be a picture of files, not files.'}</div></div>
+    </div>
+    <ol class="fm-steps">
+      ${step(1, 'Start the gateway', 'On the machine that holds the files: npm run dev:gateway (or your service unit). It listens on :8787 and owns the directories.', connected)}
+      ${step(2, 'Connect this app to it', 'Account & Access → Configure gateway → the gateway URL. In dev the app proxies /api to :8787 automatically.', connected)}
+      ${step(3, 'Enrol a directory', 'An Owner enrols an absolute path once it is signed in. Three roots (downloads, artifacts, public web) are created on the gateway at first boot.', false)}
+      ${step(4, 'Sign in', 'Reading a listing needs file:read (Observer); writing needs file:write (Operator); enrolling a root needs file:configure (Owner).', isAuthenticated())}
+    </ol>
+    <div class="fm-gate-foot">
+      <button class="btn primary" data-act="nav" data-to="login">${icon(connected ? 'user' : 'link', 15)} ${connected ? 'Sign in' : 'Open Account & Access'}</button>
+      <button class="btn" data-act="fm-recheck">${icon('undo', 15)} Re-check</button>
+    </div>
+    <div class="tiny muted">The rest of this screen — the tree, the download manager, the storage table — appears
+      as soon as a listing can be read. Nothing here is pre-filled with example data.</div>
+  </div>`;
+}
+
 views.files = {
-  title: 'Files',
+  title: 'File management',
   persistent: true,
   render() {
-    if (!isApiMode()) {
-      return `<div class="page-head"><h1>Files</h1><div class="sub">File management</div></div>
-        <div class="banner warn">${icon('shield', 16)}<div><strong>No gateway is connected.</strong>
-          File management reads and writes real directories on a gateway host. This build has nowhere to look,
-          so it shows no files rather than a sample tree. Connect a gateway in Settings.</div></div>`;
-    }
+    const connected = isApiMode();
+    const signedIn = connected && isAuthenticated();
+    const sub = !connected
+      ? 'not connected to a gateway'
+      : !signedIn
+        ? `connected · ${getAuth().status}`
+        : `${st.locations.length} storage ${st.locations.length === 1 ? 'location' : 'locations'} · ${st.path || 'root'}`;
+    // The tabs render in every state. A screen that hides its own shape until the backend is ready is how a
+    // shipped feature looks missing.
     return `
-      <div class="page-head"><h1>Files</h1>
-        <div class="sub">${st.locations.length} storage ${st.locations.length === 1 ? 'location' : 'locations'} · ${esc(st.path || 'root')}</div>
-      </div>
+      <div class="page-head"><h1>File management</h1><div class="sub">${esc(sub)}</div></div>
       ${tabBar()}
-      ${st.tab === 'browse' ? locationChips() : ''}
-      ${st.tab === 'browse' ? browseTab() : st.tab === 'downloads' ? downloadsTab() : storageTab()}`;
+      ${
+        connected && signedIn
+          ? `${st.tab === 'browse' ? locationChips() : ''}
+             ${st.tab === 'browse' ? browseTab() : st.tab === 'downloads' ? downloadsTab() : storageTab()}`
+          : unconnectedHTML()
+      }`;
   },
   mount() {
-    if (!isApiMode()) return;
+    if (!isApiMode() || !isAuthenticated()) return;
     loadAll()
       .then(() => import('./main.js').then((m) => m.rerender()))
       .catch(() => {});
     wireLongPress();
   },
 };
+
+on('fm-recheck', () => {
+  loadAll()
+    .then(() => import('./main.js').then((m) => m.rerender()))
+    .catch(() => import('./main.js').then((m) => m.rerender()));
+});
 
 let pressTimer = null;
 function wireLongPress() {

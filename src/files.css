@@ -224,3 +224,34 @@
 @media (prefers-reduced-motion: reduce) {
   .fm-bar i { transition: none; }
 }
+
+/* ---------- the state before a gateway answers ---------- */
+.fm-gate {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fm-gate-head { display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary); }
+.fm-gate-head > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fm-gate-head svg { color: var(--brand); flex: 0 0 auto; }
+.fm-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.fm-step { display: flex; gap: 10px; align-items: flex-start; }
+.fm-step-n {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 999px;
+  background: var(--elevated);
+  color: var(--text-muted);
+  font: 700 11px/1 var(--mono);
+}
+.fm-step.done .fm-step-n { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.fm-step .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fm-gate-foot { display: flex; flex-wrap: wrap; gap: 8px; }
+.fm-gate-foot .btn { min-height: 44px; }

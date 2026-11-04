@@ -105,6 +105,29 @@ pretend otherwise.
 | Range-based *server-side* download to a folder on the host | not built; every download currently lands in the browser, not on the gateway. |
 | Thumbnails / previews | not built. |
 
+## 4b. How to reach it (this was broken, and why)
+
+The first ship of this panel was correct and **invisible**. Two reasons, both fixed:
+
+1. **The nav tile labelled “Files” pointed at `artifacts`** — the prototype's sample screen. `files` had no
+   destination in the module grid at all, so tapping *Files* showed seeded rows and a fabricated
+   “248 MB used”, and the real manager was only reachable by URL or from Settings. The grid now sends
+   **Files → `files`**, and `artifacts` is relabelled **“Sample artifacts”** and taken out of the grid
+   (still routable; Settings links to it and says what it is).
+2. **With no gateway the screen was a single banner.** Honest, but it hid the feature's shape. It now
+   renders its three tabs and a four-step panel that says what is missing and how to fix it, with a button
+   to Account & Access. Nothing is pre-filled with example data in either state.
+
+To see it with real files:
+
+```
+npm run dev:gateway      # terminal 1 — owns the directories
+npm run dev              # terminal 2 — proxies /api to :8787
+```
+
+Then open **Files** in the module grid. With no session yet you get the four-step panel; sign in and the
+tree appears. Three roots are created on the gateway's first boot; `MMM_FILES_ROOT` moves them.
+
 ## 5. Evidence
 
 | Suite | Result |

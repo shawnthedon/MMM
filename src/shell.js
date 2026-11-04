@@ -26,7 +26,11 @@ export const routes = [
   // Kept as routes for titles/highlighting, but not shown in the All-modules grid (see HIDDEN).
   { id: 'matrix', label: 'Skills Matrix', icon: 'graph', title: 'Skills Matrix' },
   { id: 'analytics', label: 'Analytics', icon: 'chart', title: 'Analytics' },
-  { id: 'artifacts', label: 'Files', icon: 'folder', title: 'Artifacts & Files' },
+  // The real file manager. `artifacts` below is the prototype's sample screen and is no longer
+  // labelled "Files" — that label belonged to a screen that never touched a disk, and it hid the one
+  // that does. It stays routable (Settings links to it) but is out of the module grid.
+  { id: 'files', label: 'Files', icon: 'folder', title: 'File management' },
+  { id: 'artifacts', label: 'Sample artifacts', icon: 'doc', title: 'Artifacts (sample data)' },
   { id: 'terminal', label: 'Terminal', icon: 'terminal', title: 'Terminal' },
   { id: 'settings', label: 'Settings', icon: 'gear', title: 'Settings' },
   { id: 'login', label: 'Account', icon: 'shield', title: 'Account & Access' },
@@ -241,7 +245,7 @@ function quickCreateSheet() {
 function moreSheet(navigate) {
   // Chat has its own header button and the Skills Matrix is opened from the Skills Hub, so neither
   // belongs in the module list; Comms replaces the old standalone Telegram entry.
-  const HIDDEN = [...TABS, 'chat', 'matrix'];
+  const HIDDEN = [...TABS, 'chat', 'matrix', 'artifacts'];
   const items = routes.filter((r) => !HIDDEN.includes(r.id));
   // 'Local' is the entry point for the on-device AI work (spec §12 phase 1: audit/preflight only).
   // It is flagged so nobody mistakes it for a finished runtime.

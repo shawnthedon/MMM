@@ -63,6 +63,13 @@ globalThis.fetch = async (url, opts = {}) => {
   const method = (opts.method || 'GET').toUpperCase();
   calls.push({ m: method, p, q: Object.fromEntries(u.searchParams) });
   if (!enabled) return json(0, { error: 'no gateway' });
+  if (p === '/api/v1/auth/session') {
+    return json(200, {
+      principal: { id: 'user-owner', name: 'Owner', role: 'Owner', type: 'user' },
+      permissions: ['read', 'file:read', 'file:write', 'file:configure'],
+      csrfToken: 'csrf-test',
+    });
+  }
   if (p === '/api/v1/files/locations') return json(200, { locations });
   if (p === '/api/v1/files/list') {
     const loc = u.searchParams.get('location');
@@ -100,18 +107,47 @@ await import('../src/main.js');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 await sleep(150);
 const api = await import('../src/api.js');
-const files = await import('../src/files.js');
+const auth = await import('../src/auth.js');
 const main = await import('../src/main.js');
 const view = () => win.document.getElementById('view');
-const sheet = () => win.document.querySelector('.sheet');
+// Sheets accumulate in #sheet-root (each open appends one), so the *last* is the live one. Reading the
+// first returned a closed menu from an earlier check — which is what made a real failure look like a pass.
+const sheet = () => [...win.document.querySelectorAll('.sheet')].pop() || null;
+const clearSheets = () => win.document.querySelectorAll('.sheet').forEach((el) => el.remove());
 const open = async (route = 'files') => { main.navigate(route); await sleep(160); };
 
-await check('with no gateway the screen refuses to show a tree it cannot read', async () => {
+await check('the app has a Files destination, and it is the real manager — not the sample screen', async () => {
+  main.navigate('files');
+  await sleep(160);
+  assert(/File management/.test(text(view())), 'the route renders the file manager');
+  assert(/Sample artifacts/.test(text(view())) === false, 'and it is not the prototype artifacts screen');
+  // The module grid must send "Files" to the manager. It used to send it to `artifacts`, which is why the
+  // feature read as missing even though it shipped.
+  win.document.querySelector('.tabbar [data-act="more"]')?.dispatchEvent(new win.Event('click', { bubbles: true }));
+  await sleep(120);
+  const sheetEl = win.document.querySelector('.sheet.open');
+  assert(sheetEl, 'the module sheet opens');
+  const tiles = [...sheetEl.querySelectorAll('.mod-tile')].map((t) => ({ to: t.dataset.to, label: text(t.querySelector('.mod-label')) }));
+  const filesTile = tiles.find((t) => t.label === 'Files');
+  assert(filesTile, `a tile labelled Files must exist (got ${tiles.map((t) => t.label).join(', ')})`);
+  eq(filesTile.to, 'files', 'and it must open the file manager');
+  assert(!tiles.some((t) => t.to === 'artifacts' && t.label === 'Files'), 'nothing else may claim the Files label');
+  assert(!tiles.some((t) => t.to === 'artifacts'), 'the sample artifacts screen is out of the module grid');
+  win.document.querySelector('.sheet.open [data-sheet-close]')?.dispatchEvent(new win.Event('click', { bubbles: true }));
+  await sleep(80);
+});
+
+await check('with no gateway the panel still shows its shape, and says exactly what is missing', async () => {
   api.setGatewayUrl('');
+  await auth.refreshSession({ silent: true });
   await open('files');
   const body = text(view());
-  assert(/No gateway is connected/.test(body), 'it says there is no gateway');
-  assert(/shows no files rather than a sample tree/.test(body), 'and refuses to draw a sample tree');
+  assert(/File management needs a gateway/.test(body), 'it says what is missing');
+  // A screen that hides its own tabs until the backend answers is how a shipped feature looks missing.
+  eq(view().querySelectorAll('[data-act="fm-tab"]').length, 3, 'all three tabs are present');
+  eq(view().querySelectorAll('.fm-step').length, 4, 'the four steps are listed');
+  assert(/shows? no|rather than a sample tree|picture of files/.test(body), 'and it refuses to draw a sample tree');
+  assert(view().querySelector('[data-act="nav"][data-to="login"]'), 'with a control that goes to the gateway settings');
   eq(view().querySelectorAll('.fm-row').length, 0, 'no rows are rendered');
   eq(view().querySelectorAll('[data-act="fm-upload"]').length, 0, 'and no upload control');
 });
@@ -119,6 +155,9 @@ await check('with no gateway the screen refuses to show a tree it cannot read', 
 await check('with a gateway the tree is what the gateway returned, with real sizes', async () => {
   enabled = true;
   api.setGatewayUrl('http://gateway.test');
+  // Connected *and* signed in: the state the panel is in for a real user. Without a session it would
+  // (correctly) show the "sign in" gate instead of a tree.
+  await auth.refreshSession({ silent: true });
   calls.length = 0;
   await open('files');
   await sleep(220);
@@ -159,12 +198,12 @@ await check('a long press opens the context menu, and it offers only routes that
 });
 
 await check('a right-click opens the same menu without a 500 ms wait', async () => {
-  win.document.querySelector('.sheet')?.remove();
+  clearSheets();
   const row = view().querySelector('.fm-row[data-type="file"]');
   row.dispatchEvent(new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
   await sleep(30);
   assert(sheet(), 'the menu opened on contextmenu');
-  win.document.querySelector('.sheet')?.remove();
+  clearSheets();
 });
 
 await check('deleting says it went to the trash, because that is what the gateway did', async () => {
