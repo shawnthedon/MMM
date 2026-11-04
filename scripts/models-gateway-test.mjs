@@ -325,6 +325,22 @@ await check('the provider’s own row now shows the real spend, not the fixture 
 });
 
 /* ---------- 4. budget ---------- */
+await check('the per-call cap is enforced using a conservative preflight estimate', async () => {
+  const set = await owner.request('/api/v1/budget', { method: 'PUT', body: { dailyUsd: 5, perCallUsd: 0.000001 } });
+  eq(set.status, 200, `PUT /budget (${set.text})`);
+  const before = seen.requests.length;
+  const res = await operator.request(`/api/v1/providers/${PROVIDER}/call`, {
+    method: 'POST', body: { messages: [{ role: 'user', content: 'small prompt' }], maxTokens: 512 },
+  });
+  eq(res.status, 402, 'refused with 402 Payment Required');
+  eq(res.body.code, 'budget-exceeded', 'per-call budget reason');
+  assert(/per-call cap/i.test(res.body.error), `specific per-call explanation (${res.body.error})`);
+  eq(seen.requests.length, before, 'nothing was sent to the provider');
+  const calls = await owner.request('/api/v1/model-calls');
+  eq(calls.body.calls[0].status, 'blocked', 'the refusal is recorded as blocked');
+  eq(calls.body.calls[0].costUsd, 0, 'the refused request records zero spend');
+});
+
 await check('the budget is enforced before the request leaves the process', async () => {
   const set = await owner.request('/api/v1/budget', { method: 'PUT', body: { dailyUsd: 0.000001, perCallUsd: 0.000001 } });
   eq(set.status, 200, `PUT /budget (${set.text})`);
