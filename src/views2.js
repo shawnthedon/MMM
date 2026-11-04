@@ -1278,6 +1278,19 @@ views.settings = {
         </div>
       </div>
 
+      <div class="section-title">Files</div>
+      <div class="card">
+        <div class="kv"><span class="k">File management</span>
+          <span class="tiny muted">${isApiMode() ? 'real directories on the gateway host' : 'no gateway connected'}</span></div>
+        <div class="tiny muted">A directory tree over enrolled storage locations, with a download manager and
+          uploads that report the size the disk confirms. Files live on the gateway; nothing here writes to
+          local demo state.</div>
+        <button class="btn block sm" style="margin-top:10px" data-act="nav" data-to="files">${icon('folder', 15)} Open file management</button>
+        <button class="btn sm" style="margin-top:8px" data-act="nav" data-to="artifacts">${icon('doc', 15)} Sample artifacts screen</button>
+        <div class="tiny muted" style="margin-top:6px">The old Artifacts screen still shows seeded rows from the
+          prototype. It is not the file manager and does not touch the disk.</div>
+      </div>
+
       <div class="section-title">Workspace</div>
       <div class="card">
         <div class="field"><label>Name</label><input class="input" data-model="settings.workspaceName" value="${esc(st.workspaceName)}"></div>

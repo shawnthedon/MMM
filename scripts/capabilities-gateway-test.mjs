@@ -323,15 +323,22 @@ await check('an unconfigured operation is still listed, with the route that woul
 await check('an operation with no service claims no route and explains itself', async () => {
   const body = await getCatalogue(owner);
   const none = body.operations.filter((o) => o.state === 'no-service');
-  assert(none.length >= 9, `expected the declared no-service operations, saw ${none.length}`);
+  // The floor was 9 while `files.upload` had no service. The file service exists now, so the honest floor
+  // is 8 — and the named list below is what actually guards against a service disappearing quietly.
+  assert(none.length >= 8, `expected the declared no-service operations, saw ${none.length}`);
   for (const op of none) {
     eq(op.routes.length, 0, `${op.id} must claim no route`);
     assert(op.reason.length > 20, `${op.id} must explain itself, got “${op.reason}”`);
   }
   const ids = none.map((o) => o.id);
-  for (const expected of ['agents.run', 'swarms.execute', 'skills.activate', 'files.upload', 'analytics.series', 'plugins.connect', 'training.validate']) {
+  // `files.upload` was on this list until the file service existed. The registry placeholder is gone and
+  // the operation is real now, so the assertion moved with it: files has routes, and what remains without
+  // a service still says so by name.
+  for (const expected of ['agents.run', 'swarms.execute', 'skills.activate', 'local.inference', 'analytics.series', 'plugins.connect', 'training.validate']) {
     assert(ids.includes(expected), `${expected} must be declared as having no service`);
   }
+  assert(!ids.includes('files.upload'), 'the files.upload placeholder must be gone now that the file service exists');
+  assert(byId(body)['files.list'].routes.length > 0, 'and files.list must declare the route it is served by');
   eq(byId(body)['swarms.execute'].state, 'no-service', 'a swarm plan cannot be executed');
   assert(/deploy/i.test(byId(body)['swarms.execute'].note), 'the note names the phantom deploy route');
 });

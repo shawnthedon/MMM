@@ -23,6 +23,11 @@ const field = (type, extra = {}) => ({ type, ...extra });
 const NAME = field('string', { required: true, minLength: 2, maxLength: 80 });
 const TEXT = (max = 4000) => field('string', { maxLength: max });
 const MONEY = field('number', { min: 0, max: 10000 });
+/** A location id, and the two shapes of a path inside one (a directory may be empty, a file may not). */
+const LOCATION_ID = field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 });
+const REL_DIR = field('string', { maxLength: 1024, pattern: '^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$' });
+/** A path relative to a storage location: no leading slash, no traversal segment. */
+const REL_PATH = field('string', { required: true, minLength: 1, maxLength: 1024, pattern: '^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$' });
 
 /**
  * Declared contracts. `route` selects one entry from the operation's `routes`; `template` is the path with
@@ -71,6 +76,113 @@ export const CONTRACTS = Object.freeze({
     template: '/api/v1/agents/{id}',
     path: { id: ID },
     target: (params) => `agent:${params.id}`,
+  },
+
+  /* ---------- files ----------
+   * A file path is a string the service re-validates: the contract bounds its length and refuses the
+   * two characters that make traversal possible, and `resolveInside` refuses everything else after the
+   * location root is applied. Two gates, because a path is the one parameter that can leave a sandbox.
+   */
+  'files.list': {
+    route: 'GET /api/v1/files/list',
+    template: '/api/v1/files/list',
+    query: { location: LOCATION_ID, path: REL_DIR },
+  },
+  'files.stat': {
+    route: 'GET /api/v1/files/stat',
+    template: '/api/v1/files/stat',
+    query: { location: LOCATION_ID, path: REL_PATH },
+  },
+  'files.usage': {
+    route: 'GET /api/v1/files/usage',
+    template: '/api/v1/files/usage',
+    query: { location: field('string', { pattern: '^[\\w-]+$', maxLength: 64 }) },
+  },
+  'files.locations.create': {
+    route: 'POST /api/v1/files/locations',
+    template: '/api/v1/files/locations',
+    body: {
+      label: field('string', { required: true, minLength: 1, maxLength: 200 }),
+      path: field('string', { required: true, minLength: 1, maxLength: 1024 }),
+      kind: field('string', { enum: ['downloads', 'artifacts', 'web', 'custom'] }),
+      purpose: field('string', { enum: ['downloads', 'uploads', 'web-deploy', ''] }),
+    },
+  },
+  'files.locations.update': {
+    route: 'PATCH /api/v1/files/locations/*',
+    template: '/api/v1/files/locations/{id}',
+    path: { id: field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 }) },
+    body: {
+      label: field('string', { minLength: 1, maxLength: 200 }),
+      purpose: field('string', { enum: ['downloads', 'uploads', 'web-deploy', ''] }),
+      granted: field('boolean'),
+    },
+  },
+  'files.locations.delete': {
+    route: 'DELETE /api/v1/files/locations/*',
+    template: '/api/v1/files/locations/{id}',
+    path: { id: field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 }) },
+    target: (params) => `location:${params.id}`,
+  },
+  'files.mkdir': {
+    route: 'POST /api/v1/files/dir',
+    template: '/api/v1/files/dir',
+    body: {
+      locationId: field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 }),
+      path: REL_PATH,
+    },
+  },
+  'files.move': {
+    route: 'POST /api/v1/files/move',
+    template: '/api/v1/files/move',
+    body: {
+      locationId: field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 }),
+      from: REL_PATH,
+      to: REL_PATH,
+    },
+  },
+  'files.copy': {
+    route: 'POST /api/v1/files/copy',
+    template: '/api/v1/files/copy',
+    body: {
+      locationId: field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 }),
+      from: REL_PATH,
+      to: REL_PATH,
+    },
+  },
+  'files.delete': {
+    route: 'DELETE /api/v1/files/entry',
+    template: '/api/v1/files/entry',
+    query: {
+      location: field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 }),
+      path: REL_PATH,
+    },
+    target: (params) => `file:${params.location}/${params.path}`,
+  },
+  'files.downloads.create': {
+    route: 'POST /api/v1/files/downloads',
+    template: '/api/v1/files/downloads',
+    body: {
+      locationId: field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 }),
+      path: REL_PATH,
+    },
+  },
+  'files.downloads.update': {
+    route: 'PATCH /api/v1/files/downloads/*',
+    template: '/api/v1/files/downloads/{id}',
+    path: { id: field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 }) },
+    body: {
+      status: field('string', { enum: ['queued', 'running', 'paused', 'completed', 'failed', 'cancelled'] }),
+      bytesDone: field('number', { min: 0 }),
+      error: TEXT(300),
+      attempt: field('boolean'),
+    },
+  },
+  'files.downloads.delete': {
+    route: 'DELETE /api/v1/files/downloads/*',
+    template: '/api/v1/files/downloads/{id}',
+    path: { id: field('string', { required: true, pattern: '^[\\w-]+$', maxLength: 64 }) },
+    target: (params) => `download:${params.id}`,
   },
 
   /* ---------- tasks ---------- */

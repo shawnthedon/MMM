@@ -777,6 +777,41 @@ code — because a control plane that is mostly right is a control plane you can
 - Honest limits: this unit changes what the *panel* may claim. It does not add a route gate, a contract,
   or an expiry — those are D2/D3/D4, and until they land the audit's P2 finding stands.
 
+## 📁 2026-11-04 — File management: the Files screen gets a disk behind it
+
+The prototype's Files screen has shown "248 MB used" since the beginning. It was a picture of files: rows
+from local state, an upload that wrote a JavaScript object, and a Share button that copied a sentence about
+a link that expires. This unit replaces that with a real file service and a panel opened from Settings.
+
+- **`apps/gateway/src/files.js` + `017_files.sql`** — enrolled roots (`file_locations`) and download
+  records (`file_downloads`). Three roots are seeded under `MMM_FILES_ROOT`: downloads, artifacts, public
+  web. Listing, stat, bounded usage, mkdir, move, copy, trash, upload and a range-aware download stream.
+- **A path never leaves its root, twice.** `resolveInside` is the string check; `assertNoEscape` re-walks
+  `realpath` to the deepest existing ancestor, so a symlink inside the root that points outside it is
+  refused rather than followed — tested by trying to *write through* one.
+- **Deleting is a move.** Everything goes to `<root>/.trash/<timestamp>__<name>`; the module contains no
+  unlink, and the toast says "Moved to trash — recoverable at …".
+- **Pause and resume are real.** The panel streams with `fetch` + `ReadableStream`, keeps the chunks, and
+  reports the byte count; pausing aborts the socket, resuming re-requests with `Range:` and takes the
+  `206`. A row left `running` after a reload is reconciled to `failed` — no progress bar ever claims a
+  socket nobody is holding.
+- **Uploads report what the disk says.** Temp file + rename, then `stat`; the response carries
+  `confirmedBy: 'stat'`. Upload progress uses XHR because only XHR reports it.
+- **16 registry operations with contracts**, all dispatchable by an Owner; `files.upload`'s `no-service`
+  placeholder is gone (and the capability suite's assertion moved with it, with a comment saying why).
+  Upload and download are excused from the dispatcher by name, because a dispatcher call is a JSON result.
+- **`files.delete` is declared reversible, not destructive** — because it moves to the trash. Declaring it
+  destructive would have forced a gate the route does not enforce, which is the P2 finding this initiative
+  is already tracking; a declaration the code cannot honour is worse than no declaration.
+- Evidence: `npm run test:files` — **22 passed** against a real gateway and a real temporary filesystem
+  (bytes read back from disk, `Range` slice exact, traversal and symlink escape both refused with nothing
+  written outside the root, Observer cannot write, Operator cannot enrol a root, un-enrol leaves the
+  directory intact, audit chain verifies); `npm run test:files:ui` — **8 passed** driving the real panel.
+- Honest limits, stated on the screen and in [`files/FILE_MANAGEMENT.md`](files/FILE_MANAGEMENT.md):
+  **the FTP client is not built yet**; browsing "devices and network" is only possible for directories the
+  host has already mounted (a browser cannot mount a share), and the panel offers no control that pretends
+  otherwise; downloads land in the browser, not on the gateway.
+
 ## 🖥️ 2026-11-02 — npm execution in the terminal: the three gaps the probe found (M36)
 
 The terminal request arrived with "report before implementing", so the previous step was a probe of the

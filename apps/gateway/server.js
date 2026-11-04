@@ -30,6 +30,7 @@ import * as browserScriptDrafts from './src/browserScriptDrafts.js';
 import * as voice from './src/voice.js';
 import * as chat from './src/chat.js';
 import * as terminal from './src/terminal/index.js';
+import * as files from './src/files.js';
 import * as auth from './src/auth.js';
 import {
   can,
@@ -1276,6 +1277,215 @@ route('POST', /^\/api\/v1\/copilot\/scripts\/([\w-]+)\/archive$/, { permission: 
     return { code: 200, body: { draft } };
   } catch (error) {
     return draftFail(error);
+  }
+});
+
+/* ---- Files: a real file service (see src/files.js) ----
+ * The Settings screen opens a file manager over these routes. Three of them carry bytes rather than JSON
+ * (upload, download, and the range variant of download), so they are excused from the dispatcher by name
+ * in `capabilities.UNEXPOSED` instead of pretending to be dispatchable operations.
+ */
+const filesFail = (error) => {
+  const code = error?.code || 'error';
+  const status = code === 'not-found' ? 404
+    : code === 'conflict' ? 409
+      : code === 'forbidden' ? 403
+        : code === 'invalid-path' || code === 'invalid-params' || code === 'invalid-location' ? 400
+          : code === 'file-too-large' ? 413
+            : 500;
+  return { code: status, body: { error: error.message, code } };
+};
+
+route('GET', /^\/api\/v1\/files$/, { permission: 'file:read' }, () => ({
+  code: 200,
+  body: { ...files.capabilities(), locations: files.listLocations() },
+}));
+
+route('GET', /^\/api\/v1\/files\/locations$/, { permission: 'file:read' }, () => ({
+  code: 200,
+  body: { locations: files.listLocations().map((l) => ({ ...l, usage: files.usage(l.id) })) },
+}));
+
+route('POST', /^\/api\/v1\/files\/locations$/, { permission: 'file:configure', mutating: true }, (ctx) => {
+  try {
+    const location = files.createLocation(ctx.body || {}, ctx.principal);
+    broadcast('files', { type: 'files.location', id: location.id, status: 'created' });
+    return { code: 201, body: { location } };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('PATCH', /^\/api\/v1\/files\/locations\/([\w-]+)$/, { permission: 'file:configure', mutating: true }, (ctx) => {
+  try {
+    return { code: 200, body: { location: files.updateLocation(ctx.match[1], ctx.body || {}, ctx.principal) } };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/files\/locations\/([\w-]+)$/, { permission: 'file:configure', mutating: true }, (ctx) => {
+  try {
+    const out = files.deleteLocation(ctx.match[1], ctx.principal);
+    broadcast('files', { type: 'files.location', id: out.id, status: 'deleted' });
+    return { code: 200, body: out };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/files\/list$/, { permission: 'file:read' }, (ctx) => {
+  try {
+    return { code: 200, body: files.listDirectory(String(ctx.query.location || ''), String(ctx.query.path || '')) };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/files\/stat$/, { permission: 'file:read' }, (ctx) => {
+  try {
+    return { code: 200, body: { entry: files.statEntry(String(ctx.query.location || ''), String(ctx.query.path || '')) } };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('GET', /^\/api\/v1\/files\/usage$/, { permission: 'file:read' }, (ctx) => {
+  try {
+    const one = String(ctx.query.location || '');
+    const list = one ? [files.usage(one)] : files.listLocations().map((l) => files.usage(l.id));
+    return { code: 200, body: { usage: list, at: Date.now() } };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/files\/dir$/, { permission: 'file:write', mutating: true }, (ctx) => {
+  try {
+    const b = ctx.body || {};
+    const entry = files.makeDirectory(String(b.locationId || ''), String(b.path || ''), ctx.principal);
+    broadcast('files', { type: 'files.mkdir', location: b.locationId, path: b.path });
+    return { code: 201, body: { entry } };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/files\/move$/, { permission: 'file:write', mutating: true }, (ctx) => {
+  try {
+    const b = ctx.body || {};
+    const out = files.moveEntry(String(b.locationId || ''), b.from, b.to, ctx.principal);
+    broadcast('files', { type: 'files.move', location: b.locationId, path: out.to });
+    return { code: 200, body: out };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('POST', /^\/api\/v1\/files\/copy$/, { permission: 'file:write', mutating: true }, (ctx) => {
+  try {
+    const b = ctx.body || {};
+    const out = files.copyEntry(String(b.locationId || ''), b.from, b.to, ctx.principal);
+    broadcast('files', { type: 'files.copy', location: b.locationId, path: out.to });
+    return { code: 201, body: out };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/files\/entry$/, { permission: 'file:write', mutating: true }, (ctx) => {
+  try {
+    const out = files.removeEntry(String(ctx.query.location || ''), String(ctx.query.path || ''), ctx.principal);
+    broadcast('files', { type: 'files.remove', location: ctx.query.location, path: out.removed });
+    return { code: 200, body: out };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+/** Bytes up. The body is the file; the name is in the query, because a filename is not a JSON field. */
+route('POST', /^\/api\/v1\/files\/upload$/, {
+  permission: 'file:write',
+  mutating: true,
+  binary: true,
+  bodyLimit: files.FILE_LIMITS.uploadBytes,
+}, (ctx) => {
+  const limit = auth.rateLimit(`files:upload:${ctx.principal.id}`, { limit: 40, windowMs: 60 * 1000 });
+  if (!limit.allowed) {
+    return { code: 429, body: { error: 'too many uploads in a minute; wait a moment' }, headers: { 'Retry-After': String(limit.retryAfter) } };
+  }
+  try {
+    const out = files.writeUpload(String(ctx.query.location || ''), String(ctx.query.path || ''), ctx.bytes, ctx.principal);
+    broadcast('files', { type: 'files.upload', location: ctx.query.location, path: out.path });
+    return { code: 201, body: out };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+/**
+ * Bytes down, with a range. The response is written here (`handled: true`) because a file is not JSON:
+ * `Accept-Ranges` plus `206` is what lets the panel pause a transfer and resume it from the byte count
+ * it already has, instead of starting again.
+ */
+route('GET', /^\/api\/v1\/files\/download$/, { permission: 'file:read' }, (ctx) => {
+  let opened;
+  try {
+    opened = files.openRange(String(ctx.query.location || ''), String(ctx.query.path || ''), ctx.req.headers?.range);
+  } catch (error) {
+    return filesFail(error);
+  }
+  const res = ctx.res;
+  if (opened.unsatisfiable) {
+    res.writeHead(416, { 'Content-Range': `bytes */${opened.total}`, 'Accept-Ranges': 'bytes' });
+    res.end();
+    return { handled: true };
+  }
+  const headers = {
+    'Content-Type': files.mimeFor(opened.fileName),
+    'Content-Length': String(opened.length),
+    'Accept-Ranges': 'bytes',
+    'Content-Disposition': `attachment; filename="${opened.fileName.replace(/["\\\r\n]/g, '_')}"`,
+    'Cache-Control': 'no-store',
+  };
+  if (opened.partial) headers['Content-Range'] = `bytes ${opened.start}-${opened.end}/${opened.total}`;
+  res.writeHead(opened.partial ? 206 : 200, headers);
+  opened.stream.on('error', () => {
+    try { res.destroy(); } catch { /* the client is gone either way */ }
+  });
+  ctx.req.on('close', () => {
+    try { opened.stream.destroy(); } catch { /* nothing to clean up */ }
+  });
+  opened.stream.pipe(res);
+  return { handled: true };
+});
+
+route('GET', /^\/api\/v1\/files\/downloads$/, { permission: 'file:read' }, (ctx) => {
+  files.reconcileDownloads(ctx.principal.id);
+  return { code: 200, body: { downloads: files.listDownloads(ctx.principal.id) } };
+});
+
+route('POST', /^\/api\/v1\/files\/downloads$/, { permission: 'file:write', mutating: true }, (ctx) => {
+  try {
+    return { code: 201, body: { download: files.createDownload(ctx.body || {}, ctx.principal) } };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('PATCH', /^\/api\/v1\/files\/downloads\/([\w-]+)$/, { permission: 'file:write', mutating: true }, (ctx) => {
+  try {
+    return { code: 200, body: { download: files.updateDownload(ctx.match[1], ctx.body || {}, ctx.principal.id) } };
+  } catch (error) {
+    return filesFail(error);
+  }
+});
+
+route('DELETE', /^\/api\/v1\/files\/downloads\/([\w-]+)$/, { permission: 'file:write', mutating: true }, (ctx) => {
+  try {
+    return { code: 200, body: files.deleteDownload(ctx.match[1], ctx.principal.id) };
+  } catch (error) {
+    return filesFail(error);
   }
 });
 
@@ -2526,6 +2736,9 @@ copilot.setDispatcher(dispatch);
  * =======================================================================================*/
 export function createGateway() {
   migrate();
+  // The three default roots (downloads, artifacts, public web) exist on disk before any request asks for
+  // them, so "the folder is empty" and "the folder does not exist" are never confused on the screen.
+  files.seedLocations();
   const bootstrap = auth.bootstrapOwner({ quiet: process.env.MMM_QUIET === '1' });
   const mode = auth.authMode();
 
