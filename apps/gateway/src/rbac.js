@@ -31,6 +31,11 @@ export const PERMISSIONS = Object.freeze({
   // Speech: reading what hosts are configured is read-only; changing one is an owner act, because an
   // endpoint decides where a recording is sent. Transcribing is operating, like any other run.
   'voice:read': 'Observer',
+  // Files: reading a directory listing is read-only; writing, moving or deleting is operating; enrolling
+  // a new root is an owner act, because a root is the boundary every other path check is measured against.
+  'file:read': 'Observer',
+  'file:write': 'Operator',
+  'file:configure': 'Owner',
   'voice:transcribe': 'Operator',
   'voice:configure': 'Owner',
   // review surface
@@ -68,9 +73,9 @@ export const PERMISSIONS = Object.freeze({
   'dev:seed': 'Owner',
 });
 
-const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read', 'evolution:read', 'chat:read', 'terminal:read', 'model:read', 'copilot:read', 'voice:read'];
+const READ_ONLY = ['read', 'summary:read', 'event:read', 'approval:read', 'token:issue', 'comms:read', 'browser:read', 'evolution:read', 'chat:read', 'terminal:read', 'model:read', 'copilot:read', 'voice:read', 'file:read'];
 const REVIEW = ['audit:read', 'audit:verify', 'evolution:review', 'evolution:approve'];
-const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run', 'evolution:run', 'chat:write', 'terminal:run', 'terminal:signal', 'model:call', 'copilot:write', 'voice:transcribe'];
+const OPERATE = ['agent:write', 'task:write', 'swarm:write', 'comms:write', 'browser:run', 'evolution:run', 'chat:write', 'terminal:run', 'terminal:signal', 'model:call', 'copilot:write', 'voice:transcribe', 'file:write'];
 
 /** Explicit role → permission sets (the authoritative check). */
 export const ROLE_PERMISSIONS = Object.freeze({

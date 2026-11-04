@@ -6,9 +6,12 @@ dist/
 .env
 .env.local
 
-# runtime data — never commit databases, WAL files or snapshots
+# runtime data — never commit databases, WAL files, enrolled file roots or snapshots
 data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
 backups/
+
+# file management roots (default MMM_FILES_ROOT) — user data, never committed
+var/
