@@ -20,4 +20,4 @@ CREATE INDEX IF NOT EXISTS idx_agent_runs_agent_created ON agent_runs(agent_id, 
 CREATE INDEX IF NOT EXISTS idx_agent_runs_queue ON agent_runs(status, created_at);
 
 -- Remove fictional runtime history from seeded profiles without touching real user agents.
-UPDATE agents SET status='idle', runs=0, success_rate=0, cost_today=0, memory='{}' WHERE created_by='seed';
+UPDATE agents SET status='idle', runs=0, success_rate=0, cost_today=0, last_active=0, memory='{}' WHERE created_by='seed';
