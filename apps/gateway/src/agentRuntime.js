@@ -51,6 +51,7 @@ export function queueAgentRun({ agentId, principal, objective = '' } = {}) {
   const now = Date.now();
   db.prepare(`INSERT INTO agent_runs (id,agent_id,principal_id,objective,status,model_id,provider_id,created_at)
               VALUES (?,?,?,?, 'queued',?,?,?)`).run(id, agentId, principal.id, goal, agent.model, providerId, now);
+  db.prepare("UPDATE agents SET status='queued' WHERE id=? AND status<>'running'").run(agentId);
   audit(principal.id, principal.via || 'app', 'agent.run.queued', { agentId, runId: id, model: agent.model }, 'allow', 'ok');
   logEvent('agent', `Run queued for ${agent.name}`, id);
   return db.prepare('SELECT * FROM agent_runs WHERE id=?').get(id);
@@ -105,10 +106,9 @@ async function executeOne(broadcast) {
 
 export function startAgentRuntime(broadcast = () => {}) {
   // A process restart must not leave a run looking permanently alive. Queued runs remain durable.
-  const interrupted = db.prepare("UPDATE agent_runs SET status='failed',ended_at=?,error='Gateway restarted while this run was active.' WHERE status='running'").run(Date.now());
-  if (interrupted.changes) {
-    db.prepare("UPDATE agents SET status='idle' WHERE status='running'").run();
-  }
+  const interruptedAgents = db.prepare("SELECT DISTINCT agent_id FROM agent_runs WHERE status='running'").all().map((r) => r.agent_id);
+  db.prepare("UPDATE agent_runs SET status='failed',ended_at=?,error='Gateway restarted while this run was active.' WHERE status='running'").run(Date.now());
+  for (const id of interruptedAgents) { refreshStats(id); db.prepare("UPDATE agents SET status='idle' WHERE id=?").run(id); }
   let busy = false;
   const timer = setInterval(async () => {
     if (busy) return;
