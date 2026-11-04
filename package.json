@@ -109,6 +109,7 @@
     "test:swarms:ui": "node --import ./scripts/register-css-stub.mjs scripts/swarms-ui-test.mjs",
     "test:swarms:browser": "node scripts/swarms-browser-test.mjs",
     "test:models": "node --no-warnings scripts/models-gateway-test.mjs",
+    "test:agents": "node --no-warnings scripts/agent-runs-test.mjs",
     "test:models:ui": "node --import ./scripts/register-css-stub.mjs scripts/models-ui-test.mjs",
     "test:models:browser": "node scripts/models-browser-test.mjs",
     "test:copilot:browser": "node scripts/copilot-browser-test.mjs",
