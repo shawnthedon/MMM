@@ -243,6 +243,8 @@ export const api = {
   summary: () => request('/api/v1/summary'),
   agents: () => request('/api/v1/agents'),
   createAgent: (body) => request('/api/v1/agents', { method: 'POST', body }),
+  agentRuns: (id, limit = 20) => request(`/api/v1/agents/${encodeURIComponent(id)}/runs?limit=${encodeURIComponent(limit)}`),
+  runAgent: (id, objective) => request(`/api/v1/agents/${encodeURIComponent(id)}/run`, { method: 'POST', body: { objective } }),
   updateAgent: (id, body) => request(`/api/v1/agents/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
   deleteAgent: (id) => request(`/api/v1/agents/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   tasks: () => request('/api/v1/tasks'),

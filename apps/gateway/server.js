@@ -21,6 +21,7 @@ import { evolution, setEvolutionBroadcast, ensurePoliciesForAllAgents } from './
 import * as teams from './src/teams.js';
 import * as swarms from './src/swarms.js';
 import * as models from './src/models.js';
+import * as agentRuntime from './src/agentRuntime.js';
 import * as copilot from './src/copilot.js';
 import * as capabilities from './src/capabilities.js';
 import { createDispatcher } from './src/dispatcher.js';
@@ -527,6 +528,24 @@ route('POST', /^\/api\/v1\/agents$/, { permission: 'agent:write', mutating: true
     return { code: 400, body: { error: 'name is required (max 120 chars)' } };
   }
   return { code: 201, body: insertAgent(ctx, b) };
+});
+
+route('GET', /^\/api\/v1\/agents\/([\w-]+)\/runs$/, { permission: 'read' }, (ctx) => {
+  const agent = db.prepare('SELECT id FROM agents WHERE id=? AND deleted_at IS NULL').get(ctx.match[1]);
+  if (!agent) return { code: 404, body: { error: 'agent not found' } };
+  return { code: 200, body: { runs: agentRuntime.listAgentRuns(ctx.match[1], ctx.query.limit) } };
+});
+
+route('POST', /^\/api\/v1\/agents\/([\w-]+)\/run$/, { permission: 'agent:write', mutating: true }, (ctx) => {
+  try {
+    const run = agentRuntime.queueAgentRun({ agentId: ctx.match[1], principal: ctx.principal, objective: ctx.body?.objective });
+    broadcast('agents', { type: 'agent.run.queued', entity: ctx.match[1], runId: run.id });
+    return { code: 202, body: { run, message: 'Run queued. The gateway worker will execute it using the configured model.' } };
+  } catch (error) {
+    const code = error?.code || 'error';
+    const status = code === 'not-found' ? 404 : code === 'no-provider' || code === 'tools-unavailable' ? 409 : 400;
+    return { code: status, body: { error: error.message, code } };
+  }
 });
 
 route('GET', /^\/api\/v1\/agents\/([\w-]+)$/, { permission: 'read' }, (ctx) => {
@@ -2821,6 +2840,7 @@ export function createGateway() {
   // The retry worker is off in tests (MMM_COMMS_DISABLE=1) and unref'd, so it never holds a
   // process open — `processQueue` is driven explicitly instead.
   const queueTicker = comms.startQueueTicker();
+  const agentRuntimeTicker = agentRuntime.startAgentRuntime(broadcast);
 
   // Browser tasks: the fan-out first, then the ticker that advances them, then re-attach whatever was
   // running when the process last stopped (it resumes from its checkpoint, after inspecting the page).
@@ -2846,6 +2866,7 @@ export function createGateway() {
     authMode: mode.mode,
     authWarning: mode.warning,
     queueTicker,
+    agentRuntimeTicker,
     browserTicker,
     evolutionPolicies,
     /** Test seam: route provider calls to a local mock instead of the network. */

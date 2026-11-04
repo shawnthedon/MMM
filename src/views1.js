@@ -7,7 +7,7 @@ import {
 import { openSheet, closeAllSheets, toast, confirmModal, on, actions } from './shell.js';
 import { sourceTagHTML, sourceBannerHTML } from './sourceui.js';
 import {
-  isLive, getStatus, createAgent, updateAgent, createTask, updateTask, deleteAgent,
+  isLive, getStatus, createAgent, updateAgent, createTask, updateTask, deleteAgent, runAgent,
   createSwarmPlan, updateSwarmPlan, setSwarmPlanStatus, deleteSwarmPlan, getSwarmsRuntime,
 } from './datastore.js';
 import { isApiMode } from './api.js';
@@ -246,8 +246,8 @@ function agentDetail(id) {
           <h2 style="font-size:18px">${esc(a.name)}</h2>
           <div class="tiny muted">${esc(a.role)}</div>
         </div>
-        <button class="btn sm ${a.status === 'running' ? '' : 'primary'}" data-act="toggle-agent" data-id="${a.id}">
-          ${a.status === 'running' ? icon('pause', 14) + ' Pause' : icon('play', 14) + ' Run'}
+        <button class="btn sm ${['running','queued'].includes(a.status) ? '' : 'primary'}" data-act="toggle-agent" data-id="${a.id}" ${['running','queued'].includes(a.status) ? 'disabled' : ''}>
+          ${a.status === 'running' ? icon('loader-circle', 14) + ' Running' : a.status === 'queued' ? icon('clock', 14) + ' Queued' : icon('play', 14) + ' Run'}
         </button>
       </div>
       <div class="row wrap" style="margin-top:10px;gap:8px">
@@ -263,8 +263,8 @@ function agentDetail(id) {
         <span class="chip tiny" style="color:${trustColor(a.trust)}">◈ trust ${a.trust} · tier ${trustTier(a.trust).toUpperCase()}</span>
       </div>
       <div class="grid-3" style="margin-top:12px">
-        <div class="stat"><div class="k">Success</div><div class="v" style="font-size:17px">${Math.round(a.successRate * 100)}%</div></div>
-        <div class="stat"><div class="k">Runs</div><div class="v" style="font-size:17px">${a.runs}</div></div>
+        <div class="stat"><div class="k">Success</div><div class="v" style="font-size:17px"> ${a.runs > 0 ? Math.round(a.successRate * 100) + '%' : '—'}</div></div>
+        <div class="stat"><div class="k">Runs</div><div class="v" style="font-size:17px"> ${a.runs || '—'}</div></div>
         <div class="stat"><div class="k">Cost 24h</div><div class="v" style="font-size:17px">${fmtMoney(a.costToday)}</div></div>
       </div>
     </div>
@@ -282,6 +282,7 @@ function agentDetail(id) {
       <div class="tiny muted">Autonomy level, authorised scope, diffs, test evidence, reviews and approvals for this agent live on the Self-Improvement panel. The gateway enforces them.</div>
     </div>
 
+    ${(a.tools || []).length ? '<div class="banner warn" style="margin-top:10px">Tool execution is not connected yet. This run can reason and write, but cannot browse or call external tools.</div>' : ''}
     <div class="section-title">Tools & skills</div>
     <div class="card">
       <div class="row wrap">${a.tools.map((t) => `<span class="chip tiny">${esc(t)}</span>`).join('')}</div>
@@ -1158,31 +1159,19 @@ on('new-task', () => taskCreateSheet());
 on('toggle-agent', async (el, ds) => {
   const a = getAgent(ds.id);
   if (!a) return;
-  const next = a.status === 'running' ? 'paused' : 'running';
-  if (isLive('agents')) {
-    if (permissionDenied('agent:write')) {
-      toast('Your role cannot change agent state on the gateway', 'bad');
-      return;
-    }
-    el?.setAttribute('disabled', 'disabled');
-    try {
-      const row = await updateAgent(ds.id, { status: next });
-      toast(`${row.name} is now ${row.status} on the gateway`, 'ok');
-    } catch (err) {
-      toast(`Gateway refused: ${esc(err.message)}`, 'bad');
-    }
-    import('./main.js').then((m) => m.rerender());
+  if (!isApiMode() || !isLive('agents')) {
+    toast('Connect and sign in to a live MMM gateway before running agents. Demo mode cannot execute agents.', 'bad');
     return;
   }
-  setState((s) => {
-    const x = s.agents.find((y) => y.id === ds.id);
-    if (x) {
-      x.status = next;
-      x.lastActive = now();
-      logEvent('agent', `${x.name} ${x.status}`);
-    }
-  }, 'toggle-agent');
-  toast('Agent state updated', 'ok');
+  if (permissionDenied('agent:write')) { toast('Your role cannot run agents', 'bad'); return; }
+  if (['queued','running'].includes(a.status)) { toast(`${a.name} already has an active run.`); return; }
+  el?.setAttribute('disabled', 'disabled');
+  try {
+    const result = await runAgent(a.id, a.goal || a.role || `Work as ${a.name} and provide a useful result.`);
+    toast(`${a.name}: run queued`, 'ok');
+  } catch (err) {
+    toast(`Run refused: ${esc(err.message)}`, 'bad');
+  }
   import('./main.js').then((m) => m.rerender());
 });
 
@@ -1192,33 +1181,22 @@ on('toggle-agent', async (el, ds) => {
 async function setAgentState(id, status, source) {
   const a = getAgent(id);
   if (!a) return;
-  if (status === a.status) {
-    toast(`${a.name} is already ${status}`, '');
+  if (status === 'paused') {
+    toast('Run cancellation is not wired yet. This agent has not been stopped.', 'bad');
     return;
   }
-  if (isLive('agents')) {
-    if (permissionDenied('agent:write')) {
-      toast('Your role cannot change agent state on the gateway', 'bad');
-      return;
-    }
-    try {
-      const row = await updateAgent(id, { status });
-      toast(`${row.name} is now ${row.status} on the gateway · ${source}`, 'ok');
-    } catch (err) {
-      toast(`Gateway refused: ${esc(err.message)}`, 'bad');
-    }
-    import('./main.js').then((m) => m.rerender());
+  if (!isApiMode() || !isLive('agents')) {
+    toast('Connect and sign in to a live MMM gateway before running agents.', 'bad');
     return;
   }
-  setState((st) => {
-    const row = st.agents.find((x) => x.id === id);
-    if (row) {
-      row.status = status;
-      row.lastActive = now();
-      logEvent('agent', `${row.name} ${status} · ${source}`);
-    }
-  }, `agent-${status}`);
-  toast(`${a.name} ${status === 'running' ? 'started' : 'stopped'}`, status === 'running' ? 'ok' : '');
+  if (permissionDenied('agent:write')) { toast('Your role cannot run agents', 'bad'); return; }
+  if (['queued','running'].includes(a.status)) { toast(`${a.name} already has an active run.`); return; }
+  try {
+    await runAgent(id, a.goal || a.role || `Work as ${a.name} and provide a useful result.`);
+    toast(`${a.name}: run queued · ${source}`, 'ok');
+  } catch (err) {
+    toast(`Run refused: ${esc(err.message)}`, 'bad');
+  }
   import('./main.js').then((m) => m.rerender());
 }
 
@@ -1421,22 +1399,24 @@ on('task-move', async (el, ds) => {
   import('./main.js').then((m) => m.rerender());
 });
 
-on('task-run', (el, ds) => {
+on('task-run', async (el, ds) => {
   const t = getState().tasks.find((x) => x.id === ds.id);
-  // Dispatching a task to an agent has no gateway runtime: refuse rather than fake a run.
-  if (isLive('tasks')) {
-    toast('No gateway run endpoint — a task cannot be dispatched from here yet. Nothing was changed.', 'bad');
+  if (!t) return;
+  if (!isApiMode() || !isLive('agents')) {
+    toast('Connect and sign in to a live gateway before dispatching tasks.', 'bad');
     return;
   }
-  setState((s) => {
-    const x = s.tasks.find((y) => y.id === ds.id);
-    if (x) x.column = 'doing';
-    const ag = s.agents.find((a) => a.id === t?.assignee);
-    if (ag) ag.status = 'running';
-    logEvent('task', `Run started: ${t?.title}`);
-  }, 'task-run');
-  import('./shell.js').then((m) => m.closeAllSheets());
-  toast('Agent dispatched ▶', 'ok');
+  if (!t.assignee) { toast('Assign this task to an agent first. Nothing was dispatched.', 'bad'); return; }
+  if (permissionDenied('agent:write')) { toast('Your role cannot run agents.', 'bad'); return; }
+  el?.setAttribute('disabled', 'disabled');
+  try {
+    await runAgent(t.assignee, `Task: ${t.title}\\n\\n${t.desc || ''}\\n\\nComplete the task as far as possible and clearly state any limitations.`);
+    import('./shell.js').then((m) => m.closeAllSheets());
+    toast('Task dispatched to agent · run queued', 'ok');
+  } catch (error) {
+    toast(`Task dispatch refused: ${esc(error.message)}`, 'bad');
+    el?.removeAttribute('disabled');
+  }
   import('./main.js').then((m) => m.rerender());
 });
 
